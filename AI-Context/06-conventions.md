@@ -24,7 +24,7 @@
 6. Seeder bila butuh data master.
 7. Feature test di `tests/Feature` (pola: `Sanctum::actingAs($user)`, seed `DatabaseSeeder`, assert status + JSON path).
 8. Update dokumentasi: `AI-Context/03`, `04`, `05` dan `AI-Context` di repo `klinik-frontend` bila kontrak API berubah.
-9. `docker compose exec app php artisan test` dan `vendor/bin/pint`.
+9. `docker compose -f docker-compose.dev.yml exec app php artisan test` dan `vendor/bin/pint`.
 
 ## Testing
 
@@ -38,8 +38,9 @@
 
 | Masalah | Penjelasan |
 |---------|-----------|
-| PHP di host | Laragon hanya punya PHP 7.4/8.1; Laravel 13 butuh ≥ 8.3. Selalu `docker compose exec app ...`. |
+| PHP di host | Laragon hanya punya PHP 7.4/8.1; Laravel 13 butuh ≥ 8.3. Selalu `docker compose -f docker-compose.dev.yml exec app ...`. |
 | `CLAUDE.md` / `AGENTS.md` bawaan installer | Berisi instruksi memasang PHP di host & Laravel Boost — abaikan, tidak relevan dengan setup Docker. |
+| Folder `docker/app` | Build context image gabungan adalah folder induk (`..`), jadi path `COPY` diawali `backend/` / `frontend/`. Ignore file khusus: `docker/app/Dockerfile.dockerignore`. |
 | Heredoc panjang lewat Bash tool Windows | Pernah gagal parse; tulis file dengan tool Write/Edit. |
 | Pluralisasi tabel | `Poli` → Laravel bisa salah menebak; selalu set `#[Table]`. |
 | Route parameter | `apiResource('icd10s')` → `{icd10}`; untuk nama Indonesia pakai route manual atau cek `route:list`. |

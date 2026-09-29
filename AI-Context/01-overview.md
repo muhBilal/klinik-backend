@@ -10,7 +10,7 @@ E-Klinik adalah sistem informasi klinik rawat jalan: pendaftaran pasien & antria
 | Komponen | Versi / Keterangan |
 |----------|--------------------|
 | Framework | Laravel 13 (`laravel/framework ^13`) |
-| PHP | 8.4 (di Docker, image dibangun dari `docker/php/Dockerfile`) |
+| PHP | 8.4 (di Docker: `docker/app/Dockerfile` untuk stack lengkap, `docker/php/Dockerfile` untuk dev) |
 | Database | PostgreSQL 17 (container `db`) |
 | Auth | Laravel Sanctum — personal access token (Bearer) |
 | Test | PHPUnit, SQLite in-memory (lihat `phpunit.xml`) |
@@ -19,37 +19,57 @@ E-Klinik adalah sistem informasi klinik rawat jalan: pendaftaran pasien & antria
 
 ## Layout repository
 
-Repo ini (`klinik-backend`) berdiri sendiri; frontend ada di repo terpisah `klinik-frontend`.
+Frontend ada di repo terpisah `klinik-frontend`, tetapi **semua file Docker ada di repo ini**.
+Kedua repo di-clone sejajar dalam satu folder induk; folder induk hanya berisi `backend/` dan `frontend/`.
 
 ```
-klinik-backend/
-├── docker-compose.yml      service: app (php-fpm), nginx (port 8000), db (postgres, port 5432)
-├── docker/php/             Dockerfile + php.ini
-├── docker/nginx/           default.conf
-├── app/, routes/, database/, tests/, ...   aplikasi Laravel
-└── AI-Context/             dokumen ini
+e-klinik/
+├── backend/                        ← repo ini
+│   ├── docker-compose.yml          STACK LENGKAP: app (nginx+php-fpm+build frontend, port 8000) + db
+│   ├── docker-compose.dev.yml      STACK DEV API: app (php-fpm, kode di-mount) + nginx + db
+│   ├── docker/app/                 Dockerfile gabungan (context = folder induk), Dockerfile.dockerignore,
+│   │                               nginx.conf, supervisord.conf, entrypoint.sh, php.ini
+│   ├── docker/php/, docker/nginx/  image & config mode dev
+│   ├── app/, routes/, database/, tests/, ...
+│   └── AI-Context/
+└── frontend/                       repo klinik-frontend (tidak punya file Docker sendiri)
 ```
 
-## Menjalankan (dari root repo ini)
+## Menjalankan stack lengkap (dari `backend/`)
 
 ```bash
-cp .env.example .env                                     # sekali saja
-docker compose up -d --build
-docker compose exec app composer install
-docker compose exec app php artisan key:generate        # sekali saja
-docker compose exec app php artisan migrate --seed
+cp .env.example .env            # isi APP_KEY
+docker compose up -d --build    # buka http://localhost:8000
 ```
 
-API tersedia di `http://localhost:8000/api`. `GET /` mengembalikan JSON info aplikasi.
+- Container `eklinik`: supervisor menjalankan php-fpm + nginx. Nginx menyajikan build Vue di `/` (SPA fallback)
+  dan meneruskan `/api/*` + `/up` ke Laravel. Frontend dibuild dengan `VITE_API_URL=/api` (satu origin, tanpa CORS).
+- `entrypoint.sh`: cek `APP_KEY` → `config:cache` + `route:cache` → `migrate --force` → `db:seed` bila `SEED_DEMO=true`
+  (seeder melewati dirinya sendiri bila tabel users sudah berisi).
+- Image produksi memakai `composer install --no-dev`: **tidak ada Faker/PHPUnit/Pint** di container ini.
+  Seeder melewati 25 pasien acak bila Faker tidak tersedia.
+- `APP_ENV=production`, `APP_DEBUG=false` di-hardcode di compose; `APP_KEY`, `APP_URL`, `DB_*` diambil dari `backend/.env`.
+- Kode tidak di-mount → setiap perubahan kode butuh `docker compose up -d --build`.
 
-Perintah sehari-hari:
+## Menjalankan mode development (dari `backend/`)
 
 ```bash
-docker compose exec app php artisan test
-docker compose exec app vendor/bin/pint
-docker compose exec app php artisan migrate:fresh --seed     # reset data demo
-docker compose exec app php artisan route:list --path=api
-docker compose exec app php artisan tinker
+docker compose -f docker-compose.dev.yml up -d --build
+docker compose -f docker-compose.dev.yml exec app composer install
+docker compose -f docker-compose.dev.yml exec app php artisan key:generate   # sekali saja
+docker compose -f docker-compose.dev.yml exec app php artisan migrate --seed
+```
+
+API di `http://localhost:8000/api`; frontend terpisah dengan `npm run dev` (port 5173). Kedua stack memakai port
+8000/5432 — jalankan salah satu saja.
+
+Perintah sehari-hari (mode dev; singkat `DC="docker compose -f docker-compose.dev.yml"`):
+
+```bash
+$DC exec app php artisan test
+$DC exec app vendor/bin/pint
+$DC exec app php artisan migrate:fresh --seed     # reset data demo
+$DC exec app php artisan route:list --path=api
 ```
 
 ## Environment penting (`.env`)
@@ -60,7 +80,7 @@ docker compose exec app php artisan tinker
 | `DB_HOST` | `db` | nama service Docker, bukan `127.0.0.1` |
 | `DB_DATABASE` / `DB_USERNAME` / `DB_PASSWORD` | `eklinik` / `eklinik` / `secret` | |
 | `APP_TIMEZONE` | `Asia/Jakarta` | memengaruhi `today()` untuk antrian harian |
-| `FRONTEND_URL` | `http://localhost:5173` | dipakai CORS (`config/cors.php`), boleh dipisah koma |
+| `FRONTEND_URL` | `http://localhost:5173,http://localhost:3000` | dipakai CORS (`config/cors.php`), boleh dipisah koma |
 
 ## Akun demo (seeder)
 

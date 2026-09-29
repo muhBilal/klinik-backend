@@ -3,48 +3,78 @@
 Backend sistem informasi klinik: Laravel 13 REST API, autentikasi token Sanctum, PostgreSQL 17.
 Frontend (Vue 3 SPA) ada di repo terpisah: [klinik-frontend](https://github.com/muhBilal/klinik-frontend).
 
-PHP 8.4, Nginx, dan PostgreSQL berjalan di Docker — tidak perlu memasang PHP/Composer di komputer.
+Semua konfigurasi Docker ada di repo ini — tidak perlu memasang PHP/Composer/Node di komputer.
 
-## Menjalankan
+## Struktur folder yang diharapkan
 
-Prasyarat: Docker Desktop.
+Clone kedua repo ke folder induk yang sama:
 
-```bash
-cp .env.example .env
-docker compose up -d --build
-docker compose exec app composer install
-docker compose exec app php artisan key:generate
-docker compose exec app php artisan migrate --seed
+```
+e-klinik/
+├── backend/    ← repo ini (klinik-backend), berisi semua file Docker
+└── frontend/   ← repo klinik-frontend
 ```
 
-- API: http://localhost:8000/api
-- PostgreSQL: `localhost:5432` — db/user `eklinik`, password `secret`
-- Port dapat diubah dengan variabel `APP_PORT` / `DB_FORWARD_PORT`.
-- Origin frontend untuk CORS diatur di `FRONTEND_URL` (default `http://localhost:5173`).
+```bash
+git clone https://github.com/muhBilal/klinik-backend.git backend
+git clone https://github.com/muhBilal/klinik-frontend.git frontend
+```
+
+## Menjalankan semuanya (1 perintah)
+
+```bash
+cd backend
+cp .env.example .env
+# isi APP_KEY, contoh:
+docker run --rm php:8.4-cli php -r "echo 'base64:'.base64_encode(random_bytes(32)).PHP_EOL;"
+docker compose up -d --build
+```
+
+Buka **http://localhost:8000** — frontend dan API (`/api`) disajikan dari satu container.
+
+| Container | Isi |
+|-----------|-----|
+| `eklinik` | Nginx + PHP-FPM (API Laravel) + hasil build frontend, dijalankan supervisor. Migrasi otomatis saat start. |
+| `eklinik-db` | PostgreSQL 17, data di volume `pgdata`, port `5432` |
+
+- Data demo (akun, poli, obat, ICD-10) otomatis dimasukkan bila database kosong (`SEED_DEMO=true`).
+- Setelah mengubah kode backend/frontend: `docker compose up -d --build`.
+- Port diubah lewat `APP_PORT` / `DB_FORWARD_PORT` di `.env`.
 
 ### Akun demo (password `password`)
 
 `admin@eklinik.test`, `pendaftaran@eklinik.test`, `perawat@eklinik.test`, `dokter@eklinik.test`,
 `apoteker@eklinik.test`, `kasir@eklinik.test`
 
-## Modul
+## Mode development
 
-- Auth & role: admin, pendaftaran, perawat, dokter, apoteker, kasir
-- Pasien (No. RM otomatis) & pendaftaran kunjungan dengan nomor antrian per poli
-- Pemeriksaan: tanda vital, SOAP, diagnosa ICD-10, tindakan, resep
-- Kasir: tagihan otomatis, diskon, pembayaran
-- Farmasi: penyerahan resep (setelah lunas), stok & kartu stok
-- Master: poli, tindakan, ICD-10, pengguna
-
-## Perintah
+Untuk mengembangkan API (kode di-mount, dev dependencies & test tersedia):
 
 ```bash
-docker compose exec app php artisan test                  # feature test alur klinik
-docker compose exec app vendor/bin/pint                   # format kode
-docker compose exec app php artisan migrate:fresh --seed  # reset data demo
-docker compose exec app php artisan route:list --path=api
+docker compose -f docker-compose.dev.yml up -d --build
+docker compose -f docker-compose.dev.yml exec app composer install
+docker compose -f docker-compose.dev.yml exec app php artisan migrate --seed
+docker compose -f docker-compose.dev.yml exec app php artisan test
+docker compose -f docker-compose.dev.yml exec app vendor/bin/pint
 ```
+
+API di http://localhost:8000/api; frontend dijalankan terpisah dengan `npm run dev` (http://localhost:5173).
+Jangan jalankan bersamaan dengan `docker-compose.yml` (port sama) — hentikan salah satu dengan `docker compose [-f ...] down`.
+
+## File Docker
+
+```
+docker-compose.yml          stack lengkap (app + db)
+docker-compose.dev.yml      stack development API (php-fpm + nginx + db, kode di-mount)
+docker/app/                 image gabungan: Dockerfile, Dockerfile.dockerignore, nginx.conf, supervisord.conf, entrypoint.sh, php.ini
+docker/php/, docker/nginx/  image & config untuk mode development
+```
+
+## Modul
+
+Auth & role · Pasien & pendaftaran (antrian per poli) · Pemeriksaan (SOAP, ICD-10, tindakan, resep) ·
+Kasir · Farmasi & kartu stok · Master data.
 
 ## Dokumentasi
 
-Arsitektur, skema database, aturan bisnis, dan referensi API lengkap ada di [`AI-Context/`](AI-Context/README.md).
+Arsitektur, skema database, aturan bisnis, dan referensi API ada di [`AI-Context/`](AI-Context/README.md).

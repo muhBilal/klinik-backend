@@ -17,6 +17,13 @@ class DatabaseSeeder extends Seeder
 {
     public function run(FarmasiService $farmasi): void
     {
+        // Aman dijalankan berulang (mis. setiap container start): lewati bila data sudah ada.
+        if (User::exists()) {
+            $this->command?->info('Database sudah berisi data, seeder dilewati.');
+
+            return;
+        }
+
         $polis = collect([
             ['kode' => 'UMUM', 'nama' => 'Poli Umum', 'tarif_konsultasi' => 50000],
             ['kode' => 'GIGI', 'nama' => 'Poli Gigi', 'tarif_konsultasi' => 75000],
@@ -36,7 +43,7 @@ class DatabaseSeeder extends Seeder
         ];
 
         foreach ($users as $user) {
-            User::factory()->create($user);
+            User::create([...$user, 'password' => 'password']);
         }
 
         $admin = User::where('role', Role::Admin)->first();
@@ -54,7 +61,10 @@ class DatabaseSeeder extends Seeder
             $farmasi->mutasiManual($obat, JenisMutasi::Masuk, $stok, 'Stok awal', $admin);
         }
 
-        Pasien::factory(25)->create();
+        // Faker hanya tersedia di dependensi dev; image produksi dilewati tanpa pasien acak.
+        if (class_exists(\Faker\Factory::class)) {
+            Pasien::factory(25)->create();
+        }
     }
 
     private function icd10(): array

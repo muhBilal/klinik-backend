@@ -1,0 +1,13 @@
+**/.git
+**/.env
+**/.env.local
+**/node_modules
+**/*.log
+backend/vendor
+backend/storage/logs/*
+backend/storage/framework/cache/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/bootstrap/cache/*.php
+backend/database/*.sqlite
+frontend/dist

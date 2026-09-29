@@ -1,43 +1,65 @@
+# Menjalankan seluruh E-Klinik (backend + frontend) dengan satu perintah dari folder backend/:
+#   docker compose up -d --build
+#
+# app = Nginx + PHP-FPM (API Laravel) + hasil build frontend Vue  -> http://localhost:8000
+# db  = PostgreSQL 17 (data di volume `pgdata`)
+#
+# Syarat: repo frontend berada di folder sejajar `../frontend`.
+# Nilai APP_KEY, APP_URL, DB_* diambil dari backend/.env.
+# Untuk development API (kode di-mount, bisa `php artisan test`), pakai docker-compose.dev.yml.
 name: eklinik
 
 services:
   app:
-    build: ./docker/php
-    container_name: eklinik-app
-    working_dir: /var/www/html
-    volumes:
-      - .:/var/www/html
+    build:
+      context: ..
+      dockerfile: backend/docker/app/Dockerfile
+    container_name: eklinik
+    ports:
+      - "${APP_PORT:-8000}:80"
+    environment:
+      APP_NAME: E-Klinik
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY}
+      APP_URL: ${APP_URL:-http://localhost:8000}
+      APP_TIMEZONE: Asia/Jakarta
+      APP_LOCALE: id
+      FRONTEND_URL: ${APP_URL:-http://localhost:8000}
+      LOG_CHANNEL: stderr
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-eklinik}
+      DB_USERNAME: ${DB_USERNAME:-eklinik}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      CACHE_STORE: database
+      SESSION_DRIVER: database
+      QUEUE_CONNECTION: database
+      # Isi data demo (akun, poli, obat, ICD-10) bila database masih kosong
+      SEED_DEMO: ${SEED_DEMO:-true}
     depends_on:
       db:
         condition: service_healthy
-
-  nginx:
-    image: nginx:alpine
-    container_name: eklinik-nginx
-    ports:
-      - "${APP_PORT:-8000}:80"
-    volumes:
-      - .:/var/www/html
-      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      - app
+    restart: unless-stopped
 
   db:
     image: postgres:17-alpine
     container_name: eklinik-db
     environment:
-      POSTGRES_DB: eklinik
-      POSTGRES_USER: eklinik
-      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: ${DB_DATABASE:-eklinik}
+      POSTGRES_USER: ${DB_USERNAME:-eklinik}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
     ports:
       - "${DB_FORWARD_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U eklinik -d eklinik"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
 volumes:
   pgdata:

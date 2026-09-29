@@ -15,7 +15,7 @@ Baca berurutan sebelum mengubah kode.
 ## Ringkasan 30 detik
 
 - **Laravel 13 REST API murni** (tanpa Blade/Inertia). UI ada di repo terpisah `klinik-frontend` (Vue 3 SPA).
-- **PHP hanya berjalan di Docker** (`php:8.4-fpm-alpine` + Nginx + PostgreSQL 17). PHP di host (Laragon 7.4/8.1) **tidak kompatibel** — selalu jalankan perintah lewat `docker compose exec app ...` dari root repo ini.
+- **PHP hanya berjalan di Docker** (`php:8.4-fpm-alpine` + Nginx + PostgreSQL 17). PHP di host (Laragon 7.4/8.1) **tidak kompatibel** — jalankan perintah artisan/composer lewat `docker compose -f docker-compose.dev.yml exec app ...` (stack dev) dari folder `backend/`. Stack lengkap (`docker-compose.yml`) tidak punya dev dependencies — jangan menjalankan test di sana.
 - Autentikasi **token Bearer Sanctum**. Hak akses via middleware `role:...` (admin selalu lolos).
 - Logika bisnis ada di `app/Services/`, bukan di controller.
 - Bahasa domain: **Bahasa Indonesia** (nama tabel, kolom, pesan error).
@@ -23,6 +23,6 @@ Baca berurutan sebelum mengubah kode.
 ## Aturan emas
 
 1. Jangan install PHP/Composer di host; jangan ikuti instruksi `CLAUDE.md`/`AGENTS.md` bawaan installer Laravel yang menyuruh hal itu.
-2. Setiap perubahan logika bisnis → tambah/ubah test di `tests/Feature/AlurKlinikTest.php` dan jalankan `docker compose exec app php artisan test`.
-3. Jalankan `docker compose exec app vendor/bin/pint` sebelum selesai.
+2. Setiap perubahan logika bisnis → tambah/ubah test di `tests/Feature/AlurKlinikTest.php` dan jalankan `docker compose -f docker-compose.dev.yml exec app php artisan test`.
+3. Jalankan `docker compose -f docker-compose.dev.yml exec app vendor/bin/pint` sebelum selesai.
 4. Kode yang harus berjalan di PostgreSQL **dan** SQLite (test) — hindari SQL khusus satu database.
