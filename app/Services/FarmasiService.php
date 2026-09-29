@@ -21,7 +21,9 @@ class FarmasiService
     public function serahkan(Resep $resep, User $apoteker): Resep
     {
         return DB::transaction(function () use ($resep, $apoteker) {
-            $resep = Resep::whereKey($resep->id)->lockForUpdate()->with(['items', 'kunjungan.tagihan'])->firstOrFail();
+            $resep = Resep::whereKey($resep->id)->lockForUpdate()
+                ->with(['items:id,resep_id,obat_id,jumlah', 'kunjungan:id', 'kunjungan.tagihan:id,kunjungan_id,status'])
+                ->firstOrFail();
 
             if ($resep->status !== StatusResep::Menunggu) {
                 throw ValidationException::withMessages(['status' => 'Resep sudah diserahkan atau dibatalkan.']);
@@ -51,7 +53,7 @@ class FarmasiService
                 'diserahkan_at' => now(),
             ]);
 
-            return $resep->load(['items.obat', 'kunjungan.pasien', 'kunjungan.poli', 'dokter:id,name', 'apoteker:id,name']);
+            return $resep;
         });
     }
 

@@ -129,6 +129,12 @@ class AlurKlinikTest extends TestCase
 
         $total = 50000 + $gds->tarif + 10 * $paracetamol->harga;
         $this->assertSame($total, $kunjungan['tagihan']['total']);
+        $this->assertArrayNotHasKey('items', $kunjungan['tagihan'], 'Detail kunjungan tidak perlu rincian tagihan.');
+
+        // Riwayat pasien: kunjungan ini muncul, kecuali bila dikecualikan
+        $this->getJson("/api/pasiens/{$pasien->id}/riwayat")->assertOk()->assertJsonPath('0.id', $id)
+            ->assertJsonPath('0.pemeriksaan.diagnosas.0.icd10.kode', 'J02.9');
+        $this->getJson("/api/pasiens/{$pasien->id}/riwayat?kecuali={$id}")->assertOk()->assertJsonCount(0);
 
         // Pemeriksaan tidak bisa diubah setelah ditutup
         $this->putJson("/api/kunjungans/{$id}/pemeriksaan", ['objektif' => 'x'])->assertUnprocessable();
@@ -148,11 +154,16 @@ class AlurKlinikTest extends TestCase
             ->assertJsonPath('status', 'lunas')
             ->assertJsonPath('grand_total', $total - 5000)
             ->assertJsonPath('kembalian', 100000 - ($total - 5000))
-            ->assertJsonPath('kunjungan.status', 'selesai');
+            ->assertJsonPath('kunjungan.status', 'selesai')
+            ->assertJsonPath('kunjungan.pasien.no_rm', $pasien->no_rm)
+            ->assertJsonCount(3, 'items');
 
         // 6. Farmasi menyerahkan obat -> stok berkurang & tercatat di kartu stok
         $this->as(Role::Apoteker);
-        $this->postJson("/api/reseps/{$resepId}/serahkan")->assertOk()->assertJsonPath('status', 'diserahkan');
+        $this->postJson("/api/reseps/{$resepId}/serahkan")->assertOk()
+            ->assertJsonPath('status', 'diserahkan')
+            ->assertJsonPath('kunjungan.tagihan.status', 'lunas')
+            ->assertJsonPath('items.0.obat.stok', $stokAwal - 10);
         $this->postJson("/api/reseps/{$resepId}/serahkan")->assertUnprocessable();
 
         $this->assertSame($stokAwal - 10, $paracetamol->refresh()->stok);
@@ -174,6 +185,36 @@ class AlurKlinikTest extends TestCase
         $this->postJson('/api/kunjungans', ['pasien_id' => $p3->id, 'poli_id' => $poliGigi, 'penjamin' => 'umum'])->assertJsonPath('no_antrian', 1);
 
         $this->getJson("/api/kunjungans?poli_id={$poliUmum}")->assertOk()->assertJsonCount(2, 'data');
+    }
+
+    public function test_respons_list_hanya_memuat_data_seperlunya(): void
+    {
+        $this->as(Role::Admin);
+        $pasien = Pasien::first();
+
+        // simple=1 (autocomplete) tidak menghitung total
+        $this->getJson('/api/icd10s?q=J&simple=1&per_page=5')
+            ->assertOk()
+            ->assertJsonMissingPath('total')
+            ->assertJsonStructure(['data' => [['id', 'kode', 'nama']]])
+            ->assertJsonMissingPath('data.0.created_at');
+        $this->getJson('/api/icd10s')->assertOk()->assertJsonStructure(['total', 'last_page']);
+
+        // Dropdown poli aktif ringkas, master poli lengkap
+        $this->getJson('/api/polis?aktif=1')->assertOk()
+            ->assertJsonStructure([['id', 'kode', 'nama']])
+            ->assertJsonMissingPath('0.dokters_count')
+            ->assertJsonMissingPath('0.tarif_konsultasi');
+        $this->getJson('/api/polis')->assertOk()->assertJsonStructure([['id', 'tarif_konsultasi', 'dokters_count']]);
+
+        // Detail pasien ringkas tanpa riwayat kunjungan
+        $this->getJson("/api/pasiens/{$pasien->id}?ringkas=1")->assertOk()
+            ->assertJsonPath('no_rm', $pasien->no_rm)
+            ->assertJsonMissingPath('kunjungans');
+        $this->getJson("/api/pasiens/{$pasien->id}")->assertOk()->assertJsonStructure(['kunjungans']);
+
+        // Riwayat mengecualikan kunjungan yang sedang diperiksa
+        $this->getJson("/api/pasiens/{$pasien->id}/riwayat?kecuali=999999")->assertOk();
     }
 
     public function test_stok_tidak_boleh_minus(): void

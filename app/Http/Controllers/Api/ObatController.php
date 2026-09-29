@@ -15,17 +15,18 @@ class ObatController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $obats = Obat::query()
+        $obats = $this->filterAktif(Obat::query(), $request)
+            ->select(['id', 'kode', 'nama', 'satuan', 'harga', 'stok', 'stok_minimum', 'is_active'])
             ->when($request->boolean('aktif'), fn ($q) => $q->where('is_active', true))
             ->when($request->boolean('menipis'), fn ($q) => $q->stokMenipis())
+            ->when($request->filled('satuan'), fn ($q) => $q->where('satuan', $request->input('satuan')))
             ->when($request->filled('q'), function ($query) use ($request) {
                 $q = $request->string('q')->trim();
                 $query->where(fn ($w) => $w->whereLike('nama', "%{$q}%")->orWhereLike('kode', "{$q}%"));
             })
-            ->orderBy('nama')
-            ->paginate(min($request->integer('per_page', 20), 100));
+            ->orderBy('nama');
 
-        return response()->json($obats);
+        return response()->json($this->paginate($obats, $request));
     }
 
     public function store(Request $request, FarmasiService $farmasi): JsonResponse
@@ -73,7 +74,12 @@ class ObatController extends Controller
      */
     public function mutasi(Request $request, Obat $obat): JsonResponse
     {
-        return response()->json($obat->mutasis()->with('user:id,name')->paginate(min($request->integer('per_page', 20), 100)));
+        $mutasi = $obat->mutasis()
+            ->select(['id', 'obat_id', 'jenis', 'jumlah', 'stok_akhir', 'referensi', 'keterangan', 'user_id', 'created_at'])
+            ->when($request->filled('jenis'), fn ($q) => $q->where('jenis', $request->input('jenis')))
+            ->with('user:id,name');
+
+        return response()->json($this->paginate($mutasi, $request));
     }
 
     public function storeMutasi(Request $request, Obat $obat, FarmasiService $farmasi): JsonResponse

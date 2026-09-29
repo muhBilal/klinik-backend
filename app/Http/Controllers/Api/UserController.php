@@ -14,17 +14,18 @@ class UserController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $users = User::query()
+        $users = $this->filterAktif(User::query(), $request)
+            ->select(['id', 'name', 'email', 'role', 'poli_id', 'sip', 'is_active'])
             ->with('poli:id,nama')
             ->when($request->filled('role'), fn ($q) => $q->where('role', $request->input('role')))
+            ->when($request->filled('poli_id'), fn ($q) => $q->where('poli_id', $request->integer('poli_id')))
             ->when($request->filled('q'), function ($query) use ($request) {
                 $q = $request->string('q')->trim();
                 $query->where(fn ($w) => $w->whereLike('name', "%{$q}%")->orWhereLike('email', "%{$q}%"));
             })
-            ->orderBy('name')
-            ->paginate(min($request->integer('per_page', 20), 100));
+            ->orderBy('name');
 
-        return response()->json($users);
+        return response()->json($this->paginate($users, $request));
     }
 
     /**

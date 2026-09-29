@@ -65,16 +65,34 @@ class Kunjungan extends Model
     }
 
     /**
-     * Relasi lengkap untuk halaman detail / rekam medis.
+     * Relasi rekam medis (SOAP, diagnosa, tindakan, resep) dengan kolom seperlunya.
+     * Dipakai detail kunjungan dan riwayat pasien.
+     */
+    public static function relasiRekamMedis(): array
+    {
+        return [
+            'pemeriksaan' => fn ($q) => $q->select(['id', 'kunjungan_id', ...Pemeriksaan::VITAL_FIELDS, ...Pemeriksaan::SOAP_FIELDS]),
+            'pemeriksaan.diagnosas:id,pemeriksaan_id,icd10_id,jenis',
+            'pemeriksaan.diagnosas.icd10:id,kode,nama',
+            'tindakans:id,kunjungan_id,tindakan_id,jumlah,tarif',
+            'tindakans.tindakan:id,nama',
+            'resep:id,kunjungan_id,no_resep,status,catatan',
+            'resep.items:id,resep_id,obat_id,jumlah,aturan_pakai,harga',
+        ];
+    }
+
+    /**
+     * Relasi untuk halaman detail kunjungan / pemeriksaan.
      */
     public function loadDetail(): static
     {
         return $this->load([
-            'pasien', 'poli', 'dokter:id,name,sip',
-            'pemeriksaan.diagnosas.icd10', 'pemeriksaan.perawat:id,name', 'pemeriksaan.dokter:id,name',
-            'tindakans.tindakan',
-            'resep.items.obat', 'resep.apoteker:id,name',
-            'tagihan.items', 'tagihan.kasir:id,name',
+            'pasien:id,no_rm,nama,jenis_kelamin,tanggal_lahir,golongan_darah,alergi',
+            'poli:id,kode,nama,tarif_konsultasi',
+            'dokter:id,name,sip',
+            ...self::relasiRekamMedis(),
+            'resep.items.obat:id,nama,satuan,stok',
+            'tagihan:id,kunjungan_id,no_tagihan,total,grand_total,status',
         ]);
     }
 }

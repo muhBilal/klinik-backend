@@ -10,12 +10,12 @@ Sumber kebenaran: `routes/api.php`.
 | POST | `/login` | publik (throttle 10/menit) | `{ email, password, device_name? }` → `{ token, user }` (user + `poli` + `role_label`) |
 | GET | `/me` | semua | user saat ini (bentuk sama dengan `user` di login) |
 | POST | `/logout` | semua | cabut token saat ini |
-| GET | `/dashboard` | semua | ringkasan hari ini: kunjungan per status/per poli, pasien, resep menunggu, tagihan belum bayar, pendapatan, obat stok menipis |
+| GET | `/dashboard` | semua | ringkasan hari ini: kunjungan per status/per poli, pasien, resep menunggu, tagihan belum bayar, pendapatan (`null` bila bukan kasir/admin), obat stok menipis |
 
 ## Referensi (read-only)
 | Method | Path | Role | Query |
 |--------|------|------|-------|
-| GET | `/polis` | semua | `aktif=1` — **array**, termasuk `dokters_count` |
+| GET | `/polis` | semua | **array**. Tanpa filter: data lengkap + `dokters_count` (master). `aktif=1`: ringkas `{id, kode, nama}` poli aktif untuk dropdown |
 | GET | `/polis/{poli}` | semua | + `dokters` |
 | GET | `/dokters` | semua | `poli_id` — **array** `[id, name, poli_id, sip]` |
 | GET | `/icd10s` | semua | `q` (kode prefix / nama) |
@@ -27,8 +27,8 @@ Sumber kebenaran: `routes/api.php`.
 | Method | Path | Role | Keterangan |
 |--------|------|------|------------|
 | GET | `/pasiens` | semua | `q` = nama (ilike) / no_rm / nik / no_bpjs (prefix) |
-| GET | `/pasiens/{pasien}` | semua | + 50 kunjungan terakhir (poli, dokter, diagnosa) |
-| GET | `/pasiens/{pasien}/riwayat` | dokter, perawat | 20 kunjungan selesai terakhir dengan rekam medis lengkap |
+| GET | `/pasiens/{pasien}` | semua | + 50 kunjungan terakhir (poli, dokter, diagnosa). `ringkas=1`: identitas saja tanpa `kunjungans` |
+| GET | `/pasiens/{pasien}/riwayat` | dokter, perawat | 20 kunjungan selesai terakhir dengan rekam medis (vital, SOAP, diagnosa, tindakan, resep). `kecuali={kunjungan_id}` |
 | POST | `/pasiens` | pendaftaran | lihat field di bawah |
 | PUT | `/pasiens/{pasien}` | pendaftaran | |
 | DELETE | `/pasiens/{pasien}` | admin | ditolak bila punya kunjungan |
@@ -65,7 +65,7 @@ Respons: kunjungan lengkap (`loadDetail`).
 |--------|------|------|------------|
 | GET | `/reseps` | apoteker | `status`, `tanggal`, `q`; termasuk `items_count`, `kunjungan.tagihan.status` |
 | GET | `/reseps/{id}` | apoteker | items.obat (dengan stok), pasien, tagihan |
-| POST | `/reseps/{id}/serahkan` | apoteker | wajib tagihan lunas & stok cukup |
+| POST | `/reseps/{id}/serahkan` | apoteker | wajib tagihan lunas & stok cukup; respons = bentuk detail resep |
 | POST | `/obats` | apoteker | `{ kode*, nama*, satuan*, harga*, stok_minimum*, is_active, stok_awal? }` |
 | PUT | `/obats/{id}` | apoteker | sama tanpa `stok_awal` (stok tidak bisa diubah di sini) |
 | DELETE | `/obats/{id}` | admin | ditolak bila pernah diresepkan |
@@ -77,7 +77,7 @@ Respons: kunjungan lengkap (`loadDetail`).
 |--------|------|------|------------|
 | GET | `/tagihans` | kasir | `status`, `tanggal`, `q` |
 | GET | `/tagihans/{id}` | kasir | items, kunjungan.pasien/poli/dokter, kasir |
-| POST | `/tagihans/{id}/bayar` | kasir | `{ metode_bayar*, dibayar (wajib jika tunai), diskon? }` |
+| POST | `/tagihans/{id}/bayar` | kasir | `{ metode_bayar*, dibayar (wajib jika tunai), diskon? }`; respons = bentuk detail tagihan |
 
 ## Master (admin)
 | Method | Path |

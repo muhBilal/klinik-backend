@@ -12,7 +12,10 @@ class PasienController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        // Semua kolom identitas dipakai list & form ubah; timestamp tidak perlu.
         $pasiens = Pasien::query()
+            ->select(['id', 'no_rm', 'nik', 'no_bpjs', 'nama', 'jenis_kelamin', 'tempat_lahir', 'tanggal_lahir',
+                'golongan_darah', 'alamat', 'no_hp', 'pekerjaan', 'alergi'])
             ->when($request->filled('q'), function ($query) use ($request) {
                 $q = $request->string('q')->trim();
                 $query->where(fn ($w) => $w
@@ -21,10 +24,13 @@ class PasienController extends Controller
                     ->orWhere('nik', 'like', "{$q}%")
                     ->orWhere('no_bpjs', 'like', "{$q}%"));
             })
-            ->latest('id')
-            ->paginate(min($request->integer('per_page', 15), 100));
+            ->when(in_array($request->input('jenis_kelamin'), ['L', 'P'], true), fn ($q) => $q->where('jenis_kelamin', $request->input('jenis_kelamin')))
+            ->when($request->filled('golongan_darah'), fn ($q) => $q->where('golongan_darah', $request->input('golongan_darah')))
+            ->when($request->input('bpjs') === 'ya', fn ($q) => $q->whereNotNull('no_bpjs'))
+            ->when($request->input('bpjs') === 'tidak', fn ($q) => $q->whereNull('no_bpjs'))
+            ->latest('id');
 
-        return response()->json($pasiens);
+        return response()->json($this->paginate($pasiens, $request, 15));
     }
 
     public function store(Request $request): JsonResponse
@@ -34,12 +40,21 @@ class PasienController extends Controller
         return response()->json($pasien, 201);
     }
 
-    public function show(Pasien $pasien): JsonResponse
+    /**
+     * `?ringkas=1` hanya identitas pasien (tanpa riwayat kunjungan), mis. untuk form pendaftaran.
+     */
+    public function show(Request $request, Pasien $pasien): JsonResponse
     {
-        $pasien->load(['kunjungans' => fn ($q) => $q
-            ->with(['poli:id,nama', 'dokter:id,name', 'pemeriksaan.diagnosas.icd10'])
-            ->latest('tanggal')->latest('id')
-            ->limit(50)]);
+        if (! $request->boolean('ringkas')) {
+            $pasien->load(['kunjungans' => fn ($q) => $q
+                ->select(['id', 'pasien_id', 'poli_id', 'dokter_id', 'tanggal', 'penjamin', 'status'])
+                ->with([
+                    'poli:id,nama', 'dokter:id,name', 'pemeriksaan:id,kunjungan_id',
+                    'pemeriksaan.diagnosas:id,pemeriksaan_id,icd10_id,jenis', 'pemeriksaan.diagnosas.icd10:id,kode,nama',
+                ])
+                ->latest('tanggal')->latest('id')
+                ->limit(50)]);
+        }
 
         return response()->json($pasien);
     }

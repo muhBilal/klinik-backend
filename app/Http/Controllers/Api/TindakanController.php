@@ -13,16 +13,16 @@ class TindakanController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $tindakans = Tindakan::query()
+        $tindakans = $this->filterAktif(Tindakan::query(), $request)
+            ->select(['id', 'kode', 'nama', 'tarif', 'is_active'])
             ->when($request->boolean('aktif'), fn ($q) => $q->where('is_active', true))
             ->when($request->filled('q'), function ($query) use ($request) {
                 $q = $request->string('q')->trim();
                 $query->where(fn ($w) => $w->whereLike('nama', "%{$q}%")->orWhereLike('kode', "{$q}%"));
             })
-            ->orderBy('nama')
-            ->paginate(min($request->integer('per_page', 20), 100));
+            ->orderBy('nama');
 
-        return response()->json($tindakans);
+        return response()->json($this->paginate($tindakans, $request));
     }
 
     public function store(Request $request): JsonResponse

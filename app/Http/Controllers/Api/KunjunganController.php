@@ -28,23 +28,25 @@ class KunjunganController extends Controller
             'status' => ['nullable', 'string'],
             'poli_id' => ['nullable', 'integer'],
             'dokter_id' => ['nullable', 'integer'],
+            'penjamin' => ['nullable', Rule::enum(Penjamin::class)],
         ]);
 
         $kunjungans = Kunjungan::query()
-            ->with(['pasien:id,no_rm,nama,jenis_kelamin,tanggal_lahir', 'poli:id,kode,nama', 'dokter:id,name'])
+            ->select(['id', 'no_registrasi', 'pasien_id', 'poli_id', 'dokter_id', 'tanggal', 'no_antrian', 'penjamin', 'keluhan', 'status', 'created_at'])
+            ->with(['pasien:id,no_rm,nama,jenis_kelamin', 'poli:id,kode,nama', 'dokter:id,name'])
             ->whereDate('tanggal', $request->input('tanggal', today()->toDateString()))
             ->when($request->filled('poli_id'), fn ($q) => $q->where('poli_id', $request->integer('poli_id')))
             ->when($request->filled('dokter_id'), fn ($q) => $q->where('dokter_id', $request->integer('dokter_id')))
+            ->when($request->filled('penjamin'), fn ($q) => $q->where('penjamin', $request->input('penjamin')))
             ->when($request->filled('status'), fn ($q) => $q->whereIn('status', explode(',', $request->input('status'))))
             ->when($request->filled('q'), function ($query) use ($request) {
                 $q = $request->string('q')->trim();
                 $query->whereHas('pasien', fn ($p) => $p->where(fn ($w) => $w->whereLike('nama', "%{$q}%")->orWhere('no_rm', 'like', "{$q}%")));
             })
             ->orderBy('poli_id')
-            ->orderBy('no_antrian')
-            ->paginate(min($request->integer('per_page', 50), 200));
+            ->orderBy('no_antrian');
 
-        return response()->json($kunjungans);
+        return response()->json($this->paginate($kunjungans, $request, 50, 200));
     }
 
     /**
@@ -80,7 +82,8 @@ class KunjunganController extends Controller
             'created_by' => $request->user()->id,
         ]));
 
-        return response()->json($kunjungan->load(['pasien', 'poli', 'dokter:id,name']), 201);
+        // Cukup untuk tiket antrian
+        return response()->json($kunjungan->load(['pasien:id,no_rm,nama', 'poli:id,kode,nama', 'dokter:id,name']), 201);
     }
 
     public function show(Kunjungan $kunjungan): JsonResponse
@@ -106,12 +109,15 @@ class KunjunganController extends Controller
 
     /**
      * Riwayat kunjungan pasien (rekam medis) untuk ditampilkan saat pemeriksaan.
+     * `?kecuali={id}` mengecualikan kunjungan yang sedang diperiksa.
      */
-    public function riwayat(Pasien $pasien): JsonResponse
+    public function riwayat(Request $request, Pasien $pasien): JsonResponse
     {
         $riwayat = $pasien->kunjungans()
+            ->select(['id', 'pasien_id', 'poli_id', 'tanggal'])
             ->whereIn('status', [StatusKunjungan::MenungguPembayaran, StatusKunjungan::Selesai])
-            ->with(['poli:id,nama', 'dokter:id,name', 'pemeriksaan.diagnosas.icd10', 'tindakans.tindakan', 'resep.items.obat'])
+            ->when($request->filled('kecuali'), fn ($q) => $q->whereKeyNot($request->integer('kecuali')))
+            ->with(['poli:id,nama', ...Kunjungan::relasiRekamMedis(), 'resep.items.obat:id,nama,satuan'])
             ->latest('tanggal')->latest('id')
             ->limit(20)
             ->get();

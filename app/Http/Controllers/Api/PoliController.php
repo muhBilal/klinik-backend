@@ -10,11 +10,22 @@ use Illuminate\Validation\Rule;
 
 class PoliController extends Controller
 {
+    /**
+     * `?aktif=1` = daftar ringkas poli aktif untuk dropdown (id, kode, nama).
+     * Tanpa filter = data lengkap + jumlah dokter untuk halaman master.
+     */
     public function index(Request $request): JsonResponse
     {
-        $polis = Poli::query()
-            ->when($request->boolean('aktif'), fn ($q) => $q->where('is_active', true))
-            ->withCount('dokters')
+        $polis = $this->filterAktif(Poli::query(), $request)
+            ->when(
+                $request->boolean('aktif'),
+                fn ($q) => $q->select(['id', 'kode', 'nama'])->where('is_active', true),
+                fn ($q) => $q->withCount('dokters'),
+            )
+            ->when($request->filled('q'), function ($query) use ($request) {
+                $q = $request->string('q')->trim();
+                $query->where(fn ($w) => $w->whereLike('nama', "%{$q}%")->orWhereLike('kode', "{$q}%"));
+            })
             ->orderBy('nama')
             ->get();
 

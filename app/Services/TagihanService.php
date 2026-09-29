@@ -97,7 +97,7 @@ class TagihanService
 
             $tagihan->kunjungan()->update(['status' => StatusKunjungan::Selesai]);
 
-            return $tagihan->load(['items', 'kasir:id,name', 'kunjungan.pasien', 'kunjungan.poli']);
+            return $tagihan;
         });
     }
 }

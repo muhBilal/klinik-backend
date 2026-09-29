@@ -54,7 +54,12 @@ Request ─► routes/api.php (auth:sanctum + role:...) ─► Controller ─►
   timestamp ISO-8601 UTC.
 - List memakai `paginate()` Laravel → `{ data, current_page, last_page, per_page, total, from, to, links, ... }`.
   Pengecualian: `GET /polis` dan `GET /dokters` mengembalikan array biasa.
-- `per_page` dibatasi (`min($request->integer('per_page', N), 100)`).
+- `per_page` dibatasi lewat helper `Controller::paginate($query, $request, default, max)`. `?simple=1` memakai
+  `simplePaginate` (tanpa `COUNT(*)`, tanpa `total`/`last_page`) — dipakai autocomplete frontend.
+- **Select seperlunya**: list memakai `->select([...])` dan eager load dengan kolom (`'poli:id,nama'`); FK relasi wajib ikut
+  di-select. Relasi detail kunjungan terpusat di `Kunjungan::loadDetail()` / `Kunjungan::relasiRekamMedis()`;
+  detail resep/tagihan di konstanta `DETAIL` controller (dipakai juga respons `serahkan`/`bayar`). Kolom yang tidak
+  di-select tidak muncul di JSON — cek pemakaian di frontend sebelum menghapus kolom dari select.
 - Error: 401 (token), 403 (`EnsureRole`), 404 (route model binding), 422 (validasi/aturan bisnis,
   `{ message, errors: { field: [..] } }`), `abort_if(..., 422, 'pesan')` untuk larangan hapus data terpakai.
 

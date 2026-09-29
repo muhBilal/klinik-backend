@@ -13,15 +13,19 @@ class Icd10Controller extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        // ?huruf=J → bab ICD-10 berdasarkan huruf awal kode
+        $huruf = strtoupper((string) $request->input('huruf'));
+
         $icd10s = Icd10::query()
+            ->select(['id', 'kode', 'nama'])
+            ->when(preg_match('/^[A-Z]$/', $huruf) === 1, fn ($q) => $q->where('kode', 'like', "{$huruf}%"))
             ->when($request->filled('q'), function ($query) use ($request) {
                 $q = $request->string('q')->trim();
                 $query->where(fn ($w) => $w->whereLike('kode', "{$q}%")->orWhereLike('nama', "%{$q}%"));
             })
-            ->orderBy('kode')
-            ->paginate(min($request->integer('per_page', 20), 100));
+            ->orderBy('kode');
 
-        return response()->json($icd10s);
+        return response()->json($this->paginate($icd10s, $request));
     }
 
     public function store(Request $request): JsonResponse
