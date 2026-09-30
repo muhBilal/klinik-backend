@@ -148,7 +148,8 @@ class FilterTest extends TestCase
 
         $this->getJson("/api/obats/{$obat->id}/mutasi?jenis=keluar")
             ->assertJsonCount(1, 'data')->assertJsonPath('data.0.jumlah', -5);
+        // Stok awal seeder dibagi dua batch (FEFO), jadi ada dua mutasi masuk.
         $this->getJson("/api/obats/{$obat->id}/mutasi?jenis=masuk")
-            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.keterangan', 'Stok awal');
+            ->assertJsonCount(2, 'data')->assertJsonPath('data.0.keterangan', 'Stok awal');
     }
 }

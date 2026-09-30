@@ -2,23 +2,24 @@
 
 namespace Database\Seeders;
 
-use App\Enums\JenisMutasi;
 use App\Enums\Role;
 use App\Models\Cabang;
 use App\Models\Icd10;
+use App\Models\JadwalPraktik;
 use App\Models\KategoriTindakan;
 use App\Models\Obat;
 use App\Models\Pasien;
 use App\Models\Poli;
+use App\Models\SumberDaya;
 use App\Models\Tindakan;
 use App\Models\User;
-use App\Services\FarmasiService;
+use App\Services\InventoriService;
 use Faker\Factory;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    public function run(FarmasiService $farmasi): void
+    public function run(InventoriService $inventori): void
     {
         // Aman dijalankan berulang (mis. setiap container start): lewati bila data sudah ada.
         if (User::exists()) {
@@ -65,8 +66,13 @@ class DatabaseSeeder extends Seeder
         $obats = collect();
         foreach ($this->obat() as $item) {
             [$kode, $nama, $satuan, $harga, $stok] = $item;
-            $obat = Obat::create(['kode' => $kode, 'nama' => $nama, 'satuan' => $satuan, 'harga' => $harga, 'stok_minimum' => $item[5] ?? 20]);
-            $farmasi->mutasiManual($obat, JenisMutasi::Masuk, $stok, 'Stok awal', $admin);
+            $kodeAngka = substr($kode, -3);
+            $obat = Obat::create(['kode' => $kode, 'nama' => $nama, 'satuan' => $satuan, 'harga' => $harga,
+                'stok_minimum' => $item[5] ?? 20, 'fraksional' => $item[6] ?? false, 'jam_pakai_setelah_buka' => $item[7] ?? null]);
+
+            // Stok awal dibagi dua batch dengan kedaluwarsa berbeda supaya FEFO terlihat di data demo (IN-01).
+            $inventori->terima($obat, $cabang->id, ceil($stok / 2), "B{$kodeAngka}-A", now()->addMonths(6), $admin, 'Stok awal');
+            $inventori->terima($obat, $cabang->id, floor($stok / 2), "B{$kodeAngka}-B", now()->addMonths(18), $admin, 'Stok awal');
             $obats[$kode] = $obat;
         }
 
@@ -82,6 +88,29 @@ class DatabaseSeeder extends Seeder
                     $tindakan->bhps()->create(['obat_id' => $obats[$kodeObat]->id, 'jumlah' => $jumlah]);
                 }
             }
+        }
+
+        // Ruang & alat yang bisa dibooking (BK-01)
+        foreach ([
+            ['RG-01', 'Ruang Tindakan 1', 'ruang'],
+            ['RG-02', 'Ruang Tindakan 2', 'ruang'],
+            ['RG-GIGI', 'Ruang Gigi', 'ruang'],
+            ['LASER-01', 'Mesin Laser', 'alat'],
+            ['CHAIR-01', 'Dental Chair', 'alat'],
+        ] as [$kode, $nama, $tipe]) {
+            SumberDaya::create(['cabang_id' => $cabang->id, 'kode' => $kode, 'nama' => $nama, 'tipe' => $tipe]);
+        }
+
+        // Jadwal praktik Senin-Jumat 09:00-17:00, Sabtu 09:00-13:00 untuk dokter & terapis (BK-03)
+        $penjadwal = User::whereIn('role', [Role::Dokter->value, 'terapis'])->get();
+
+        foreach ($penjadwal as $petugas) {
+            foreach ([1, 2, 3, 4, 5] as $hari) {
+                JadwalPraktik::create(['cabang_id' => $cabang->id, 'user_id' => $petugas->id, 'hari' => $hari,
+                    'jam_mulai' => '09:00', 'jam_selesai' => '17:00']);
+            }
+            JadwalPraktik::create(['cabang_id' => $cabang->id, 'user_id' => $petugas->id, 'hari' => 6,
+                'jam_mulai' => '09:00', 'jam_selesai' => '13:00']);
         }
 
         // Faker hanya tersedia di dependensi dev; image produksi dilewati tanpa pasien acak.
@@ -187,9 +216,10 @@ class DatabaseSeeder extends Seeder
             ['OBT-019', 'Miconazole Cream 2%', 'tube', 12000, 30],
             ['OBT-020', 'OBH Sirup 100 ml', 'botol', 15000, 40],
             // Bahan habis pakai treatment estetika (stok minimum khusus)
-            ['OBT-021', 'Botulinum Toxin Type A 100U', 'vial', 3000000, 10, 3],
-            ['OBT-022', 'Filler Asam Hialuronat 1 ml', 'syringe', 3500000, 10, 3],
-            ['OBT-023', 'Krim Anestesi Lidocaine 5% 30 g', 'tube', 150000, 20, 5],
+            // Fraksional: dipakai sebagian lintas pasien. Vial botulinum terbuka hanya layak 24 jam.
+            ['OBT-021', 'Botulinum Toxin Type A 100U', 'vial', 3000000, 10, 3, true, 24],
+            ['OBT-022', 'Filler Asam Hialuronat 1 ml', 'syringe', 3500000, 10, 3, true],
+            ['OBT-023', 'Krim Anestesi Lidocaine 5% 30 g', 'tube', 150000, 20, 5, true],
             ['OBT-024', 'Spuit 1 ml', 'pcs', 3000, 200, 50],
         ];
     }

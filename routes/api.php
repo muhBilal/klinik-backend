@@ -1,11 +1,14 @@
 <?php
 
+use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BerkasController;
+use App\Http\Controllers\Api\BhpController;
 use App\Http\Controllers\Api\CabangController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\Icd10Controller;
+use App\Http\Controllers\Api\JadwalController;
 use App\Http\Controllers\Api\KategoriTindakanController;
 use App\Http\Controllers\Api\KunjunganController;
 use App\Http\Controllers\Api\ObatController;
@@ -16,6 +19,9 @@ use App\Http\Controllers\Api\PeranController;
 use App\Http\Controllers\Api\PoliController;
 use App\Http\Controllers\Api\ProfilController;
 use App\Http\Controllers\Api\ResepController;
+use App\Http\Controllers\Api\ShiftKasController;
+use App\Http\Controllers\Api\StokBatchController;
+use App\Http\Controllers\Api\SumberDayaController;
 use App\Http\Controllers\Api\TagihanController;
 use App\Http\Controllers\Api\TindakanController;
 use App\Http\Controllers\Api\UserController;
@@ -82,6 +88,36 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
             Route::post('kunjungans/{kunjungan}/batal', [KunjunganController::class, 'batal']);
         });
 
+        // Booking & kalender (BK-01, BK-02); check-in mengubah booking menjadi kunjungan (AN-01)
+        Route::middleware('izin:booking.lihat')->group(function () {
+            Route::get('appointments', [AppointmentController::class, 'index']);
+            Route::get('appointments/{appointment}', [AppointmentController::class, 'show']);
+            Route::get('appointments-slot', [AppointmentController::class, 'slot']);
+            Route::get('jadwals', [JadwalController::class, 'index']);
+            Route::get('sumber-dayas', [SumberDayaController::class, 'index']);
+        });
+        Route::middleware('izin:booking.kelola')->group(function () {
+            Route::post('appointments', [AppointmentController::class, 'store']);
+            Route::put('appointments/{appointment}', [AppointmentController::class, 'update']);
+            Route::post('appointments/{appointment}/konfirmasi', [AppointmentController::class, 'konfirmasi']);
+            Route::post('appointments/{appointment}/batal', [AppointmentController::class, 'batal']);
+            Route::post('appointments/{appointment}/tidak-hadir', [AppointmentController::class, 'tidakHadir']);
+            Route::post('appointments/{appointment}/checkin', [AppointmentController::class, 'checkin']);
+            Route::delete('appointments/{appointment}', [AppointmentController::class, 'destroy']);
+        });
+
+        // Jadwal praktik, cuti, ruang & alat (BK-03)
+        Route::middleware('izin:jadwal.kelola')->group(function () {
+            Route::post('jadwals', [JadwalController::class, 'store']);
+            Route::put('jadwals/{jadwal}', [JadwalController::class, 'update']);
+            Route::delete('jadwals/{jadwal}', [JadwalController::class, 'destroy']);
+            Route::post('jadwal-pengecualians', [JadwalController::class, 'storePengecualian']);
+            Route::delete('jadwal-pengecualians/{pengecualian}', [JadwalController::class, 'destroyPengecualian']);
+            Route::post('sumber-dayas', [SumberDayaController::class, 'store']);
+            Route::put('sumber-dayas/{sumberDaya}', [SumberDayaController::class, 'update']);
+            Route::delete('sumber-dayas/{sumberDaya}', [SumberDayaController::class, 'destroy']);
+        });
+
         // Pemeriksaan
         Route::post('kunjungans/{kunjungan}/panggil', [KunjunganController::class, 'panggil'])->middleware('izin:pemeriksaan.panggil');
         Route::put('kunjungans/{kunjungan}/pemeriksaan', [PemeriksaanController::class, 'update'])->middleware('izin:pemeriksaan.vital,pemeriksaan.dokter');
@@ -102,6 +138,7 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
             Route::get('reseps', [ResepController::class, 'index']);
             Route::get('reseps/{resep}', [ResepController::class, 'show']);
             Route::post('reseps/{resep}/serahkan', [ResepController::class, 'serahkan']);
+            Route::post('reseps/{resep}/batal', [ResepController::class, 'batal']);
         });
         Route::middleware('izin:farmasi.obat')->group(function () {
             Route::post('obats', [ObatController::class, 'store']);
@@ -110,11 +147,39 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
             Route::post('obats/{obat}/mutasi', [ObatController::class, 'storeMutasi']);
         });
 
+        // Inventori: batch, kedaluwarsa, stok opname (IN-01, IN-03, IN-05) & pemakaian BHP (IN-02)
+        Route::middleware('izin:inventori.kelola')->group(function () {
+            Route::get('stok-batches', [StokBatchController::class, 'index']);
+            Route::get('stok-batches/kedaluwarsa', [StokBatchController::class, 'kedaluwarsa']);
+            Route::post('stok-batches', [StokBatchController::class, 'store']);
+            Route::post('stok-batches/{stokBatch}/sesuaikan', [StokBatchController::class, 'sesuaikan']);
+            Route::post('stok-batches/{stokBatch}/buang', [StokBatchController::class, 'buang']);
+
+            Route::get('kunjungan-tindakans/{kunjunganTindakan}/bhps', [BhpController::class, 'index']);
+            Route::put('kunjungan-tindakans/{kunjunganTindakan}/bhps', [BhpController::class, 'update']);
+        });
+
         // Kasir
         Route::middleware('izin:kasir.tagihan')->group(function () {
             Route::get('tagihans', [TagihanController::class, 'index']);
             Route::get('tagihans/{tagihan}', [TagihanController::class, 'show']);
+            Route::post('tagihans', [TagihanController::class, 'store']);
             Route::post('tagihans/{tagihan}/bayar', [TagihanController::class, 'bayar']);
+
+            // Batal & refund butuh izin terpisah (persetujuan manajer) — BL-06
+            Route::middleware('izin:kasir.void')->group(function () {
+                Route::post('tagihans/{tagihan}/batal', [TagihanController::class, 'batal']);
+                Route::post('tagihans/{tagihan}/refund', [TagihanController::class, 'refund']);
+            });
+
+            // Shift kas (BL-05)
+            Route::middleware('izin:kasir.shift')->group(function () {
+                Route::get('shift-kas', [ShiftKasController::class, 'index']);
+                Route::get('shift-kas/aktif', [ShiftKasController::class, 'aktif']);
+                Route::get('shift-kas/{shiftKas}', [ShiftKasController::class, 'show'])->whereNumber('shiftKas');
+                Route::post('shift-kas', [ShiftKasController::class, 'store']);
+                Route::post('shift-kas/{shiftKas}/tutup', [ShiftKasController::class, 'tutup']);
+            });
         });
 
         // Master data

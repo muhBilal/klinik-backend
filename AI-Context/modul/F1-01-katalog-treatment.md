@@ -16,7 +16,7 @@ dokter–terapis–asisten; katalog belum menyimpan apa pun tentang komisi.
   `durasi + buffer` sebagai panjang slot.
 - **BHP standar** (`tindakan_bhps`) merujuk `obats` — satu-satunya master barang saat ini. `jumlah` desimal (3 digit) dalam
   **satuan stok obat** (mis. 0,3 vial = 30 U botulinum). Konversi satuan pakai (U, ml) dan pemotongan stok otomatis menyusul di
-  Inventori (IN-02, IN-03). BHP hanya data standar; belum mengubah stok.
+  Inventori (IN-02, IN-03). **Sejak F1-04 BHP standar sudah memotong stok otomatis** — lihat [F1-04](F1-04-inventori.md).
 - **Kategori** (`kategori_tindakans`) master pusat sederhana (nama unik, deskripsi, aktif), soft delete.
 - Semua perubahan tercatat di audit log per baris: `tindakan`, `kategori_tindakan`, `tindakan_harga` (dengan `cabang_id` harga itu),
   `tindakan_bhp`.

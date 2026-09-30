@@ -99,16 +99,58 @@ Bentuk berkas: `{ uuid, cabang_id, pasien_id, kunjungan_id, kategori, keterangan
 | GET | `/reseps` | farmasi.resep | `status`, `tanggal`, `poli_id`, `pembayaran=lunas/belum`, `q`; cabang aktif |
 | GET | `/reseps/{id}` | farmasi.resep | items.obat (dengan stok), pasien, tagihan, `cabang` (kop etiket) |
 | POST | `/reseps/{id}/serahkan` | farmasi.resep | wajib tagihan lunas & stok cukup; respons = bentuk detail resep |
-| POST / PUT | `/obats`, `/obats/{id}` | farmasi.obat | `{ kode*, nama*, satuan*, harga*, stok_minimum*, is_active, stok_awal? (hanya POST) }` |
-| GET / POST | `/obats/{id}/mutasi` | farmasi.obat | kartu stok / `{ jenis*: masuk/keluar/penyesuaian, jumlah*, keterangan? }` → `{ mutasi, obat }` |
+| POST / PUT | `/obats`, `/obats/{id}` | farmasi.obat | `{ kode*, nama*, satuan*, fraksional?, jam_pakai_setelah_buka?, harga*, stok_minimum*, is_active, stok_awal? (hanya POST) }`. `fraksional` = boleh dipakai sebagian (IN-03) |
+| GET / POST | `/obats/{id}/mutasi` | farmasi.obat | kartu stok / `{ jenis*: masuk/keluar/penyesuaian, jumlah*, keterangan? }` → `{ mutasi, obat }`. Masuk/keluar lewat batch tanpa nomor di cabang aktif; `penyesuaian` = stok akhir yang diinginkan **di cabang itu** |
 | DELETE | `/obats/{id}` | master.kelola | soft delete; ditolak bila pernah diresepkan atau menjadi BHP standar treatment |
 
+## Booking & jadwal
+Detail: [modul/F1-02](modul/F1-02-booking-jadwal.md)
+
+| Method | Path | Izin | Keterangan |
+|--------|------|------|------------|
+| GET | `/appointments` | booking.lihat | `dari`, `sampai` (default hari ini), `petugas_id`, `poli_id`, `status`, `q`; + pasien, poli, petugas, tindakans, sumberDayas |
+| GET | `/appointments/{id}` | booking.lihat | bentuk detail booking |
+| GET | `/appointments-slot` | booking.lihat | `petugas_id*`, `tanggal*`, `tindakan_ids[]*`, `sumber_daya_ids[]?` → `{ durasi_menit, jam_kerja[], slot[] }` |
+| POST | `/appointments` | booking.kelola | `{ pasien_id*, poli_id?, petugas_id?, mulai_at*, tindakan_ids[]*, sumber_daya_ids[]?, catatan? }`; `selesai_at` dihitung server dari durasi + buffer |
+| PUT | `/appointments/{id}` | booking.kelola | field yang dikirim saja; jadwal & bentrok dihitung ulang |
+| POST | `/appointments/{id}/konfirmasi` · `/batal` · `/tidak-hadir` | booking.kelola | `/batal` menerima `alasan_batal?`; `/tidak-hadir` hanya bila jadwal sudah lewat |
+| POST | `/appointments/{id}/checkin` | booking.kelola | hanya booking hari ini & berpoli → `{ appointment, kunjungan }` (201) |
+| DELETE | `/appointments/{id}` | booking.kelola | ditolak bila sudah menjadi kunjungan |
+| GET | `/jadwals` | booking.lihat | `?user_id=` → `{ praktiks, pengecualians }` |
+| POST / PUT / DELETE | `/jadwals`, `/jadwals/{id}` | jadwal.kelola | `{ user_id*, hari* (0=Minggu..6), jam_mulai* (H:i), jam_selesai* (H:i), is_active }`; ditolak bila beririsan |
+| POST / DELETE | `/jadwal-pengecualians`, `/{id}` | jadwal.kelola | `{ user_id*, tanggal*, tipe*: cuti/tambahan, jam_mulai?, jam_selesai?, keterangan? }`; cuti tanpa jam = sehari penuh |
+| GET | `/sumber-dayas` | booking.lihat | `tipe` (ruang/alat), `status`, `q`; cabang aktif |
+| POST / PUT / DELETE | `/sumber-dayas`, `/{id}` | jadwal.kelola | `{ kode* (unik per cabang), nama*, tipe*: ruang/alat, is_active }` |
+
 ## Kasir
+Detail: [modul/F1-03](modul/F1-03-kasir.md)
+
 | Method | Path | Izin | Keterangan |
 |--------|------|------|------------|
 | GET | `/tagihans` | kasir.tagihan | `status`, `tanggal`, `metode_bayar`, `penjamin`, `poli_id`, `q`; cabang aktif |
-| GET | `/tagihans/{id}` | kasir.tagihan | items, kunjungan.pasien/poli/dokter, kasir, `cabang` (kop struk: nama, alamat, telepon) |
-| POST | `/tagihans/{id}/bayar` | kasir.tagihan | `{ metode_bayar*, dibayar (wajib jika tunai), diskon? }`; respons = bentuk detail tagihan |
+| GET | `/tagihans/{id}` | kasir.tagihan | items, pembayarans, pasien, kunjungan.pasien/poli/dokter, kasir, `cabang` (kop struk) |
+| POST | `/tagihans` | kasir.tagihan | tagihan tanpa kunjungan (produk/paket/deposit): `{ pasien_id?, keterangan?, items[]*{kategori*: produk/paket/deposit/lainnya, deskripsi*, jumlah*, harga*} }` |
+| POST | `/tagihans/{id}/bayar` | kasir.tagihan | **split payment**: `{ pembayarans[]{metode*, jumlah*, referensi?}, diskon? }`. Bentuk lama `{ metode_bayar*, dibayar, diskon? }` tetap diterima. Non-tunai tidak boleh melebihi tagihan |
+| POST | `/tagihans/{id}/batal` | kasir.void | `{ alasan_batal* }`; hanya tagihan belum bayar |
+| POST | `/tagihans/{id}/refund` | kasir.void | `{ alasan_refund* }`; hanya tagihan lunas; kunjungan kembali ke `menunggu_pembayaran` |
+| POST | `/reseps/{id}/batal` | farmasi.resep | `{ alasan_batal* }`; hanya resep yang belum diserahkan |
+| GET | `/shift-kas` | kasir.shift | `kasir_id`, `tanggal`, `terbuka=1` |
+| GET | `/shift-kas/aktif` | kasir.shift | shift kasir yang login, atau `null` |
+| GET | `/shift-kas/{id}` | kasir.shift | + `rekap`: `per_metode[]`, `total`, `total_refund`, `kas_seharusnya` |
+| POST | `/shift-kas` | kasir.shift | `{ modal_awal* }`; ditolak bila masih ada shift terbuka |
+| POST | `/shift-kas/{id}/tutup` | kasir.shift | `{ kas_fisik*, catatan? }` → `selisih` (negatif = kurang) |
+
+## Inventori
+Detail: [modul/F1-04](modul/F1-04-inventori.md)
+
+| Method | Path | Izin | Keterangan |
+|--------|------|------|------------|
+| GET | `/stok-batches` | inventori.kelola | `obat_id`, `tersedia=1`, `habis=1`, `q`; urut FEFO; cabang aktif |
+| GET | `/stok-batches/kedaluwarsa` | inventori.kelola | `?hari=30`; batch yang sudah/akan kedaluwarsa |
+| POST | `/stok-batches` | inventori.kelola | penerimaan: `{ obat_id*, jumlah* (desimal ≤3), no_batch?, kedaluwarsa? (harus > hari ini), keterangan? }` |
+| POST | `/stok-batches/{id}/sesuaikan` | inventori.kelola | stok opname: `{ jumlah*, keterangan? }` = jumlah akhir hasil hitung fisik |
+| POST | `/stok-batches/{id}/buang` | inventori.kelola | buang sisa batch kedaluwarsa: `{ keterangan? }` |
+| GET / PUT | `/kunjungan-tindakans/{id}/bhps` | inventori.kelola | pemakaian BHP; PUT replace-all `{ bhps[]{obat_id*, jumlah*, batch_id?} }`; ditolak setelah stok dipotong |
 
 ## Master data
 | Method | Path | Izin |

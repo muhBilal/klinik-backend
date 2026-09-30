@@ -108,13 +108,20 @@ Selalu lakukan hal yang sama untuk model baru.
 | TindakanHarga | tindakan_hargas | Auditable (tercatat dengan `cabang_id` harganya) |
 | TindakanBhp | tindakan_bhps | Auditable |
 | Obat | obats | Auditable (kolom `stok` diabaikan — sudah di kartu stok), SoftDeletes |
-| StokMutasi | stok_mutasis | — (ledger) |
+| StokMutasi | stok_mutasis | — (ledger); kini punya `cabang_id` & `batch_id` |
+| StokBatch | stok_batches | Auditable, **DalamCabang** — stok per cabang per batch (FEFO) |
+| KunjunganTindakanBhp | kunjungan_tindakan_bhps | Auditable — pemakaian BHP aktual |
 | Kunjungan | kunjungans | Auditable, **DalamCabang** |
 | Pemeriksaan | pemeriksaans | Auditable |
 | PemeriksaanDiagnosa | pemeriksaan_diagnosas | Auditable |
 | KunjunganTindakan | kunjungan_tindakans | Auditable |
 | Resep / ResepItem | reseps / resep_items | Auditable, **DalamCabang** (Resep) |
-| Tagihan / TagihanItem | tagihans / tagihan_items | Auditable, **DalamCabang** (Tagihan) |
+| Tagihan / TagihanItem | tagihans / tagihan_items | Auditable, **DalamCabang**, SoftDeletes (Tagihan) |
+| Pembayaran | pembayarans | Auditable — split payment; refund menandai `dikembalikan_at` |
+| ShiftKas | shift_kas | Auditable, **DalamCabang** |
+| Appointment / AppointmentTindakan | appointments / appointment_tindakans | Auditable, **DalamCabang**, SoftDeletes (Appointment) |
+| SumberDaya | sumber_dayas | Auditable, **DalamCabang**, SoftDeletes — ruang & alat |
+| JadwalPraktik / JadwalPengecualian | jadwal_praktiks / jadwal_pengecualians | Auditable, **DalamCabang** |
 | Berkas | berkas | Auditable, SoftDeletes |
 | AuditLog | audit_logs | — (menolak update/delete) |
 
@@ -122,12 +129,21 @@ Selalu lakukan hal yang sama untuk model baru.
 bentuk respons konsisten. Relasi ke `User` (dokter, perawat, kasir, apoteker, pengunggah) memakai `withTrashed()` agar nama
 petugas yang sudah dihapus tetap tampil di riwayat.
 
+## Kardinalitas yang berubah di Fase 1
+
+- `tagihans.kunjungan_id` **tidak unique** dan **nullable**: satu kunjungan boleh punya beberapa tagihan, dan tagihan
+  boleh berdiri sendiri (produk/paket/deposit, `pasien_id` diisi langsung). Sama untuk `reseps.kunjungan_id` (tidak unique).
+  Relasi `Kunjungan::tagihan()`/`resep()` mengambil baris terbaru yang bukan batal; `tagihans()`/`reseps()` untuk semuanya.
+- `appointments.kunjungan_id` unique & nullable: satu booking menghasilkan paling banyak satu kunjungan (saat check-in).
+- `obats.stok` = **ringkasan** `stok_batches` lintas cabang, bertipe desimal (12,3). Stok nyata per cabang ada di batch.
+
 ## Aturan hapus
 
 - Data yang sudah dipakai transaksi **tidak boleh dihapus** (controller `abort_if(..., 422)`): pasien dengan kunjungan
   (di cabang mana pun), poli dengan kunjungan, obat yang pernah diresepkan, tindakan yang pernah dipakai, ICD-10 yang dipakai
   diagnosa, cabang yang punya kunjungan/pengguna, peran sistem atau peran yang masih dipakai, kategori treatment yang masih
-  dipakai treatment, obat yang menjadi BHP standar treatment. Solusinya menonaktifkan (`is_active=false`).
+  dipakai treatment, obat yang menjadi BHP standar treatment, ruang/alat yang masih dipakai booking mendatang,
+  booking yang sudah menjadi kunjungan. Solusinya menonaktifkan (`is_active=false`).
 - Hapus yang diizinkan = **soft delete** (pasien, pengguna, obat, tindakan, kategori treatment, poli, cabang, berkas). Harga cabang &
   BHP standar ikut tersimpan saat treatment di-soft delete. Kolom unik (NIK, email,
   kode) tetap terpakai oleh baris yang dihapus — pulihkan data lama, jangan membuat duplikat.

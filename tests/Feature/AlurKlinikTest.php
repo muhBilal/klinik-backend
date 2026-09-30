@@ -76,7 +76,7 @@ class AlurKlinikTest extends TestCase
         $pasien = Pasien::first();
         $dokter = User::where('email', 'dokter@eklinik.test')->first();
         $paracetamol = Obat::where('kode', 'OBT-001')->first();
-        $stokAwal = $paracetamol->stok;
+        $stokAwal = (int) $paracetamol->stok;
         $gds = Tindakan::where('kode', 'TND-001')->first();
 
         // 1. Pendaftaran
@@ -166,7 +166,7 @@ class AlurKlinikTest extends TestCase
             ->assertJsonPath('items.0.obat.stok', $stokAwal - 10);
         $this->postJson("/api/reseps/{$resepId}/serahkan")->assertUnprocessable();
 
-        $this->assertSame($stokAwal - 10, $paracetamol->refresh()->stok);
+        $this->assertSame((float) ($stokAwal - 10), $paracetamol->refresh()->stok);
         $this->getJson("/api/obats/{$paracetamol->id}/mutasi")
             ->assertOk()
             ->assertJsonPath('data.0.jumlah', -10)

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -46,6 +47,12 @@ class Tindakan extends Model
     public function bhps(): HasMany
     {
         return $this->hasMany(TindakanBhp::class);
+    }
+
+    /** Ruang/alat yang boleh dipakai treatment ini (BK-01). Kosong = tidak butuh sumber daya khusus. */
+    public function sumberDayas(): BelongsToMany
+    {
+        return $this->belongsToMany(SumberDaya::class, 'tindakan_sumber_dayas')->withoutGlobalScope('cabang');
     }
 
     /**

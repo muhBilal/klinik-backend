@@ -2,18 +2,17 @@
 
 namespace App\Services;
 
-use App\Enums\MetodeBayar;
-use App\Enums\StatusKunjungan;
 use App\Enums\StatusTagihan;
 use App\Models\Kunjungan;
 use App\Models\Tagihan;
-use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class TagihanService
 {
-    public function __construct(private NomorUrutService $nomor) {}
+    public function __construct(
+        private NomorUrutService $nomor,
+        private KasirService $kasir,
+    ) {}
 
     /**
      * Susun tagihan dari biaya konsultasi poli, tindakan dan obat pada resep.
@@ -50,11 +49,18 @@ class TagihanService
         $items = array_map(fn ($item) => $item + ['subtotal' => $item['jumlah'] * $item['harga']], $items);
         $total = array_sum(array_column($items, 'subtotal'));
 
-        $tagihan = $kunjungan->tagihan()->create([
+        // Tarif pajak di-snapshot saat tagihan dibuat (AD-04); perubahan pengaturan tidak mengubah tagihan lama.
+        $pajakPersen = $this->kasir->pajakPersen();
+        $grandTotal = $this->kasir->hitungGrandTotal($total, 0, $pajakPersen);
+
+        $tagihan = $kunjungan->tagihans()->create([
             'cabang_id' => $kunjungan->cabang_id,
             'no_tagihan' => $this->nomor->noTagihan(now()),
+            'pasien_id' => $kunjungan->pasien_id,
             'total' => $total,
-            'grand_total' => $total,
+            'pajak' => $grandTotal - $total,
+            'pajak_persen' => $pajakPersen,
+            'grand_total' => $grandTotal,
             'status' => StatusTagihan::BelumBayar,
         ]);
 
@@ -63,42 +69,37 @@ class TagihanService
         return $tagihan;
     }
 
-    public function bayar(Tagihan $tagihan, MetodeBayar $metode, int $dibayar, int $diskon, User $kasir): Tagihan
+    /**
+     * Tagihan berdiri sendiri tanpa kunjungan — penjualan produk OTC, paket, deposit
+     * (PRD FR-04, TR-02; temuan teknis 8.3 #3).
+     *
+     * @param  list<array{kategori: string, deskripsi: string, jumlah: int, harga: int}>  $items
+     */
+    public function buatMandiri(int $cabangId, ?int $pasienId, array $items, ?string $keterangan = null): Tagihan
     {
-        return DB::transaction(function () use ($tagihan, $metode, $dibayar, $diskon, $kasir) {
-            $tagihan = Tagihan::whereKey($tagihan->id)->lockForUpdate()->firstOrFail();
+        return DB::transaction(function () use ($cabangId, $pasienId, $items, $keterangan) {
+            $items = array_map(fn ($item) => $item + ['subtotal' => $item['jumlah'] * $item['harga']], $items);
+            $total = array_sum(array_column($items, 'subtotal'));
 
-            if ($tagihan->status !== StatusTagihan::BelumBayar) {
-                throw ValidationException::withMessages(['status' => 'Tagihan ini sudah dibayar atau dibatalkan.']);
-            }
+            $pajakPersen = $this->kasir->pajakPersen();
+            $grandTotal = $this->kasir->hitungGrandTotal($total, 0, $pajakPersen);
 
-            if ($diskon > $tagihan->total) {
-                throw ValidationException::withMessages(['diskon' => 'Diskon tidak boleh melebihi total tagihan.']);
-            }
-
-            $grandTotal = $tagihan->total - $diskon;
-
-            if ($metode === MetodeBayar::Tunai && $dibayar < $grandTotal) {
-                throw ValidationException::withMessages(['dibayar' => 'Nominal pembayaran kurang dari total tagihan.']);
-            }
-
-            // Non-tunai dan penjamin dibayar pas sesuai tagihan.
-            $dibayar = $metode === MetodeBayar::Tunai ? $dibayar : $grandTotal;
-
-            $tagihan->update([
-                'diskon' => $diskon,
+            $tagihan = Tagihan::create([
+                'cabang_id' => $cabangId,
+                'no_tagihan' => $this->nomor->noTagihan(now()),
+                'pasien_id' => $pasienId,
+                'total' => $total,
+                'pajak' => $grandTotal - $total,
+                'pajak_persen' => $pajakPersen,
                 'grand_total' => $grandTotal,
-                'metode_bayar' => $metode,
-                'dibayar' => $dibayar,
-                'kembalian' => $dibayar - $grandTotal,
-                'status' => StatusTagihan::Lunas,
-                'kasir_id' => $kasir->id,
-                'dibayar_at' => now(),
+                'status' => StatusTagihan::BelumBayar,
+                'keterangan' => $keterangan,
             ]);
 
-            $tagihan->kunjungan->update(['status' => StatusKunjungan::Selesai]);
+            $tagihan->items()->createMany($items);
 
-            return $tagihan;
+            // refresh() agar kolom yang tidak diisi (kunjungan_id, dll) ikut ada di respons JSON.
+            return $tagihan->refresh();
         });
     }
 }

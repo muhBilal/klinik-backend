@@ -25,6 +25,20 @@ return [
         'penomoran.prefix_registrasi' => ['default' => 'REG', 'rules' => ['required', 'regex:/^[A-Z]{2,5}$/'], 'publik' => false],
         'penomoran.prefix_resep' => ['default' => 'RSP', 'rules' => ['required', 'regex:/^[A-Z]{2,5}$/'], 'publik' => false],
         'penomoran.prefix_tagihan' => ['default' => 'INV', 'rules' => ['required', 'regex:/^[A-Z]{2,5}$/'], 'publik' => false],
+        'penomoran.prefix_booking' => ['default' => 'BOK', 'rules' => ['required', 'regex:/^[A-Z]{2,5}$/'], 'publik' => false],
+
+        // Pajak layanan (persen) yang ditambahkan ke tagihan baru. Tarif di-snapshot per tagihan.
+        'keuangan.pajak_persen' => ['default' => 0, 'rules' => ['required', 'integer', 'between:0,100'], 'publik' => false],
+        // Batas diskon maksimum per peran, {kode_peran: persen}. Peran tanpa entri = tidak dibatasi,
+        // sehingga klinik yang belum mengatur batas tetap berjalan seperti sebelumnya (BL-02 bersifat opt-in).
+        'keuangan.batas_diskon_persen' => ['default' => [], 'rules' => ['present', 'array'], 'item_rules' => ['integer', 'between:0,100'], 'publik' => false],
+        // Stok BHP kurang saat pemeriksaan ditutup: true = tolak, false = tetap lanjut dan pemakaian
+        // ditandai belum dipotong untuk diselesaikan lewat stok opname (IN-02).
+        'inventori.blokir_bhp_stok_kurang' => ['default' => false, 'rules' => ['boolean'], 'publik' => false],
+
+        // Jam operasional klinik (AD-04); dipakai sebagai batas wajar jadwal praktik & booking.
+        'klinik.jam_buka' => ['default' => '08:00', 'rules' => ['required', 'date_format:H:i'], 'publik' => true],
+        'klinik.jam_tutup' => ['default' => '21:00', 'rules' => ['required', 'date_format:H:i'], 'publik' => true],
 
         // Sesi berakhir bila token tidak dipakai selama N menit (PRD 7.2: 15 menit di perangkat bersama).
         'keamanan.idle_timeout_menit' => ['default' => 15, 'rules' => ['required', 'integer', 'between:5,480'], 'publik' => false],

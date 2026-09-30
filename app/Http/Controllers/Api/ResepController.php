@@ -51,4 +51,12 @@ class ResepController extends Controller
     {
         return response()->json($farmasi->serahkan($resep, $request->user())->load(self::DETAIL));
     }
+
+    /** Batalkan resep yang belum diserahkan (temuan teknis 8.3 #7). */
+    public function batal(Request $request, Resep $resep, FarmasiService $farmasi): JsonResponse
+    {
+        $data = $request->validate(['alasan_batal' => ['required', 'string', 'max:255']]);
+
+        return response()->json($farmasi->batal($resep, $data['alasan_batal'], $request->user())->load(self::DETAIL));
+    }
 }
