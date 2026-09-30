@@ -11,6 +11,7 @@ Baca berurutan sebelum mengubah kode.
 | [04-business-rules.md](04-business-rules.md) | Alur pelayanan klinik dan aturan bisnis wajib |
 | [05-api-reference.md](05-api-reference.md) | Daftar endpoint, hak akses role, payload |
 | [06-conventions.md](06-conventions.md) | Konvensi kode, cara menambah fitur, testing, jebakan umum |
+| [07-roadmap-modul.md](07-roadmap-modul.md) | Gap analysis modul & roadmap agar fleksibel untuk semua jenis klinik |
 
 ## Ringkasan 30 detik
 

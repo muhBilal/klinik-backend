@@ -27,6 +27,8 @@ Route::post('login', [AuthController::class, 'login'])->middleware('throttle:10,
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('me', [AuthController::class, 'me']);
+    Route::patch('me', [AuthController::class, 'updateProfile']);
+    Route::put('me/theme', [AuthController::class, 'updateTheme']);
     Route::post('logout', [AuthController::class, 'logout']);
     Route::get('dashboard', DashboardController::class);
 
