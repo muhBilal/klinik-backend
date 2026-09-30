@@ -27,7 +27,8 @@ app/
 ├── Providers/AppServiceProvider.php  Binding scoped, Gate::before (izin), validasi token Sanctum (idle, user aktif)
 ├── Services/                   Logika bisnis + transaksi DB
 │   ├── NomorUrutService.php    Penomoran berurutan aman-konkurensi (tabel counters), prefix dari pengaturan
-│   ├── PemeriksaanService.php  panggil, simpan (upsert pemeriksaan/diagnosa/tindakan/resep), selesai
+│   ├── PemeriksaanService.php  panggil, simpan (upsert pemeriksaan/diagnosa/tindakan/resep; tarif = harga cabang kunjungan), selesai
+│   ├── TindakanService.php     simpan treatment + sinkron harga per cabang & BHP standar (per model, ter-audit)
 │   ├── TagihanService.php      buatDariKunjungan, bayar
 │   ├── FarmasiService.php      serahkan resep, mutasiManual stok
 │   ├── AuditService.php        penulis tunggal audit_logs (catat, catatModel)
@@ -41,11 +42,11 @@ routes/api.php                  Semua endpoint + grouping izin
 routes/console.php              Jadwal scheduler (prune token, prune failed jobs)
 routes/web.php                  Hanya `GET /` (info JSON)
 lang/id/validation.php          Pesan validasi Bahasa Indonesia (fallback ke en)
-database/migrations/            2026_09_29_1000xx_* = skema awal, 2026_09_30_1000xx_* = Fase 0 (lihat 03-database.md)
+database/migrations/            2026_09_29_1000xx_* = skema awal, 2026_09_30_1000xx_* = Fase 0, 2026_09_30_11xxxx_* dst. = Fase 1 (lihat 03-database.md)
 database/seeders/DatabaseSeeder.php   Data master + akun demo (peran dibuat migration)
 database/factories/             UserFactory, PasienFactory
 tests/Feature/                  AlurKlinikTest, FilterTest, PeranIzinTest, MultiCabangTest, AuditLogTest,
-                                KeamananTest, PengaturanTest, BerkasTest
+                                KeamananTest, PengaturanTest, BerkasTest, KatalogTreatmentTest
 tests/Unit/TwoFactorServiceTest.php   Vektor uji RFC 6238
 ```
 
@@ -71,7 +72,7 @@ Request ─► routes/api.php (auth:sanctum + cabang + wajib2fa + izin:...) ─�
 - Tidak memakai API Resource; model diserialisasi langsung (`toArray`). Enum → nilai string, tanggal `date:Y-m-d`,
   timestamp ISO-8601 UTC.
 - List memakai `paginate()` Laravel → `{ data, current_page, last_page, per_page, total, from, to, links, ... }`.
-  Pengecualian (array biasa): `GET /polis`, `/dokters`, `/cabangs`, `/perans`, `/izins`, `/berkas`.
+  Pengecualian (array biasa): `GET /polis`, `/dokters`, `/cabangs`, `/perans`, `/izins`, `/berkas`, `/kategori-tindakans`.
 - `per_page` dibatasi lewat helper `Controller::paginate($query, $request, default, max)`. `?simple=1` memakai
   `simplePaginate` (tanpa `COUNT(*)`, tanpa `total`/`last_page`) — dipakai autocomplete frontend.
 - **Select seperlunya**: list memakai `->select([...])` dan eager load dengan kolom (`'poli:id,nama'`); FK relasi wajib ikut

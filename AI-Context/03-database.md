@@ -8,6 +8,8 @@ Status disimpan sebagai string dan di-cast ke Enum pada model.
 ```
 cabangs 1─* users (cabang_id, null = lintas cabang)
 cabangs 1─* kunjungans / reseps / tagihans / berkas (cabang_id)
+cabangs 1─* tindakan_hargas *─1 tindakans *─1 kategori_tindakans
+tindakans 1─* tindakan_bhps *─1 obats             (BHP standar)
 perans 1─* peran_izins                      perans.kode ─* users.role
 polis 1─* users (dokter.poli_id)
 polis 1─* kunjungans *─1 pasiens
@@ -35,7 +37,10 @@ pengaturans (kunci → nilai JSON)
 | `users` | name, email (unik), password, **role** (= `perans.kode`), poli_id (dokter), **cabang_id** (null = semua cabang), sip, is_active, two_factor_secret (terenkripsi), two_factor_recovery_codes (terenkripsi), two_factor_confirmed_at, two_factor_last_step, deleted_at |
 | `polis` | kode (unik), nama, tarif_konsultasi, is_active, deleted_at |
 | `icd10s` | kode (unik), nama |
-| `tindakans` | kode (unik), nama, tarif, is_active, deleted_at |
+| `kategori_tindakans` | nama (unik), deskripsi, is_active, deleted_at |
+| `tindakans` | kode (unik), nama, **kategori_id** (nullable), **durasi_menit** (default 15), **buffer_menit** (default 0), **tarif** (= harga dasar pusat), is_active, deleted_at |
+| `tindakan_hargas` | tindakan_id, cabang_id, tarif, **tersedia** (false = tidak dilayani di cabang itu). Unik `(tindakan_id, cabang_id)`. Tanpa baris = harga dasar |
+| `tindakan_bhps` | tindakan_id, obat_id, jumlah `decimal(10,3)` (satuan stok obat, boleh fraksional). Unik `(tindakan_id, obat_id)`. Belum memotong stok (IN-02) |
 | `obats` | kode (unik), nama, satuan, harga, **stok** (int, hanya diubah via FarmasiService; masih global, belum per cabang), stok_minimum, is_active, deleted_at |
 | `pasiens` | **no_rm** (unik, auto), nik (unik, 16 digit, nullable), no_bpjs, nama, jenis_kelamin (`L`/`P`), tempat_lahir, tanggal_lahir, golongan_darah, alamat, no_hp, pekerjaan, alergi, deleted_at. Appends: `umur` ("34 th"/"8 bln"). **Milik pusat, lintas cabang** |
 
@@ -45,7 +50,7 @@ pengaturans (kunci → nilai JSON)
 | `kunjungans` | **cabang_id**, no_registrasi (unik), pasien_id, poli_id, dokter_id, tanggal, no_antrian, penjamin, no_penjamin, keluhan, **status**, dipanggil_at, selesai_at, created_by. Unik `(cabang_id, poli_id, tanggal, no_antrian)` |
 | `pemeriksaans` | kunjungan_id (unik), tekanan_darah (`"120/80"`), nadi, suhu, respirasi, berat_badan, tinggi_badan, subjektif, objektif, asesmen, plan, perawat_id, dokter_id |
 | `pemeriksaan_diagnosas` | pemeriksaan_id, icd10_id, jenis (`primer`/`sekunder`) |
-| `kunjungan_tindakans` | kunjungan_id, tindakan_id, jumlah, **tarif (snapshot)**, keterangan |
+| `kunjungan_tindakans` | kunjungan_id, tindakan_id, jumlah, **tarif (snapshot harga cabang kunjungan)**, keterangan |
 | `reseps` | **cabang_id** (= cabang kunjungan), no_resep, kunjungan_id (unik), dokter_id, **status**, catatan, apoteker_id, diserahkan_at |
 | `resep_items` | resep_id, obat_id, jumlah, aturan_pakai, **harga (snapshot)** |
 | `tagihans` | **cabang_id** (= cabang kunjungan), no_tagihan, kunjungan_id (unik), total, diskon, grand_total, **status**, metode_bayar, dibayar, kembalian, kasir_id, dibayar_at |
@@ -79,6 +84,12 @@ pengaturans (kunci → nilai JSON)
 
 Sudah diuji `migrate` + `migrate:rollback` + `migrate` ulang di PostgreSQL 17 dengan salinan data demo.
 
+## Migration Fase 1
+
+| File | Isi | Modul |
+|------|-----|-------|
+| `2026_09_30_110001_create_katalog_treatment_tables` | `kategori_tindakans`, kolom `kategori_id`/`durasi_menit`/`buffer_menit` di `tindakans`, `tindakan_hargas`, `tindakan_bhps` | [F1-01](modul/F1-01-katalog-treatment.md) |
+
 ## Model ↔ tabel
 
 Nama tabel diset eksplisit dengan `#[Table('...')]` karena pluralisasi Inggris tidak cocok untuk kata Indonesia.
@@ -92,7 +103,10 @@ Selalu lakukan hal yang sama untuk model baru.
 | Poli | polis | Auditable, SoftDeletes |
 | Pasien | pasiens | Auditable, SoftDeletes |
 | Icd10 | icd10s | Auditable |
-| Tindakan | tindakans | Auditable, SoftDeletes |
+| KategoriTindakan | kategori_tindakans | Auditable, SoftDeletes |
+| Tindakan | tindakans | Auditable, SoftDeletes. Scope `denganHargaCabang($cabangId)` (+`tarif_cabang`, `tersedia`), `tersediaDi($cabangId)` |
+| TindakanHarga | tindakan_hargas | Auditable (tercatat dengan `cabang_id` harganya) |
+| TindakanBhp | tindakan_bhps | Auditable |
 | Obat | obats | Auditable (kolom `stok` diabaikan — sudah di kartu stok), SoftDeletes |
 | StokMutasi | stok_mutasis | — (ledger) |
 | Kunjungan | kunjungans | Auditable, **DalamCabang** |
@@ -112,8 +126,10 @@ petugas yang sudah dihapus tetap tampil di riwayat.
 
 - Data yang sudah dipakai transaksi **tidak boleh dihapus** (controller `abort_if(..., 422)`): pasien dengan kunjungan
   (di cabang mana pun), poli dengan kunjungan, obat yang pernah diresepkan, tindakan yang pernah dipakai, ICD-10 yang dipakai
-  diagnosa, cabang yang punya kunjungan/pengguna, peran sistem atau peran yang masih dipakai. Solusinya menonaktifkan (`is_active=false`).
-- Hapus yang diizinkan = **soft delete** (pasien, pengguna, obat, tindakan, poli, cabang, berkas). Kolom unik (NIK, email,
+  diagnosa, cabang yang punya kunjungan/pengguna, peran sistem atau peran yang masih dipakai, kategori treatment yang masih
+  dipakai treatment, obat yang menjadi BHP standar treatment. Solusinya menonaktifkan (`is_active=false`).
+- Hapus yang diizinkan = **soft delete** (pasien, pengguna, obat, tindakan, kategori treatment, poli, cabang, berkas). Harga cabang &
+  BHP standar ikut tersimpan saat treatment di-soft delete. Kolom unik (NIK, email,
   kode) tetap terpakai oleh baris yang dihapus — pulihkan data lama, jangan membuat duplikat.
 - Rekam medis (pemeriksaan, diagnosa, tindakan, resep) tidak punya endpoint hapus; penggantian diagnosa/tindakan/item resep
   saat pemeriksaan masih terbuka dilakukan per model sehingga tercatat di audit log.

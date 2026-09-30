@@ -45,7 +45,8 @@ Status resep: `menunggu` → `diserahkan`. Status tagihan: `belum_bayar` → `lu
 - Penggantian diagnosa/tindakan/item resep (replace-all) menghapus baris lama **per model** agar tercatat di audit log.
 - `diagnosas`, `tindakans`, `resep` bersifat **replace-all** bila key ada di payload (hapus lalu buat ulang). Key tidak dikirim = tidak diubah.
 - Diagnosa pertama tanpa `jenis` otomatis `primer`, sisanya `sekunder`.
-- Tarif tindakan dan harga obat di-**snapshot** dari master saat disimpan.
+- Tarif tindakan di-**snapshot** dari **harga cabang kunjungan** (harga khusus cabang, atau harga dasar) dan harga obat dari master saat disimpan.
+- Treatment yang ditandai **tidak dilayani** di cabang kunjungan → 422 `tindakans.{i}.tindakan_id` (tindakan lama tidak dihapus). Treatment nonaktif/terhapus → 422.
 - `resep: []` menghapus resep (jika masih `menunggu`). Resep yang sudah diproses farmasi tidak bisa diubah.
 
 ### Selesai pemeriksaan (`PemeriksaanService::selesai`)
@@ -59,6 +60,13 @@ Status resep: `menunggu` → `diserahkan`. Status tagihan: `belum_bayar` → `lu
 - Tunai: `dibayar ≥ grand_total`, `kembalian = dibayar − grand_total`.
 - Non-tunai & `penjamin`: `dibayar` dipaksa = `grand_total`, kembalian 0.
 - Setelah lunas, status kunjungan → `selesai` (lewat model, tercatat di audit log).
+
+### Katalog treatment (detail: [modul/F1-01-katalog-treatment.md](modul/F1-01-katalog-treatment.md))
+- `tindakans.tarif` = harga dasar pusat; `tindakan_hargas` menimpa per cabang atau menandai tidak dilayani (`tersedia=false`).
+- `durasi_menit` (1–720, wajib) + `buffer_menit` (0–240) = panjang slot untuk booking.
+- `hargas` & `bhps` di payload treatment bersifat replace-all bila key dikirim; disinkron per model (`TindakanService`).
+- BHP standar: jumlah > 0, maks. 3 desimal, dalam satuan stok obat. Belum memotong stok (Inventori IN-02).
+- Kategori yang masih dipakai treatment dan obat yang menjadi BHP standar treatment tidak bisa dihapus.
 
 ### Farmasi (`FarmasiService`)
 - **Obat hanya diserahkan setelah tagihan lunas** (alur: poli → kasir → farmasi).

@@ -47,6 +47,13 @@
 - Setiap test `RefreshDatabase` + `$this->seed(DatabaseSeeder::class)`; akun demo tersedia (`dokter@eklinik.test`, dst).
 - Test utama: `tests/Feature/AlurKlinikTest.php` — cakup alur penuh; perluas di sana untuk aturan bisnis baru.
   Test per fitur Fase 0: `PeranIzinTest`, `MultiCabangTest`, `AuditLogTest`, `KeamananTest`, `PengaturanTest`, `BerkasTest`.
+  Fase 1: `KatalogTreatmentTest`.
+- Jangan menulis ID tetap (`/api/obats/1`, `'poli_id' => 1`): di PostgreSQL sequence tidak di-reset antar-test. Ambil dari data
+  (`Obat::value('id')`).
+- Menjalankan suite ke **PostgreSQL** (sebelum rilis / bila memakai SQL mentah): jalankan container `postgres:17-alpine` sementara
+  di network `eklinik-dev_default` (mis. nama `eklinik-pgcek`, `--tmpfs /var/lib/postgresql/data`), lalu
+  `docker compose -f docker-compose.dev.yml run --rm --no-deps -e DB_CONNECTION=pgsql -e DB_HOST=eklinik-pgcek -e DB_DATABASE=... -e DB_USERNAME=... -e DB_PASSWORD=... app php artisan test`
+  (`<env>` di phpunit.xml tidak menimpa env yang sudah diset). Di Git Bash tambahkan `MSYS_NO_PATHCONV=1` pada `docker run`.
 - `Sanctum::actingAs()` **melewati** validasi token (idle, expiry). Untuk menguji token asli: login lewat `/api/login`,
   `withToken($token)`, dan panggil `$this->app['auth']->forgetGuards()` sebelum tiap request (lihat `KeamananTest::api()`).
 - Cabang aktif di test: user terikat cabang otomatis; user lintas cabang → `withHeaders(['X-Cabang-Id' => ...])`
@@ -75,6 +82,8 @@
 | `users.role` tidak lagi di-cast enum | Nilainya string kode peran. `Role::X->value` saat membuat user di seeder/test. |
 | Membuat user tanpa cabang | `cabang_id` null = akses semua cabang. Staf cabang wajib diisi cabangnya. |
 | `APP_KEY` diganti | Berkas terenkripsi & secret 2FA tidak bisa dibuka. Rotasi pakai `APP_PREVIOUS_KEYS`. |
+| `except()` / `only()` pada Eloquent Collection | Memakai **primary key model**, bukan key koleksi. Setelah `keyBy('cabang_id')` pakai `diffKeys()` / `reject()` (lihat `TindakanService`). |
+| SQL mentah di select | Hanya fungsi standar (`COALESCE`, subquery) dan literal `TRUE`/`FALSE` — contoh `Tindakan::scopeDenganHargaCabang`. Uji juga di PostgreSQL. |
 | Edit file lewat skrip Python di Windows | `open(p, 'w')` menulis CRLF. Pakai `newline=''` / mode biner; Pint menormalkan PHP, file lain tidak. |
 | Queue worker dev gagal saat start pertama | Tabel `jobs`/`cache` belum ada sebelum `migrate`; container restart otomatis. |
 | Stack dev lambat / 504 di Windows | Bind mount kode lambat; jangan nyalakan profile `worker` bila tidak perlu, dan jangan menjalankan banyak stack dev bersamaan. `artisan` yang butuh menit = VM Docker kewalahan I/O. |

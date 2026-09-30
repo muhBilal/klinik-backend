@@ -6,6 +6,7 @@ use App\Enums\JenisMutasi;
 use App\Enums\Role;
 use App\Models\Cabang;
 use App\Models\Icd10;
+use App\Models\KategoriTindakan;
 use App\Models\Obat;
 use App\Models\Pasien;
 use App\Models\Poli;
@@ -61,13 +62,26 @@ class DatabaseSeeder extends Seeder
             Icd10::create(compact('kode', 'nama'));
         }
 
-        foreach ($this->tindakan() as [$kode, $nama, $tarif]) {
-            Tindakan::create(compact('kode', 'nama', 'tarif'));
+        $obats = collect();
+        foreach ($this->obat() as $item) {
+            [$kode, $nama, $satuan, $harga, $stok] = $item;
+            $obat = Obat::create(['kode' => $kode, 'nama' => $nama, 'satuan' => $satuan, 'harga' => $harga, 'stok_minimum' => $item[5] ?? 20]);
+            $farmasi->mutasiManual($obat, JenisMutasi::Masuk, $stok, 'Stok awal', $admin);
+            $obats[$kode] = $obat;
         }
 
-        foreach ($this->obat() as [$kode, $nama, $satuan, $harga, $stok]) {
-            $obat = Obat::create(['kode' => $kode, 'nama' => $nama, 'satuan' => $satuan, 'harga' => $harga, 'stok_minimum' => 20]);
-            $farmasi->mutasiManual($obat, JenisMutasi::Masuk, $stok, 'Stok awal', $admin);
+        // Katalog treatment: kategori, durasi + buffer (menit), BHP standar [kode obat => jumlah dalam satuan obat]
+        foreach ($this->tindakan() as $kategori => $tindakans) {
+            $kategoriId = KategoriTindakan::create(['nama' => $kategori])->id;
+
+            foreach ($tindakans as [$kode, $nama, $tarif, $durasi, $buffer, $bhp]) {
+                $tindakan = Tindakan::create(['kode' => $kode, 'nama' => $nama, 'tarif' => $tarif, 'kategori_id' => $kategoriId,
+                    'durasi_menit' => $durasi, 'buffer_menit' => $buffer]);
+
+                foreach ($bhp as $kodeObat => $jumlah) {
+                    $tindakan->bhps()->create(['obat_id' => $obats[$kodeObat]->id, 'jumlah' => $jumlah]);
+                }
+            }
         }
 
         // Faker hanya tersedia di dependensi dev; image produksi dilewati tanpa pasien acak.
@@ -109,22 +123,43 @@ class DatabaseSeeder extends Seeder
         ];
     }
 
+    /** [kategori => [[kode, nama, tarif, durasi, buffer, [kode obat => jumlah BHP]]]] */
     private function tindakan(): array
     {
         return [
-            ['TND-001', 'Pemeriksaan gula darah sewaktu', 25000],
-            ['TND-002', 'Pemeriksaan kolesterol total', 35000],
-            ['TND-003', 'Pemeriksaan asam urat', 25000],
-            ['TND-004', 'Nebulizer', 50000],
-            ['TND-005', 'Perawatan luka ringan', 40000],
-            ['TND-006', 'Jahit luka (hecting) < 5 jahitan', 100000],
-            ['TND-007', 'Injeksi', 30000],
-            ['TND-008', 'EKG', 75000],
-            ['TND-101', 'Tambal gigi komposit', 200000],
-            ['TND-102', 'Cabut gigi permanen', 150000],
-            ['TND-103', 'Scaling', 250000],
-            ['TND-201', 'USG kehamilan', 150000],
-            ['TND-202', 'Pemasangan KB suntik', 35000],
+            'Pemeriksaan Penunjang' => [
+                ['TND-001', 'Pemeriksaan gula darah sewaktu', 25000, 10, 0, []],
+                ['TND-002', 'Pemeriksaan kolesterol total', 35000, 10, 0, []],
+                ['TND-003', 'Pemeriksaan asam urat', 25000, 10, 0, []],
+                ['TND-008', 'EKG', 75000, 20, 5, []],
+            ],
+            'Tindakan Umum' => [
+                ['TND-004', 'Nebulizer', 50000, 20, 5, []],
+                ['TND-005', 'Perawatan luka ringan', 40000, 20, 5, []],
+                ['TND-006', 'Jahit luka (hecting) < 5 jahitan', 100000, 30, 10, []],
+                ['TND-007', 'Injeksi', 30000, 10, 0, ['OBT-024' => 1]],
+            ],
+            'Perawatan Gigi' => [
+                ['TND-101', 'Tambal gigi komposit', 200000, 45, 15, []],
+                ['TND-102', 'Cabut gigi permanen', 150000, 30, 15, []],
+                ['TND-103', 'Scaling', 250000, 45, 15, []],
+            ],
+            'Kesehatan Ibu & Anak' => [
+                ['TND-201', 'USG kehamilan', 150000, 20, 5, []],
+                ['TND-202', 'Pemasangan KB suntik', 35000, 10, 0, ['OBT-024' => 1]],
+            ],
+            'Injeksi Estetika' => [
+                ['TRT-001', 'Botulinum toxin dahi & glabella', 3500000, 30, 10, ['OBT-021' => 0.3, 'OBT-024' => 2]],
+                ['TRT-002', 'Filler asam hialuronat (per 1 ml)', 4500000, 45, 15, ['OBT-022' => 1, 'OBT-023' => 0.2]],
+            ],
+            'Laser & Energy Device' => [
+                ['TRT-011', 'Laser toning wajah', 1200000, 45, 15, ['OBT-023' => 0.2]],
+                ['TRT-012', 'IPL photo rejuvenation', 900000, 45, 15, []],
+            ],
+            'Facial & Peeling' => [
+                ['TRT-021', 'Facial acne', 350000, 60, 10, []],
+                ['TRT-022', 'Chemical peeling wajah', 500000, 45, 10, []],
+            ],
         ];
     }
 
@@ -151,6 +186,11 @@ class DatabaseSeeder extends Seeder
             ['OBT-018', 'Tablet Tambah Darah', 'tablet', 300, 300],
             ['OBT-019', 'Miconazole Cream 2%', 'tube', 12000, 30],
             ['OBT-020', 'OBH Sirup 100 ml', 'botol', 15000, 40],
+            // Bahan habis pakai treatment estetika (stok minimum khusus)
+            ['OBT-021', 'Botulinum Toxin Type A 100U', 'vial', 3000000, 10, 3],
+            ['OBT-022', 'Filler Asam Hialuronat 1 ml', 'syringe', 3500000, 10, 3],
+            ['OBT-023', 'Krim Anestesi Lidocaine 5% 30 g', 'tube', 150000, 20, 5],
+            ['OBT-024', 'Spuit 1 ml', 'pcs', 3000, 200, 50],
         ];
     }
 }

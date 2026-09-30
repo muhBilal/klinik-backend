@@ -26,6 +26,7 @@ Baca berurutan sebelum mengubah kode.
 | [F0-05-berkas-terenkripsi.md](modul/F0-05-berkas-terenkripsi.md) | Penyimpanan berkas klinis terenkripsi + tautan bertanda tangan | FT-03, 7.2 Enkripsi |
 | [F0-06-pengaturan-klinik.md](modul/F0-06-pengaturan-klinik.md) | Pengaturan klinik (identitas, struk, prefix nomor, keamanan) | AD-04 |
 | [F0-07-queue-scheduler.md](modul/F0-07-queue-scheduler.md) | Queue worker & scheduler | Fondasi CR-01, SATUSEHAT |
+| [F1-01-katalog-treatment.md](modul/F1-01-katalog-treatment.md) | Katalog treatment: kategori, durasi + buffer, harga per cabang, BHP standar | TR-01, AD-01 |
 
 ## Ringkasan 30 detik
 

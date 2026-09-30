@@ -119,17 +119,32 @@ class PemeriksaanService
         }
     }
 
+    /**
+     * Tarif di-snapshot dari harga cabang kunjungan (harga dasar bila cabang tidak punya harga khusus).
+     */
     private function syncTindakan(Kunjungan $kunjungan, array $tindakans): void
     {
-        $kunjungan->tindakans()->get()->each->delete();
+        $master = Tindakan::whereIn('id', Arr::pluck($tindakans, 'tindakan_id'))
+            ->select(['id', 'nama', 'tarif'])
+            ->denganHargaCabang($kunjungan->cabang_id)
+            ->get()
+            ->keyBy('id');
 
-        $master = Tindakan::whereIn('id', Arr::pluck($tindakans, 'tindakan_id'))->get()->keyBy('id');
+        foreach ($tindakans as $index => $item) {
+            if (! $master[$item['tindakan_id']]->tersedia) {
+                throw ValidationException::withMessages([
+                    "tindakans.{$index}.tindakan_id" => "{$master[$item['tindakan_id']]->nama} tidak dilayani di cabang ini.",
+                ]);
+            }
+        }
+
+        $kunjungan->tindakans()->get()->each->delete();
 
         foreach ($tindakans as $item) {
             $kunjungan->tindakans()->create([
                 'tindakan_id' => $item['tindakan_id'],
                 'jumlah' => $item['jumlah'] ?? 1,
-                'tarif' => $master[$item['tindakan_id']]->tarif,
+                'tarif' => $master[$item['tindakan_id']]->tarif_cabang,
                 'keterangan' => $item['keterangan'] ?? null,
             ]);
         }

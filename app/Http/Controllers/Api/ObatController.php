@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\JenisMutasi;
 use App\Http\Controllers\Controller;
 use App\Models\Obat;
+use App\Models\TindakanBhp;
 use App\Services\FarmasiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -63,6 +64,8 @@ class ObatController extends Controller
     {
         abort_if(DB::table('resep_items')->where('obat_id', $obat->id)->exists(), 422,
             'Obat sudah pernah diresepkan. Nonaktifkan saja, jangan dihapus.');
+        abort_if(TindakanBhp::where('obat_id', $obat->id)->whereHas('tindakan', fn ($q) => $q->withoutTrashed())->exists(), 422,
+            'Obat dipakai sebagai BHP standar treatment. Hapus dari daftar BHP treatment terlebih dahulu.');
 
         $obat->delete();
 

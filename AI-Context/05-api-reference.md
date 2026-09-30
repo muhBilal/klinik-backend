@@ -43,7 +43,8 @@ Bentuk `user` (login, `/me`):
 | GET | `/polis/{poli}` | login | + `dokters` |
 | GET | `/dokters` | login | `poli_id` — **array** `[id, name, poli_id, cabang_id, sip]`; dengan cabang aktif: dokter cabang itu + dokter lintas cabang |
 | GET | `/icd10s` | login | `q`, `huruf` |
-| GET | `/tindakans` | login | `q`, `aktif=1`, `status` |
+| GET | `/tindakans` | login | `q`, `aktif=1` (juga sembunyikan yang tidak dilayani di cabang), `status`, `kategori_id`, `cabang_id` (default cabang aktif). + `kategori`, `tarif_cabang`, `tersedia`, `hargas_count`, `bhps_count` |
+| GET | `/kategori-tindakans` | login | **array**. `aktif=1`: `{id, nama}` aktif; tanpa filter: lengkap + `tindakans_count`. `status`, `q` |
 | GET | `/obats`, `/obats/{obat}` | login | `q`, `aktif=1`, `menipis=1`, `satuan`, `status` |
 
 ## Pasien (master pusat, lintas cabang)
@@ -100,7 +101,7 @@ Bentuk berkas: `{ uuid, cabang_id, pasien_id, kunjungan_id, kategori, keterangan
 | POST | `/reseps/{id}/serahkan` | farmasi.resep | wajib tagihan lunas & stok cukup; respons = bentuk detail resep |
 | POST / PUT | `/obats`, `/obats/{id}` | farmasi.obat | `{ kode*, nama*, satuan*, harga*, stok_minimum*, is_active, stok_awal? (hanya POST) }` |
 | GET / POST | `/obats/{id}/mutasi` | farmasi.obat | kartu stok / `{ jenis*: masuk/keluar/penyesuaian, jumlah*, keterangan? }` → `{ mutasi, obat }` |
-| DELETE | `/obats/{id}` | master.kelola | soft delete; ditolak bila pernah diresepkan |
+| DELETE | `/obats/{id}` | master.kelola | soft delete; ditolak bila pernah diresepkan atau menjadi BHP standar treatment |
 
 ## Kasir
 | Method | Path | Izin | Keterangan |
@@ -113,7 +114,8 @@ Bentuk berkas: `{ uuid, cabang_id, pasien_id, kunjungan_id, kategori, keterangan
 | Method | Path | Izin |
 |--------|------|------|
 | POST / PUT / DELETE | `/polis`, `/polis/{poli}` — `{ kode*, nama*, tarif_konsultasi*, is_active }` | master.kelola |
-| apiResource (kecuali index) | `/tindakans` — `{ kode*, nama*, tarif*, is_active }` | master.kelola |
+| apiResource (kecuali index) | `/tindakans` — `{ kode*, nama*, kategori_id, durasi_menit* (1–720), buffer_menit (0–240), tarif* (harga dasar), is_active, hargas?: [{cabang_id*, tarif*, tersedia}], bhps?: [{obat_id*, jumlah* (desimal ≤3)}] }`; `hargas`/`bhps` replace-all bila dikirim. Show/store/update → + `kategori`, `hargas[].cabang`, `bhps[].obat`. Detail: [modul/F1-01](modul/F1-01-katalog-treatment.md) | master.kelola |
+| POST / PUT / DELETE | `/kategori-tindakans`, `/kategori-tindakans/{kategori}` — `{ nama* (unik), deskripsi, is_active }`; hapus ditolak bila masih dipakai | master.kelola |
 | apiResource (kecuali index) | `/icd10s` — `{ kode*, nama* }` | master.kelola |
 | POST / GET / PUT / DELETE | `/cabangs`, `/cabangs/{cabang}` — `{ kode* (A-Z0-9-, disimpan huruf besar), nama*, alamat, telepon, email, jam_buka (H:i), jam_tutup (H:i, > jam_buka), is_active }` | cabang.kelola |
 

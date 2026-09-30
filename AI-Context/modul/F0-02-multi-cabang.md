@@ -6,7 +6,8 @@ harga & stok per cabang menyusul di modul Katalog (TR-01) dan Inventori (IN-01, 
 ## Keputusan desain
 
 - **Satu instalasi = satu organisasi klinik** dengan banyak cabang (bukan multi-tenant lintas organisasi dalam satu database).
-- **Pusat (lintas cabang):** pasien & No. RM, poli, tindakan, ICD-10, obat (stok masih global), peran, pengaturan.
+- **Pusat (lintas cabang):** pasien & No. RM, poli, tindakan (harga dasar; harga per cabang di `tindakan_hargas`, F1-01), ICD-10,
+  obat (stok masih global), peran, pengaturan.
 - **Per cabang:** kunjungan, resep, tagihan (dan nantinya booking, stok, kas). Kolom `cabang_id`.
 - **Pengguna:** `users.cabang_id` = cabang tempat bertugas; `null` = boleh mengakses semua cabang (pemilik, admin pusat).
 
@@ -74,7 +75,8 @@ kunjungan/resep/tagihan, pindahkan semua user **selain admin** ke cabang itu, ga
 
 ## Belum dikerjakan (fase berikutnya)
 
-- Harga tindakan per cabang (TR-01), stok obat/BHP per gudang cabang & mutasi antar cabang (IN-01, IN-05).
+- ~~Harga tindakan per cabang (TR-01)~~ → selesai di [F1-01](F1-01-katalog-treatment.md). Stok obat/BHP per gudang cabang & mutasi
+  antar cabang (IN-01, IN-05). Tarif konsultasi poli per cabang.
 - Laporan konsolidasi lintas cabang (LP-02) — dashboard sudah mendukung tampilan semua cabang.
 - Modul spesialisasi aktif per cabang (PRD bagian 6).
 

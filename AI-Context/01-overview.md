@@ -4,8 +4,9 @@
 
 E-Klinik adalah sistem informasi klinik rawat jalan yang sedang dikembangkan menjadi sistem manajemen **klinik estetika**
 (dermatologi, estetika medis, gigi) sesuai PRD di folder ini. Fitur saat ini: pendaftaran pasien & antrian poli, rekam medis
-(tanda vital, SOAP, diagnosa ICD-10, tindakan, lampiran klinis terenkripsi), resep elektronik, farmasi (stok obat), kasir,
-multi-cabang, peran & izin dinamis, audit log, 2FA, dan pengaturan klinik. Status per fase: [07-roadmap-progress.md](07-roadmap-progress.md).
+(tanda vital, SOAP, diagnosa ICD-10, tindakan, lampiran klinis terenkripsi), katalog treatment (kategori, durasi, harga per
+cabang, BHP standar), resep elektronik, farmasi (stok obat), kasir, multi-cabang, peran & izin dinamis, audit log, 2FA, dan
+pengaturan klinik. Status per fase: [07-roadmap-progress.md](07-roadmap-progress.md).
 
 **Model tenant:** satu instalasi (satu database) = satu organisasi klinik dengan banyak cabang. Tidak ada multi-tenant
 lintas organisasi dalam satu database.
@@ -117,5 +118,5 @@ $DC exec app php artisan route:list --path=api
 Password semua `password`: `admin@` (lintas cabang), `pendaftaran@`, `perawat@`, `dokter@` (Poli Umum), `dokter.gigi@`,
 `dokter.kia@`, `apoteker@`, `kasir@`, `terapis@`, `manajer@` — domain `eklinik.test`. Semua staf di cabang `UTAMA`.
 
-Seeder juga membuat 1 cabang (UTAMA "Klinik Utama"), 3 poli (UMUM, GIGI, KIA), 27 kode ICD-10, 13 tindakan, 20 obat
-(dengan stok awal tercatat di kartu stok), dan 25 pasien acak. Peran (9 peran bawaan) dibuat oleh migration, bukan seeder.
+Seeder juga membuat 1 cabang (UTAMA "Klinik Utama"), 3 poli (UMUM, GIGI, KIA), 27 kode ICD-10, 7 kategori treatment,
+19 treatment/tindakan (6 treatment estetika dengan BHP standar), 24 obat & bahan (dengan stok awal tercatat di kartu stok), dan 25 pasien acak. Peran (9 peran bawaan) dibuat oleh migration, bukan seeder.

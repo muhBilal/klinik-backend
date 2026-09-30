@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\BerkasController;
 use App\Http\Controllers\Api\CabangController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\Icd10Controller;
+use App\Http\Controllers\Api\KategoriTindakanController;
 use App\Http\Controllers\Api\KunjunganController;
 use App\Http\Controllers\Api\ObatController;
 use App\Http\Controllers\Api\PasienController;
@@ -57,6 +58,7 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
         Route::get('dokters', [UserController::class, 'dokter']);
         Route::get('icd10s', [Icd10Controller::class, 'index']);
         Route::get('tindakans', [TindakanController::class, 'index']);
+        Route::get('kategori-tindakans', [KategoriTindakanController::class, 'index']);
         Route::get('obats', [ObatController::class, 'index']);
         Route::get('obats/{obat}', [ObatController::class, 'show']);
 
@@ -124,6 +126,9 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
             Route::delete('polis/{poli}', [PoliController::class, 'destroy']);
 
             Route::apiResource('tindakans', TindakanController::class)->except('index');
+            Route::post('kategori-tindakans', [KategoriTindakanController::class, 'store']);
+            Route::put('kategori-tindakans/{kategori}', [KategoriTindakanController::class, 'update']);
+            Route::delete('kategori-tindakans/{kategori}', [KategoriTindakanController::class, 'destroy']);
             Route::apiResource('icd10s', Icd10Controller::class)->except('index');
         });
 

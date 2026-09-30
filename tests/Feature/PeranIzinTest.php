@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Icd10;
+use App\Models\Obat;
 use App\Models\Pasien;
 use App\Models\Peran;
+use App\Models\Poli;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -74,7 +76,7 @@ class PeranIzinTest extends TestCase
         Sanctum::actingAs($user);
         $this->getJson('/api/tagihans')->assertOk();
         $this->getJson('/api/reseps')->assertOk();
-        $this->getJson('/api/obats/1/mutasi')->assertForbidden();
+        $this->getJson('/api/obats/'.Obat::value('id').'/mutasi')->assertForbidden();
 
         // Izin dicabut -> akses hilang
         $this->as('admin@eklinik.test');
@@ -119,7 +121,7 @@ class PeranIzinTest extends TestCase
         // Poli wajib untuk peran berizin pemeriksaan.dokter
         $payload = ['name' => 'dr. Estetika', 'email' => 'estetika@eklinik.test', 'password' => 'password123', 'role' => 'dokter_estetika'];
         $this->postJson('/api/users', $payload)->assertUnprocessable()->assertJsonValidationErrors('poli_id');
-        $this->postJson('/api/users', [...$payload, 'poli_id' => 1])->assertCreated();
+        $this->postJson('/api/users', [...$payload, 'poli_id' => Poli::value('id')])->assertCreated();
 
         $dokters = collect($this->getJson('/api/dokters')->assertOk()->json());
         $this->assertContains('estetika@eklinik.test', User::whereIn('id', $dokters->pluck('id'))->pluck('email'));

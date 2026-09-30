@@ -32,12 +32,12 @@ class PemeriksaanController extends Controller
             'diagnosas.*.jenis' => ['nullable', Rule::in(['primer', 'sekunder'])],
 
             'tindakans' => ['sometimes', 'array'],
-            'tindakans.*.tindakan_id' => ['required', Rule::exists('tindakans', 'id')->where('is_active', true)],
+            'tindakans.*.tindakan_id' => ['required', Rule::exists('tindakans', 'id')->where('is_active', true)->whereNull('deleted_at')],
             'tindakans.*.jumlah' => ['nullable', 'integer', 'min:1', 'max:100'],
             'tindakans.*.keterangan' => ['nullable', 'string', 'max:255'],
 
             'resep' => ['sometimes', 'array'],
-            'resep.*.obat_id' => ['required', 'distinct', Rule::exists('obats', 'id')->where('is_active', true)],
+            'resep.*.obat_id' => ['required', 'distinct', Rule::exists('obats', 'id')->where('is_active', true)->whereNull('deleted_at')],
             'resep.*.jumlah' => ['required', 'integer', 'min:1', 'max:1000'],
             'resep.*.aturan_pakai' => ['required', 'string', 'max:255'],
             'catatan_resep' => ['nullable', 'string', 'max:1000'],
