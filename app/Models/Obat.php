@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Table('obats')]
-#[Fillable(['kode', 'nama', 'satuan', 'harga', 'stok_minimum', 'is_active'])]
+#[Fillable(['kode', 'nama', 'satuan', 'fraksional', 'jam_pakai_setelah_buka', 'harga', 'stok_minimum', 'is_active'])]
 class Obat extends Model
 {
     use Auditable, SoftDeletes;
@@ -20,8 +20,10 @@ class Obat extends Model
     {
         return [
             'harga' => 'integer',
-            'stok' => 'integer',
+            'stok' => 'float',
             'stok_minimum' => 'integer',
+            'fraksional' => 'boolean',
+            'jam_pakai_setelah_buka' => 'integer',
             'is_active' => 'boolean',
         ];
     }
@@ -29,6 +31,21 @@ class Obat extends Model
     public function mutasis(): HasMany
     {
         return $this->hasMany(StokMutasi::class)->latest('id');
+    }
+
+    /** Stok per cabang per batch (IN-01). `stok` pada obat adalah totalnya. */
+    public function batches(): HasMany
+    {
+        return $this->hasMany(StokBatch::class)->withoutGlobalScope('cabang');
+    }
+
+    /** Stok di satu cabang saja. */
+    public function stokDi(?int $cabangId): float
+    {
+        return (float) $this->batches()
+            ->when($cabangId, fn ($q) => $q->where('cabang_id', $cabangId))
+            ->tersedia()
+            ->sum('jumlah');
     }
 
     public function scopeStokMenipis(Builder $query): void

@@ -33,9 +33,10 @@ class Peran extends Model
         ];
     }
 
+    /** Diurutkan agar daftar izin stabil lintas engine database (PostgreSQL tidak menjamin urutan tanpa ORDER BY). */
     public function izins(): HasMany
     {
-        return $this->hasMany(PeranIzin::class);
+        return $this->hasMany(PeranIzin::class)->orderBy('izin');
     }
 
     public function users(): HasMany

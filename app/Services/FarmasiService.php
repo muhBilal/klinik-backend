@@ -9,11 +9,40 @@ use App\Models\Obat;
 use App\Models\Resep;
 use App\Models\StokMutasi;
 use App\Models\User;
+use App\Support\CabangAktif;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class FarmasiService
 {
+    public function __construct(private InventoriService $inventori) {}
+
+    /**
+     * Batalkan resep yang belum diserahkan (temuan teknis 8.3 #7).
+     * Stok tidak tersentuh karena baru berkurang saat penyerahan.
+     */
+    public function batal(Resep $resep, string $alasan, User $user): Resep
+    {
+        return DB::transaction(function () use ($resep, $alasan, $user) {
+            $resep = Resep::whereKey($resep->id)->lockForUpdate()->firstOrFail();
+
+            if ($resep->status !== StatusResep::Menunggu) {
+                throw ValidationException::withMessages([
+                    'status' => 'Hanya resep yang belum diserahkan yang bisa dibatalkan.',
+                ]);
+            }
+
+            $resep->update([
+                'status' => StatusResep::Batal,
+                'dibatalkan_at' => now(),
+                'dibatalkan_oleh' => $user->id,
+                'alasan_batal' => $alasan,
+            ]);
+
+            return $resep;
+        });
+    }
+
     /**
      * Serahkan obat ke pasien: stok dikurangi dan dicatat di kartu stok.
      * Alur klinik: poli -> kasir (lunas) -> farmasi.
@@ -33,18 +62,26 @@ class FarmasiService
                 throw ValidationException::withMessages(['tagihan' => 'Tagihan pasien belum lunas. Arahkan pasien ke kasir terlebih dahulu.']);
             }
 
-            $obats = Obat::whereIn('id', $resep->items->pluck('obat_id'))->lockForUpdate()->get()->keyBy('id');
+            $obats = Obat::withTrashed()->whereIn('id', $resep->items->pluck('obat_id'))->get()->keyBy('id');
 
+            // Stok diambil per cabang resep dengan FEFO (IN-01); kekurangan dilaporkan sekaligus.
             $kurang = $resep->items
-                ->filter(fn ($item) => $obats[$item->obat_id]->stok < $item->jumlah)
-                ->map(fn ($item) => "{$obats[$item->obat_id]->nama} (stok {$obats[$item->obat_id]->stok}, diminta {$item->jumlah})");
+                ->filter(fn ($item) => $obats[$item->obat_id]->stokDi($resep->cabang_id) + 0.0005 < $item->jumlah)
+                ->map(function ($item) use ($obats, $resep) {
+                    $obat = $obats[$item->obat_id];
+
+                    return "{$obat->nama} (stok {$obat->stokDi($resep->cabang_id)}, diminta {$item->jumlah})";
+                });
 
             if ($kurang->isNotEmpty()) {
                 throw ValidationException::withMessages(['stok' => 'Stok tidak mencukupi: '.$kurang->implode(', ')]);
             }
 
             foreach ($resep->items as $item) {
-                $this->catatMutasi($obats[$item->obat_id], JenisMutasi::Keluar, -$item->jumlah, $apoteker, $resep->no_resep, 'Penyerahan resep');
+                $this->inventori->keluarkan(
+                    $obats[$item->obat_id], $resep->cabang_id, $item->jumlah, $apoteker,
+                    $resep->no_resep, 'Penyerahan resep',
+                );
             }
 
             $resep->update([
@@ -58,39 +95,49 @@ class FarmasiService
     }
 
     /**
-     * Mutasi stok manual: masuk (penerimaan), keluar (rusak/kadaluarsa), penyesuaian (stok opname -> nilai absolut).
+     * Mutasi stok manual pada satu cabang. Stok nyata disimpan per batch (IN-01), jadi mutasi tanpa
+     * nomor batch masuk/keluar lewat batch "tanpa nomor" cabang tersebut:
+     * - masuk        -> penerimaan tanpa data batch
+     * - keluar       -> rusak / hilang, diambil FEFO
+     * - penyesuaian  -> hasil stok opname; `$jumlah` adalah stok akhir yang diinginkan di cabang itu
      */
-    public function mutasiManual(Obat $obat, JenisMutasi $jenis, int $jumlah, ?string $keterangan, User $user): StokMutasi
+    public function mutasiManual(Obat $obat, JenisMutasi $jenis, float $jumlah, ?string $keterangan, User $user, ?int $cabangId = null): StokMutasi
     {
-        return DB::transaction(function () use ($obat, $jenis, $jumlah, $keterangan, $user) {
-            $obat = Obat::whereKey($obat->id)->lockForUpdate()->firstOrFail();
+        $cabangId ??= app(CabangAktif::class)->untukDataBaru();
 
-            $delta = match ($jenis) {
-                JenisMutasi::Masuk => $jumlah,
-                JenisMutasi::Keluar => -$jumlah,
-                JenisMutasi::Penyesuaian => $jumlah - $obat->stok,
-            };
+        return DB::transaction(function () use ($obat, $jenis, $jumlah, $keterangan, $user, $cabangId) {
+            if ($jenis === JenisMutasi::Masuk) {
+                $this->inventori->terima($obat, $cabangId, $jumlah, null, null, $user, $keterangan);
 
-            if ($obat->stok + $delta < 0) {
-                throw ValidationException::withMessages(['jumlah' => "Stok {$obat->nama} tidak mencukupi (tersisa {$obat->stok})."]);
+                return $this->mutasiTerakhir($obat, $cabangId);
             }
 
-            return $this->catatMutasi($obat, $jenis, $delta, $user, null, $keterangan);
+            if ($jenis === JenisMutasi::Keluar) {
+                $this->inventori->keluarkan($obat, $cabangId, $jumlah, $user, null, $keterangan, null, 'jumlah');
+
+                return $this->mutasiTerakhir($obat, $cabangId);
+            }
+
+            // Penyesuaian: selisih terhadap stok cabang saat ini, diterapkan ke batch tanpa nomor.
+            $selisih = round($jumlah - $obat->stokDi($cabangId), 3);
+
+            if ($selisih > 0) {
+                $this->inventori->terima($obat, $cabangId, $selisih, null, null, $user, $keterangan);
+            } elseif ($selisih < 0) {
+                $this->inventori->keluarkan($obat, $cabangId, abs($selisih), $user, null, $keterangan, null, 'jumlah');
+            } else {
+                throw ValidationException::withMessages(['jumlah' => 'Stok sudah sesuai, tidak ada yang disesuaikan.']);
+            }
+
+            $mutasi = $this->mutasiTerakhir($obat, $cabangId);
+            $mutasi->update(['jenis' => JenisMutasi::Penyesuaian]);
+
+            return $mutasi;
         });
     }
 
-    private function catatMutasi(Obat $obat, JenisMutasi $jenis, int $delta, User $user, ?string $referensi, ?string $keterangan): StokMutasi
+    private function mutasiTerakhir(Obat $obat, int $cabangId): StokMutasi
     {
-        $obat->stok += $delta;
-        $obat->save();
-
-        return $obat->mutasis()->create([
-            'jenis' => $jenis,
-            'jumlah' => $delta,
-            'stok_akhir' => $obat->stok,
-            'referensi' => $referensi,
-            'keterangan' => $keterangan,
-            'user_id' => $user->id,
-        ]);
+        return StokMutasi::where('obat_id', $obat->id)->where('cabang_id', $cabangId)->latest('id')->firstOrFail();
     }
 }

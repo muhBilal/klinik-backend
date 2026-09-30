@@ -55,6 +55,12 @@ class NomorUrutService
         return $this->harian('inv', $this->pengaturan->get('penomoran.prefix_tagihan'), $tanggal);
     }
 
+    /** Nomor booking memakai tanggal jadwal, bukan tanggal pembuatan. */
+    public function noBooking(CarbonInterface $tanggal): string
+    {
+        return $this->harian('bok', $this->pengaturan->get('penomoran.prefix_booking'), $tanggal);
+    }
+
     private function harian(string $jenis, string $prefix, CarbonInterface $tanggal): string
     {
         $ymd = $tanggal->format('Ymd');

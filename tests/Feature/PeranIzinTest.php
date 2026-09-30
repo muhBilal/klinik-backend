@@ -51,7 +51,7 @@ class PeranIzinTest extends TestCase
         $this->getJson('/api/me')->assertOk()
             ->assertJsonPath('role', 'kasir')
             ->assertJsonPath('role_label', 'Kasir')
-            ->assertJsonPath('izin', ['kasir.tagihan', 'laporan.keuangan'])
+            ->assertJsonPath('izin', ['kasir.shift', 'kasir.tagihan', 'laporan.keuangan'])
             ->assertJsonPath('two_factor.aktif', false)
             ->assertJsonMissingPath('peran');
 

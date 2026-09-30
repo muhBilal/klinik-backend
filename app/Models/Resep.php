@@ -13,7 +13,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Table('reseps')]
-#[Fillable(['cabang_id', 'no_resep', 'kunjungan_id', 'dokter_id', 'status', 'catatan', 'apoteker_id', 'diserahkan_at'])]
+#[Fillable([
+    'cabang_id', 'no_resep', 'kunjungan_id', 'dokter_id', 'status', 'catatan', 'apoteker_id', 'diserahkan_at',
+    'dibatalkan_at', 'dibatalkan_oleh', 'alasan_batal',
+])]
 class Resep extends Model
 {
     use Auditable, DalamCabang;
@@ -23,6 +26,7 @@ class Resep extends Model
         return [
             'status' => StatusResep::class,
             'diserahkan_at' => 'datetime',
+            'dibatalkan_at' => 'datetime',
         ];
     }
 

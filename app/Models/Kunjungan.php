@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Enums\Penjamin;
 use App\Enums\StatusKunjungan;
+use App\Enums\StatusResep;
+use App\Enums\StatusTagihan;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\DalamCabang;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -61,14 +63,34 @@ class Kunjungan extends Model
         return $this->hasMany(KunjunganTindakan::class);
     }
 
-    public function resep(): HasOne
+    /** Semua resep kunjungan; satu kunjungan boleh punya resep tambahan (8.3 #3). */
+    public function reseps(): HasMany
     {
-        return $this->hasOne(Resep::class)->withoutGlobalScope('cabang');
+        return $this->hasMany(Resep::class)->withoutGlobalScope('cabang');
     }
 
+    /**
+     * Resep terbaru yang masih berlaku (bukan batal) — dipakai alur pemeriksaan & farmasi.
+     * Diurutkan, bukan `latestOfMany()`: join subquery-nya membuat kolom di eager-load select ambigu.
+     */
+    public function resep(): HasOne
+    {
+        return $this->hasOne(Resep::class)->withoutGlobalScope('cabang')
+            ->where('reseps.status', '!=', StatusResep::Batal->value)
+            ->orderByDesc('reseps.id');
+    }
+
+    public function tagihans(): HasMany
+    {
+        return $this->hasMany(Tagihan::class)->withoutGlobalScope('cabang');
+    }
+
+    /** Tagihan terbaru yang masih berlaku (bukan batal). */
     public function tagihan(): HasOne
     {
-        return $this->hasOne(Tagihan::class)->withoutGlobalScope('cabang');
+        return $this->hasOne(Tagihan::class)->withoutGlobalScope('cabang')
+            ->where('tagihans.status', '!=', StatusTagihan::Batal->value)
+            ->orderByDesc('tagihans.id');
     }
 
     public function berkas(): HasMany

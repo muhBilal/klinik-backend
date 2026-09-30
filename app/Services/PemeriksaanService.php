@@ -19,6 +19,7 @@ class PemeriksaanService
     public function __construct(
         private NomorUrutService $nomor,
         private TagihanService $tagihan,
+        private BhpService $bhp,
     ) {}
 
     /**
@@ -100,6 +101,9 @@ class PemeriksaanService
                 'dokter_id' => $kunjungan->dokter_id ?? $user->id,
             ]);
 
+            // BHP dipotong sebelum tagihan dibuat: bila stok kurang, pemeriksaan tidak ikut tertutup.
+            $this->bhp->potongStok($kunjungan, $user);
+
             $this->tagihan->buatDariKunjungan($kunjungan);
 
             return $kunjungan->loadDetail();
@@ -141,12 +145,15 @@ class PemeriksaanService
         $kunjungan->tindakans()->get()->each->delete();
 
         foreach ($tindakans as $item) {
-            $kunjungan->tindakans()->create([
+            $baris = $kunjungan->tindakans()->create([
                 'tindakan_id' => $item['tindakan_id'],
                 'jumlah' => $item['jumlah'] ?? 1,
                 'tarif' => $master[$item['tindakan_id']]->tarif_cabang,
                 'keterangan' => $item['keterangan'] ?? null,
             ]);
+
+            // Draft pemakaian BHP dari standar katalog; boleh dikoreksi petugas sebelum pemeriksaan ditutup (IN-02).
+            $this->bhp->siapkanDariStandar($baris);
         }
     }
 

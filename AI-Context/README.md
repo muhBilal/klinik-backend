@@ -27,6 +27,9 @@ Baca berurutan sebelum mengubah kode.
 | [F0-06-pengaturan-klinik.md](modul/F0-06-pengaturan-klinik.md) | Pengaturan klinik (identitas, struk, prefix nomor, keamanan) | AD-04 |
 | [F0-07-queue-scheduler.md](modul/F0-07-queue-scheduler.md) | Queue worker & scheduler | Fondasi CR-01, SATUSEHAT |
 | [F1-01-katalog-treatment.md](modul/F1-01-katalog-treatment.md) | Katalog treatment: kategori, durasi + buffer, harga per cabang, BHP standar | TR-01, AD-01 |
+| [F1-02-booking-jadwal.md](modul/F1-02-booking-jadwal.md) | Booking multi-resource, slot, jadwal praktik & cuti, check-in | BK-01..03, AN-01, 8.3 #4 |
+| [F1-03-kasir.md](modul/F1-03-kasir.md) | Split payment, shift kas, batas diskon, void & refund, pajak, tagihan mandiri | BL-02/03/05/06, FR-04, AD-04, 8.3 #3 #7 |
+| [F1-04-inventori.md](modul/F1-04-inventori.md) | Batch & kedaluwarsa FEFO per cabang, potong BHP otomatis, satuan fraksional | IN-01..03, AD-01 |
 
 ## Ringkasan 30 detik
 

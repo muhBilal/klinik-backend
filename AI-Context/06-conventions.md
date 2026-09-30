@@ -10,6 +10,8 @@
 - **Controller**: tipis. Validasi inline `$request->validate`, helper `private function validated(Request, ?Model)` bila dipakai store+update. Selalu `JsonResponse`.
 - **Service**: diinject lewat constructor/method injection. Operasi multi-tabel dalam `DB::transaction`; kunci baris dengan `lockForUpdate()`; lempar `ValidationException::withMessages(['field' => 'pesan'])`.
 - **Uang**: integer rupiah. Harga/tarif di-snapshot ke tabel transaksi.
+- **Stok**: desimal (12,3) karena ada satuan fraksional. Jangan ubah `obats.stok` langsung — lewat `InventoriService`
+  agar `stok_batches`, total, dan kartu stok konsisten. Pengeluaran selalu FEFO.
 - **Pencarian teks**: pakai `whereLike('kolom', "%{$q}%")` (case-insensitive, otomatis `ilike` di PostgreSQL & kompatibel SQLite). Untuk kode/nomor pakai `like` prefix.
 - **OR di dalam whereHas**: selalu bungkus `->where(fn ($w) => $w->...->orWhere(...))` agar tidak keluar dari constraint relasi.
 - **Hak akses**: selalu lewat izin (`middleware('izin:x')`, `$user->punyaIzin(Izin::X)`). Jangan membandingkan `$user->role`
@@ -75,7 +77,11 @@
 | Pluralisasi tabel | `Poli` → Laravel bisa salah menebak; selalu set `#[Table]`. |
 | Route parameter | `apiResource('icd10s')` → `{icd10}`; untuk nama Indonesia pakai route manual atau cek `route:list`. |
 | Timezone | `today()` bergantung `APP_TIMEZONE=Asia/Jakarta`; antrian & counter harian memakai tanggal lokal. |
-| Mengubah stok langsung | Jangan. Pakai `FarmasiService` agar kartu stok konsisten. |
+| Mengubah stok langsung | Jangan. Pakai `InventoriService` (batch + FEFO) agar kartu stok & total konsisten. |
+| `latestOfMany()` pada relasi yang di-eager-load | Join subquery-nya membuat kolom tak ber-prefix di `select` jadi ambigu. Pakai `->orderByDesc('tabel.id')` pada `hasOne` (lihat `Kunjungan::tagihan()`). |
+| Kolom baru lupa di `#[Fillable]` | `create()` diam-diam mengisi null tanpa error. Setelah menambah kolom, cek `#[Fillable]` modelnya. |
+| Assertion stok di test | `obats.stok` float; `assertSame` harus float, tetapi `assertJsonPath` tetap int (JSON tidak mengirim `.0`). |
+| Pengaturan di test | Payload `PUT /api/pengaturan` **bertingkat**: `['keuangan' => ['pajak_persen' => 10]]`, bukan `['keuangan.pajak_persen' => 10]`. |
 | Nomor manual | Jangan `max()+1`; pakai `NomorUrutService` (aman konkurensi). |
 | Query massal pada data yang diaudit | `Model::where()->update()` / `$relasi()->delete()` tidak memicu event → tidak tercatat audit. Ubah per model. |
 | Route model binding data cabang lain | Model `DalamCabang` ter-scope → 404. Untuk tampilan read-only lintas cabang pakai parameter `int` + `withoutGlobalScope('cabang')` (contoh `KunjunganController::show`). |
