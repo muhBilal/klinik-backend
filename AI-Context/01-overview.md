@@ -3,10 +3,12 @@
 ## Tentang aplikasi
 
 E-Klinik adalah sistem informasi klinik rawat jalan yang sedang dikembangkan menjadi sistem manajemen **klinik estetika**
-(dermatologi, estetika medis, gigi) sesuai PRD di folder ini. Fitur saat ini: pendaftaran pasien & antrian poli, rekam medis
-(tanda vital, SOAP, diagnosa ICD-10, tindakan, lampiran klinis terenkripsi), katalog treatment (kategori, durasi, harga per
-cabang, BHP standar), resep elektronik, farmasi (stok obat), kasir, multi-cabang, peran & izin dinamis, audit log, 2FA, dan
-pengaturan klinik. Status per fase: [07-roadmap-progress.md](07-roadmap-progress.md).
+(dermatologi, estetika medis, gigi) sesuai PRD di folder ini. Fitur saat ini: pendaftaran pasien & antrian poli, booking,
+rekam medis estetika (tanda vital, SOAP dengan template, diagnosa ICD-10, tindakan ICD-9-CM + petugas, catatan tindakan: face
+chart injeksi & parameter laser, informed consent bertanda tangan, tanda tangan RME + addendum, akses terbatas kasus IMS,
+lampiran klinis terenkripsi), katalog treatment (kategori, durasi, harga per cabang, BHP standar, consent wajib), resep
+elektronik, farmasi & inventori batch FEFO, kasir (split payment, shift, void/refund), multi-cabang, peran & izin dinamis,
+audit log, 2FA, dan pengaturan klinik. Status per fase: [07-roadmap-progress.md](07-roadmap-progress.md).
 
 **Model tenant:** satu instalasi (satu database) = satu organisasi klinik dengan banyak cabang. Tidak ada multi-tenant
 lintas organisasi dalam satu database.
@@ -118,5 +120,8 @@ $DC exec app php artisan route:list --path=api
 Password semua `password`: `admin@` (lintas cabang), `pendaftaran@`, `perawat@`, `dokter@` (Poli Umum), `dokter.gigi@`,
 `dokter.kia@`, `apoteker@`, `kasir@`, `terapis@`, `manajer@` — domain `eklinik.test`. Semua staf di cabang `UTAMA`.
 
-Seeder juga membuat 1 cabang (UTAMA "Klinik Utama"), 3 poli (UMUM, GIGI, KIA), 27 kode ICD-10, 7 kategori treatment,
-19 treatment/tindakan (6 treatment estetika dengan BHP standar), 24 obat & bahan (dengan stok awal tercatat di kartu stok), dan 25 pasien acak. Peran (9 peran bawaan) dibuat oleh migration, bukan seeder.
+Seeder juga membuat 1 cabang (UTAMA "Klinik Utama"), 5 poli (UMUM, GIGI, KIA, KULIT, ESTETIKA), 54 kode ICD-10 (termasuk kulit,
+estetika, dan 9 kode IMS/HIV sensitif), 7 kategori treatment, 19 treatment/tindakan (6 treatment estetika dengan BHP standar,
+kode ICD-9-CM default, bentuk catatan & consent wajib), 10 template SOAP, 5 naskah informed consent, 24 obat & bahan (dengan
+stok awal tercatat di kartu stok), dan 25 pasien acak. Peran (9 peran bawaan) dan 62 kode ICD-9-CM dibuat oleh migration,
+bukan seeder.

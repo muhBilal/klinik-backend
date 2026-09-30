@@ -8,6 +8,10 @@ app/
 │   ├── Izin.php                Katalog izin RBAC (pasien.lihat, rme.lihat, kasir.tagihan, ...) + label() + grup()
 │   ├── Role.php                Kode peran SISTEM (admin, pendaftaran, perawat, dokter, apoteker, kasir) — untuk seeder/test saja
 │   ├── KategoriBerkas.php      foto_klinis, informed_consent, radiologi, hasil_penunjang, lainnya
+│   ├── JenisCatatanTindakan.php umum, injeksi (face chart), energi (parameter alat)
+│   ├── StatusConsent.php       disetujui, ditolak, dicabut
+│   ├── HubunganPenandatangan.php pasien, orang_tua, suami_istri, anak, saudara, wali
+│   ├── BagianAddendum.php      subjektif, objektif, asesmen, plan, diagnosa, tindakan, resep, lainnya
 │   ├── StatusKunjungan.php     menunggu, diperiksa, menunggu_pembayaran, selesai, batal
 │   ├── StatusResep.php         menunggu, diserahkan, batal
 │   ├── StatusTagihan.php       belum_bayar, lunas, batal
@@ -27,7 +31,10 @@ app/
 ├── Providers/AppServiceProvider.php  Binding scoped, Gate::before (izin), validasi token Sanctum (idle, user aktif)
 ├── Services/                   Logika bisnis + transaksi DB
 │   ├── NomorUrutService.php    Penomoran berurutan aman-konkurensi (tabel counters), prefix dari pengaturan
-│   ├── PemeriksaanService.php  panggil, simpan (upsert pemeriksaan/diagnosa/tindakan/resep; tarif = harga cabang kunjungan), selesai
+│   ├── PemeriksaanService.php  panggil, simpan (upsert pemeriksaan/diagnosa/tindakan/resep; tarif = harga cabang kunjungan), selesai (+ tanda tangan)
+│   ├── RekamMedisService.php   akses terbatas (bolehLihat, sembunyikanTerbatas), tanda tangan RME + hash, verifikasi, addendum
+│   ├── InformedConsentService.php render naskah, simpan (snapshot + checksum), cabut, pastikanLengkap sebelum tutup
+│   ├── CatatanTindakanService.php catatan tindakan, parameter alat, titik face chart, validasi petugas medis
 │   ├── TindakanService.php     simpan treatment + sinkron harga per cabang & BHP standar (per model, ter-audit)
 │   ├── TagihanService.php      buatDariKunjungan, bayar
 │   ├── FarmasiService.php      serahkan resep, mutasiManual stok
@@ -46,7 +53,8 @@ database/migrations/            2026_09_29_1000xx_* = skema awal, 2026_09_30_100
 database/seeders/DatabaseSeeder.php   Data master + akun demo (peran dibuat migration)
 database/factories/             UserFactory, PasienFactory
 tests/Feature/                  AlurKlinikTest, FilterTest, PeranIzinTest, MultiCabangTest, AuditLogTest,
-                                KeamananTest, PengaturanTest, BerkasTest, KatalogTreatmentTest
+                                KeamananTest, PengaturanTest, BerkasTest, KatalogTreatmentTest, BookingTest,
+                                KasirTest, InventoriTest, RmeEstetikaTest
 tests/Unit/TwoFactorServiceTest.php   Vektor uji RFC 6238
 ```
 
@@ -96,6 +104,9 @@ Request ─► routes/api.php (auth:sanctum + cabang + wajib2fa + izin:...) ─�
   - `$user->tercatatSebagaiDokter()` = punya `pemeriksaan.dokter` dan bukan akses penuh (dipakai `User::dokter()`, panggil pasien).
   - Pembatasan level service: tanpa `pemeriksaan.dokter` hanya tanda vital + `subjektif` yang disimpan (`PemeriksaanService::simpan`).
   - Data klinis vs komersial: tanpa `rme.lihat` detail kunjungan/pasien tidak memuat SOAP/diagnosa/tindakan/resep.
+  - Kunjungan berakses terbatas (IMS): isi RME hanya untuk tim yang menangani & `rme.terbatas` (`RekamMedisService::bolehLihat`);
+    lainnya menerima `rme_disembunyikan: true`. Detail: [modul/F1-05-rme-estetika.md](modul/F1-05-rme-estetika.md).
+  - Tutup pemeriksaan = tanda tangan RME: penutup harus `User::sipAktif()`.
   Detail: [modul/F0-01-rbac-peran-izin.md](modul/F0-01-rbac-peran-izin.md).
 - **Cabang aktif**: middleware `cabang` mengisi `App\Support\CabangAktif`; model `DalamCabang` (Kunjungan, Resep, Tagihan)
   otomatis difilter. Detail: [modul/F0-02-multi-cabang.md](modul/F0-02-multi-cabang.md).

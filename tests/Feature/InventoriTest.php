@@ -12,6 +12,7 @@ use App\Models\StokBatch;
 use App\Models\Tindakan;
 use App\Models\User;
 use App\Services\InventoriService;
+use App\Services\PengaturanService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
@@ -30,6 +31,9 @@ class InventoriTest extends TestCase
     {
         parent::setUp();
         $this->seed(DatabaseSeeder::class);
+
+        // Test ini fokus ke BHP; kewajiban informed consent botox diuji di RmeEstetikaTest.
+        app(PengaturanService::class)->simpan(['rme' => ['wajib_informed_consent' => false]]);
     }
 
     private function apoteker(): User

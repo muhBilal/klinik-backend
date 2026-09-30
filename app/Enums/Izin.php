@@ -25,6 +25,8 @@ enum Izin: string
     case PemeriksaanDokter = 'pemeriksaan.dokter';
 
     case RmeLihat = 'rme.lihat';
+    case RmeTindakan = 'rme.tindakan';
+    case RmeTerbatas = 'rme.terbatas';
     case BerkasKelola = 'berkas.kelola';
 
     case FarmasiResep = 'farmasi.resep';
@@ -57,6 +59,8 @@ enum Izin: string
             self::PemeriksaanVital => 'Isi tanda vital & anamnesis',
             self::PemeriksaanDokter => 'Pemeriksaan dokter: SOAP, diagnosa, tindakan, resep (tercatat sebagai dokter)',
             self::RmeLihat => 'Lihat isi rekam medis & lampiran klinis',
+            self::RmeTindakan => 'Catatan tindakan (area, dosis, face chart, parameter alat) & informed consent',
+            self::RmeTerbatas => 'Lihat rekam medis berakses terbatas (mis. IMS) yang tidak ditangani sendiri',
             self::BerkasKelola => 'Unggah & hapus lampiran klinis',
             self::FarmasiResep => 'Proses & serahkan resep',
             self::FarmasiObat => 'Kelola obat & stok',
@@ -80,7 +84,7 @@ enum Izin: string
             self::PasienLihat, self::PasienKelola, self::PasienHapus, self::KunjunganDaftar => 'Pasien & Pendaftaran',
             self::BookingLihat, self::BookingKelola, self::JadwalKelola => 'Booking & Jadwal',
             self::PemeriksaanPanggil, self::PemeriksaanVital, self::PemeriksaanDokter => 'Pelayanan',
-            self::RmeLihat, self::BerkasKelola => 'Rekam Medis',
+            self::RmeLihat, self::RmeTindakan, self::RmeTerbatas, self::BerkasKelola => 'Rekam Medis',
             self::FarmasiResep, self::FarmasiObat, self::InventoriKelola => 'Farmasi',
             self::KasirTagihan, self::KasirVoid, self::KasirShift, self::LaporanKeuangan => 'Keuangan',
             default => 'Administrasi',

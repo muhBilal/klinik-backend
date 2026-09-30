@@ -135,6 +135,8 @@ class AuthController extends Controller
             'role_label' => $user->peran?->nama ?? $user->role,
             'izin' => $user->izin(),
             'tercatat_dokter' => $user->tercatatSebagaiDokter(),
+            // Syarat menandatangani rekam medis; frontend memberi peringatan bila SIP kosong/kedaluwarsa.
+            'sip_aktif' => $user->sipAktif(),
             'cabangs' => $user->cabang_id
                 ? [$user->cabang?->only(['id', 'kode', 'nama'])]
                 : Cabang::where('is_active', true)->orderBy('nama')->get(['id', 'kode', 'nama']),

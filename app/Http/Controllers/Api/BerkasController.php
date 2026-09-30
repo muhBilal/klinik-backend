@@ -10,6 +10,7 @@ use App\Models\Kunjungan;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\BerkasService;
+use App\Services\RekamMedisService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -22,8 +23,9 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class BerkasController extends Controller
 {
-    public function __construct(private BerkasService $berkas) {}
+    public function __construct(private BerkasService $berkas, private RekamMedisService $rekamMedis) {}
 
+    /** Berkas kunjungan berakses terbatas (DR-03) tidak ikut terdaftar untuk pengguna di luar tim yang menangani. */
     public function index(Request $request): JsonResponse
     {
         $request->validate([
@@ -32,7 +34,23 @@ class BerkasController extends Controller
             'kategori' => ['nullable', Rule::enum(KategoriBerkas::class)],
         ]);
 
+        $user = $request->user();
+
+        if ($request->filled('kunjungan_id')) {
+            $kunjungan = Kunjungan::withoutGlobalScope('cabang')->find($request->integer('kunjungan_id'));
+
+            if ($kunjungan && ! $this->rekamMedis->bolehLihat($user, $kunjungan)) {
+                return response()->json([]);
+            }
+        }
+
+        $tersembunyi = $request->filled('pasien_id')
+            ? $this->rekamMedis->kunjunganTersembunyi($request->integer('pasien_id'), $user)
+            : collect();
+
         $berkas = Berkas::query()
+            ->when($tersembunyi->isNotEmpty(), fn ($q) => $q->where(fn ($w) => $w
+                ->whereNull('kunjungan_id')->orWhereNotIn('kunjungan_id', $tersembunyi)))
             ->with('pengunggah:id,name')
             ->when($request->filled('pasien_id'), fn ($q) => $q->where('pasien_id', $request->integer('pasien_id')))
             ->when($request->filled('kunjungan_id'), fn ($q) => $q->where('kunjungan_id', $request->integer('kunjungan_id')))
@@ -81,6 +99,11 @@ class BerkasController extends Controller
     /** Tautan unduh bertanda tangan yang berlaku beberapa menit. Setiap permintaan tercatat di audit log. */
     public function tautan(Request $request, Berkas $berkas): JsonResponse
     {
+        if ($berkas->kunjungan_id) {
+            abort_unless($this->rekamMedis->bolehLihat($request->user(), $berkas->kunjungan), 403,
+                'Berkas ini milik rekam medis berakses terbatas.');
+        }
+
         return response()->json($this->berkas->tautan($berkas, $request->user()));
     }
 

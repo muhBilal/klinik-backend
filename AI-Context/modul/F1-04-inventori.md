@@ -45,6 +45,10 @@ total tetap konsisten.
 Dipisah dua tahap supaya koreksi pemakaian tidak perlu membatalkan mutasi stok yang sudah tercatat.
 Setelah dipotong, koreksi lewat endpoint BHP ditolak — selisih diselesaikan lewat stok opname.
 
+UI koreksi pemakaian: tab **Pemakaian BHP** di modal catatan tindakan pemeriksaan ([F1-05](F1-05-rme-estetika.md)).
+Sejak F1-05 tindakan kunjungan di-upsert, sehingga koreksi BHP tidak hilang saat pemeriksaan disimpan ulang (kecuali `jumlah`
+tindakan diubah — draft dihitung ulang dari standar). Check-in booking juga menyiapkan draft BHP.
+
 **Stok kurang saat pemeriksaan ditutup**: perilakunya mengikuti pengaturan `inventori.blokir_bhp_stok_kurang`.
 Default `false` — pemeriksaan tetap bisa ditutup, baris ditinggal `stok_dipotong = false`, dan peringatan
 dikembalikan ke petugas. Alasannya rekam medis & tagihan tidak boleh tersandera data stok yang belum rapi.

@@ -26,6 +26,7 @@ class BookingService
     public function __construct(
         private JadwalService $jadwal,
         private NomorUrutService $nomor,
+        private BhpService $bhp,
     ) {}
 
     /**
@@ -165,16 +166,22 @@ class BookingService
             ]);
 
             foreach ($appointment->tindakans()->with('tindakan')->get() as $baris) {
-                $tarif = Tindakan::withTrashed()
+                $tindakan = Tindakan::withTrashed()
                     ->whereKey($baris->tindakan_id)
+                    ->select(['id', 'icd9cm_id'])
                     ->denganHargaCabang($cabangId)
-                    ->value('tarif_cabang');
+                    ->first();
 
-                $kunjungan->tindakans()->create([
+                $kunjunganTindakan = $kunjungan->tindakans()->create([
                     'tindakan_id' => $baris->tindakan_id,
                     'jumlah' => 1,
-                    'tarif' => (int) $tarif,
+                    'tarif' => (int) $tindakan->tarif_cabang,
+                    'petugas_id' => $appointment->petugas_id,
+                    'icd9cm_id' => $tindakan->icd9cm_id,
                 ]);
+
+                // Draft BHP sama seperti tindakan yang dicatat di pemeriksaan (IN-02).
+                $this->bhp->siapkanDariStandar($kunjunganTindakan);
             }
 
             $appointment->update([

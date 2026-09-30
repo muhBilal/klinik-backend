@@ -36,6 +36,9 @@ return [
         // ditandai belum dipotong untuk diselesaikan lewat stok opname (IN-02).
         'inventori.blokir_bhp_stok_kurang' => ['default' => false, 'rules' => ['boolean'], 'publik' => false],
 
+        // Treatment ber-template consent wajib punya informed consent yang disetujui sebelum pemeriksaan ditutup (RM-03).
+        'rme.wajib_informed_consent' => ['default' => true, 'rules' => ['boolean'], 'publik' => false],
+
         // Jam operasional klinik (AD-04); dipakai sebagai batas wajar jadwal praktik & booking.
         'klinik.jam_buka' => ['default' => '08:00', 'rules' => ['required', 'date_format:H:i'], 'publik' => true],
         'klinik.jam_tutup' => ['default' => '21:00', 'rules' => ['required', 'date_format:H:i'], 'publik' => true],

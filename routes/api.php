@@ -6,10 +6,14 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BerkasController;
 use App\Http\Controllers\Api\BhpController;
 use App\Http\Controllers\Api\CabangController;
+use App\Http\Controllers\Api\CatatanTindakanController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\Icd10Controller;
+use App\Http\Controllers\Api\Icd9cmController;
+use App\Http\Controllers\Api\InformedConsentController;
 use App\Http\Controllers\Api\JadwalController;
 use App\Http\Controllers\Api\KategoriTindakanController;
+use App\Http\Controllers\Api\KodeFavoritController;
 use App\Http\Controllers\Api\KunjunganController;
 use App\Http\Controllers\Api\ObatController;
 use App\Http\Controllers\Api\PasienController;
@@ -23,6 +27,8 @@ use App\Http\Controllers\Api\ShiftKasController;
 use App\Http\Controllers\Api\StokBatchController;
 use App\Http\Controllers\Api\SumberDayaController;
 use App\Http\Controllers\Api\TagihanController;
+use App\Http\Controllers\Api\TemplateConsentController;
+use App\Http\Controllers\Api\TemplateSoapController;
 use App\Http\Controllers\Api\TindakanController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
@@ -62,7 +68,10 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
         Route::get('polis', [PoliController::class, 'index']);
         Route::get('polis/{poli}', [PoliController::class, 'show']);
         Route::get('dokters', [UserController::class, 'dokter']);
+        Route::get('petugas', [UserController::class, 'petugas']);
         Route::get('icd10s', [Icd10Controller::class, 'index']);
+        Route::get('icd9cms', [Icd9cmController::class, 'index']);
+        Route::get('template-soaps', [TemplateSoapController::class, 'index']);
         Route::get('tindakans', [TindakanController::class, 'index']);
         Route::get('kategori-tindakans', [KategoriTindakanController::class, 'index']);
         Route::get('obats', [ObatController::class, 'index']);
@@ -118,10 +127,29 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
             Route::delete('sumber-dayas/{sumberDaya}', [SumberDayaController::class, 'destroy']);
         });
 
-        // Pemeriksaan
+        // Pemeriksaan. Selesai = tutup & tanda tangani RME (dokter ber-SIP aktif); koreksi setelahnya lewat addendum (RM-07).
         Route::post('kunjungans/{kunjungan}/panggil', [KunjunganController::class, 'panggil'])->middleware('izin:pemeriksaan.panggil');
         Route::put('kunjungans/{kunjungan}/pemeriksaan', [PemeriksaanController::class, 'update'])->middleware('izin:pemeriksaan.vital,pemeriksaan.dokter');
-        Route::post('kunjungans/{kunjungan}/selesai', [PemeriksaanController::class, 'selesai'])->middleware('izin:pemeriksaan.dokter');
+        Route::middleware('izin:pemeriksaan.dokter')->group(function () {
+            Route::post('kunjungans/{kunjungan}/selesai', [PemeriksaanController::class, 'selesai']);
+            Route::post('kunjungans/{kunjungan}/addendum', [PemeriksaanController::class, 'addendum']);
+            Route::post('kode-favorits', [KodeFavoritController::class, 'store']);
+            Route::delete('kode-favorits', [KodeFavoritController::class, 'destroy']);
+        });
+
+        // RME estetika: catatan tindakan, face chart, parameter alat (RM-05, ES-01/02) & informed consent (RM-03)
+        Route::middleware('izin:rme.lihat')->group(function () {
+            Route::get('kunjungans/{kunjungan}/verifikasi', [PemeriksaanController::class, 'verifikasi'])->whereNumber('kunjungan');
+            Route::get('kunjungan-tindakans/{kunjunganTindakan}/catatan', [CatatanTindakanController::class, 'show']);
+            Route::get('informed-consents/{informedConsent}', [InformedConsentController::class, 'show']);
+        });
+        Route::middleware('izin:rme.tindakan')->group(function () {
+            Route::put('kunjungan-tindakans/{kunjunganTindakan}/catatan', [CatatanTindakanController::class, 'update']);
+            Route::get('kunjungans/{kunjungan}/informed-consents/pratinjau', [InformedConsentController::class, 'pratinjau']);
+            Route::post('kunjungans/{kunjungan}/informed-consents', [InformedConsentController::class, 'store']);
+            Route::post('informed-consents/{informedConsent}/cabut', [InformedConsentController::class, 'cabut']);
+        });
+        Route::get('template-consents', [TemplateConsentController::class, 'index'])->middleware('izin:rme.tindakan,master.kelola');
 
         // Lampiran klinis terenkripsi
         Route::middleware('izin:rme.lihat')->group(function () {
@@ -195,6 +223,16 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
             Route::put('kategori-tindakans/{kategori}', [KategoriTindakanController::class, 'update']);
             Route::delete('kategori-tindakans/{kategori}', [KategoriTindakanController::class, 'destroy']);
             Route::apiResource('icd10s', Icd10Controller::class)->except('index');
+            Route::apiResource('icd9cms', Icd9cmController::class)->except('index');
+
+            // Template SOAP (RM-01) & naskah informed consent (RM-03)
+            Route::post('template-soaps', [TemplateSoapController::class, 'store']);
+            Route::put('template-soaps/{templateSoap}', [TemplateSoapController::class, 'update']);
+            Route::delete('template-soaps/{templateSoap}', [TemplateSoapController::class, 'destroy']);
+            Route::post('template-consents', [TemplateConsentController::class, 'store']);
+            Route::get('template-consents/{templateConsent}', [TemplateConsentController::class, 'show']);
+            Route::put('template-consents/{templateConsent}', [TemplateConsentController::class, 'update']);
+            Route::delete('template-consents/{templateConsent}', [TemplateConsentController::class, 'destroy']);
         });
 
         // Administrasi

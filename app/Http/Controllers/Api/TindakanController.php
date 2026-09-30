@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\JenisCatatanTindakan;
 use App\Http\Controllers\Controller;
 use App\Models\KunjunganTindakan;
 use App\Models\Tindakan;
@@ -27,9 +28,9 @@ class TindakanController extends Controller
         $cabangId = $request->integer('cabang_id') ?: $cabangAktif->id();
 
         $tindakans = $this->filterAktif(Tindakan::query(), $request)
-            ->select(['id', 'kode', 'nama', 'kategori_id', 'durasi_menit', 'buffer_menit', 'tarif', 'is_active'])
+            ->select(['id', 'kode', 'nama', 'kategori_id', 'icd9cm_id', 'template_consent_id', 'jenis_catatan', 'durasi_menit', 'buffer_menit', 'tarif', 'is_active'])
             ->denganHargaCabang($cabangId)
-            ->with('kategori:id,nama')
+            ->with(['kategori:id,nama', 'icd9cm:id,kode,nama'])
             ->withCount(['hargas', 'bhps'])
             ->when($request->boolean('aktif'), fn ($q) => $q->where('is_active', true)->tersediaDi($cabangId))
             ->when($request->filled('kategori_id'), fn ($q) => $q->where('kategori_id', $request->integer('kategori_id')))
@@ -71,6 +72,8 @@ class TindakanController extends Controller
     {
         return $tindakan->load([
             'kategori:id,nama',
+            'icd9cm:id,kode,nama',
+            'templateConsent:id,nama',
             // Harga cabang yang sudah dihapus tidak ditampilkan (whereHas mengikuti soft delete cabang).
             'hargas' => fn ($q) => $q->select(['id', 'tindakan_id', 'cabang_id', 'tarif', 'tersedia'])
                 ->whereHas('cabang')->with('cabang:id,kode,nama,is_active'),
@@ -85,6 +88,9 @@ class TindakanController extends Controller
             'kode' => ['required', 'string', 'max:20', Rule::unique('tindakans')->ignore($tindakan)],
             'nama' => ['required', 'string', 'max:255'],
             'kategori_id' => ['nullable', Rule::exists('kategori_tindakans', 'id')->whereNull('deleted_at')],
+            'icd9cm_id' => ['nullable', Rule::exists('icd9cms', 'id')],
+            'template_consent_id' => ['nullable', Rule::exists('template_consents', 'id')->whereNull('deleted_at')],
+            'jenis_catatan' => ['nullable', Rule::enum(JenisCatatanTindakan::class)],
             'durasi_menit' => ['required', 'integer', 'between:1,720'],
             'buffer_menit' => ['nullable', 'integer', 'between:0,240'],
             'tarif' => ['required', 'integer', 'min:0'],
@@ -100,6 +106,6 @@ class TindakanController extends Controller
             'bhps.*.jumlah' => ['required', 'numeric', 'gt:0', 'max:99999', 'decimal:0,3'],
         ]);
 
-        return ['buffer_menit' => $data['buffer_menit'] ?? 0] + $data;
+        return ['buffer_menit' => $data['buffer_menit'] ?? 0, 'jenis_catatan' => $data['jenis_catatan'] ?? JenisCatatanTindakan::Umum->value] + $data;
     }
 }

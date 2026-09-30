@@ -30,6 +30,7 @@ Baca berurutan sebelum mengubah kode.
 | [F1-02-booking-jadwal.md](modul/F1-02-booking-jadwal.md) | Booking multi-resource, slot, jadwal praktik & cuti, check-in | BK-01..03, AN-01, 8.3 #4 |
 | [F1-03-kasir.md](modul/F1-03-kasir.md) | Split payment, shift kas, batas diskon, void & refund, pajak, tagihan mandiri | BL-02/03/05/06, FR-04, AD-04, 8.3 #3 #7 |
 | [F1-04-inventori.md](modul/F1-04-inventori.md) | Batch & kedaluwarsa FEFO per cabang, potong BHP otomatis, satuan fraksional | IN-01..03, AD-01 |
+| [F1-05-rme-estetika.md](modul/F1-05-rme-estetika.md) | Template SOAP, ICD-9-CM & favorit, informed consent + tanda tangan, face chart & parameter laser, tanda tangan RME + addendum, akses terbatas IMS | RM-01/02/03/05/07, DR-03, ES-01/02 |
 
 ## Ringkasan 30 detik
 
@@ -39,6 +40,8 @@ Baca berurutan sebelum mengubah kode.
 - Hak akses = **izin RBAC** (`App\Enums\Izin`) milik peran (tabel `perans`), dicek middleware `izin:...`. Bukan kode peran.
 - **Multi-cabang**: transaksi (kunjungan, resep, tagihan) otomatis dibatasi ke cabang aktif (trait `DalamCabang`); pasien milik pusat.
 - Setiap perubahan data penting & akses rekam medis tercatat di **audit log** (trait `Auditable`, `AuditService`).
+- **RME ditandatangani saat pemeriksaan ditutup** (dokter ber-SIP aktif) lalu terkunci; koreksi hanya lewat addendum. Kunjungan
+  IMS/HIV berakses terbatas (`RekamMedisService::bolehLihat`).
 - Logika bisnis ada di `app/Services/`, bukan di controller.
 - Bahasa domain: **Bahasa Indonesia** (nama tabel, kolom, pesan error).
 

@@ -10,6 +10,7 @@ use App\Models\Obat;
 use App\Models\Pasien;
 use App\Models\Tindakan;
 use App\Models\User;
+use App\Services\PengaturanService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -186,7 +187,9 @@ class KatalogTreatmentTest extends TestCase
     {
         $dokterUtama = User::where('email', 'dokter@eklinik.test')->first();
         $dokterSel = User::factory()->create(['email' => 'dokter.sel@eklinik.test', 'role' => 'dokter',
-            'poli_id' => $dokterUtama->poli_id, 'cabang_id' => $this->selatan->id]);
+            'poli_id' => $dokterUtama->poli_id, 'cabang_id' => $this->selatan->id, 'sip' => '503/SIP-DU/009/2026']);
+        // Fokus test ini harga cabang; kewajiban informed consent laser diuji di RmeEstetikaTest.
+        app(PengaturanService::class)->simpan(['rme' => ['wajib_informed_consent' => false]]);
         $laser = Tindakan::where('kode', 'TRT-011')->first();
         $ipl = Tindakan::where('kode', 'TRT-012')->first();
         $laser->hargas()->create(['cabang_id' => $this->selatan->id, 'tarif' => 1000000]);

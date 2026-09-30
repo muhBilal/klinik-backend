@@ -19,7 +19,7 @@ class UserController extends Controller
     public function index(Request $request): JsonResponse
     {
         $users = $this->filterAktif(User::query(), $request)
-            ->select(['id', 'name', 'email', 'role', 'poli_id', 'cabang_id', 'sip', 'is_active', 'two_factor_confirmed_at'])
+            ->select(['id', 'name', 'email', 'role', 'poli_id', 'cabang_id', 'sip', 'sip_berlaku_sampai', 'is_active', 'two_factor_confirmed_at'])
             ->with(self::RELASI)
             ->when($request->filled('role'), fn ($q) => $q->where('role', $request->input('role')))
             ->when($request->filled('poli_id'), fn ($q) => $q->where('poli_id', $request->integer('poli_id')))
@@ -46,6 +46,22 @@ class UserController extends Controller
             ->get(['id', 'name', 'poli_id', 'cabang_id', 'sip']);
 
         return response()->json($dokters);
+    }
+
+    /**
+     * Petugas yang bisa dicatat melakukan tindakan (dokter, perawat, terapis — AN-03). **Array**; cabang aktif + lintas cabang.
+     */
+    public function petugas(CabangAktif $cabang): JsonResponse
+    {
+        $petugas = User::petugasMedis()
+            ->with('peran:id,kode,nama')
+            ->when($cabang->id(), fn ($q, $id) => $q->where(fn ($w) => $w->where('cabang_id', $id)->orWhereNull('cabang_id')))
+            ->orderBy('name')
+            ->get(['id', 'name', 'role', 'poli_id', 'cabang_id']);
+
+        return response()->json($petugas->map(fn (User $u) => [
+            ...$u->only(['id', 'name', 'role', 'poli_id', 'cabang_id']), 'peran' => $u->peran?->nama,
+        ]));
     }
 
     public function store(Request $request): JsonResponse
@@ -105,6 +121,7 @@ class UserController extends Controller
             'poli_id' => ['nullable', Rule::requiredIf($peranDokter), Rule::exists('polis', 'id')->whereNull('deleted_at')],
             'cabang_id' => ['nullable', Rule::exists('cabangs', 'id')->whereNull('deleted_at')],
             'sip' => ['nullable', 'string', 'max:50'],
+            'sip_berlaku_sampai' => ['nullable', 'date'],
             'is_active' => ['boolean'],
         ], [
             'poli_id.required' => 'Poli wajib diisi untuk peran yang bertugas sebagai dokter.',

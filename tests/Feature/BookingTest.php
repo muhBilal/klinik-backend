@@ -144,6 +144,9 @@ class BookingTest extends TestCase
 
     public function test_checkin_membuat_kunjungan_dengan_nomor_antrian_dan_tindakan(): void
     {
+        // Jam tetap: booking "1 jam lagi + 3 jam" tidak boleh melewati tengah malam saat test dijalankan malam hari.
+        $this->travelTo(today()->setTime(10, 0));
+
         Sanctum::actingAs($this->pendaftaran());
 
         $tindakan = $this->tindakan();
@@ -176,12 +179,14 @@ class BookingTest extends TestCase
         $this->assertNotNull($res->json('kunjungan.no_registrasi'));
         $this->assertSame(1, $res->json('kunjungan.no_antrian'));
 
-        // Treatment yang dibooking ikut tersalin ke kunjungan dengan tarif cabang
+        // Treatment yang dibooking ikut tersalin ke kunjungan dengan tarif cabang; petugas booking = petugas tindakan
         $kunjunganId = $res->json('kunjungan.id');
         $this->assertDatabaseHas('kunjungan_tindakans', [
             'kunjungan_id' => $kunjunganId,
             'tindakan_id' => $tindakan->id,
             'tarif' => $tindakan->tarif,
+            'petugas_id' => $this->dokter()->id,
+            'icd9cm_id' => $tindakan->icd9cm_id,
         ]);
 
         // Check-in kedua ditolak

@@ -16,7 +16,13 @@ polis 1─* kunjungans *─1 pasiens
 users 1─* kunjungans (dokter_id, created_by)
 
 kunjungans 1─1 pemeriksaans 1─* pemeriksaan_diagnosas *─1 icd10s
+pemeriksaans 1─* pemeriksaan_addendums                 (koreksi setelah ditandatangani, append-only)
 kunjungans 1─* kunjungan_tindakans *─1 tindakans
+kunjungan_tindakans *─1 icd9cms, *─1 users (petugas_id)
+kunjungan_tindakans 1─1 catatan_tindakans 1─* catatan_tindakan_titiks *─1 obats / stok_batches
+kunjungans 1─* informed_consents *─1 template_consents   (kunjungan_tindakan_id opsional)
+tindakans *─1 icd9cms, *─1 template_consents              (consent wajib)
+template_soaps *─1 polis / tindakans                      kode_favorits (user_id, jenis, kode_id)
 kunjungans 1─1 reseps 1─* resep_items *─1 obats
 kunjungans 1─1 tagihans 1─* tagihan_items
 kunjungans 1─* berkas *─1 pasiens
@@ -34,11 +40,15 @@ pengaturans (kunci → nilai JSON)
 | `cabangs` | kode (unik, huruf besar), nama, alamat, telepon, email, jam_buka, jam_tutup (TIME, dikirim `HH:MM`), is_active, deleted_at |
 | `perans` | kode (unik, `^[a-z][a-z0-9_]*$`), nama, deskripsi, **is_sistem** (tidak bisa dihapus/ganti kode), **akses_penuh** (semua izin) |
 | `peran_izins` | peran_id, izin (nilai `App\Enums\Izin`). Unik `(peran_id, izin)` |
-| `users` | name, email (unik), password, **role** (= `perans.kode`), poli_id (dokter), **cabang_id** (null = semua cabang), sip, is_active, two_factor_secret (terenkripsi), two_factor_recovery_codes (terenkripsi), two_factor_confirmed_at, two_factor_last_step, deleted_at |
+| `users` | name, email (unik), password, **role** (= `perans.kode`), poli_id (dokter), **cabang_id** (null = semua cabang), sip, **sip_berlaku_sampai**, is_active, two_factor_secret (terenkripsi), two_factor_recovery_codes (terenkripsi), two_factor_confirmed_at, two_factor_last_step, deleted_at |
 | `polis` | kode (unik), nama, tarif_konsultasi, is_active, deleted_at |
-| `icd10s` | kode (unik), nama |
+| `icd10s` | kode (unik), nama, **sensitif** (IMS/HIV → kunjungan berakses terbatas) |
+| `icd9cms` | kode (unik), nama — kode tindakan/prosedur (62 kode dasar diisi migration) |
+| `template_soaps` | nama, poli_id (null = semua), tindakan_id, subjektif, objektif, asesmen, plan, icd10_ids (JSON), akses_terbatas, is_active, deleted_at |
+| `template_consents` | nama, isi (placeholder `{nama_pasien}` dst.), is_active, deleted_at |
+| `kode_favorits` | user_id, jenis (`icd10`/`icd9cm`), kode_id. Unik `(user_id, jenis, kode_id)` |
 | `kategori_tindakans` | nama (unik), deskripsi, is_active, deleted_at |
-| `tindakans` | kode (unik), nama, **kategori_id** (nullable), **durasi_menit** (default 15), **buffer_menit** (default 0), **tarif** (= harga dasar pusat), is_active, deleted_at |
+| `tindakans` | kode (unik), nama, **kategori_id** (nullable), **icd9cm_id**, **template_consent_id** (diisi = wajib consent), **jenis_catatan** (`umum`/`injeksi`/`energi`), **durasi_menit** (default 15), **buffer_menit** (default 0), **tarif** (= harga dasar pusat), is_active, deleted_at |
 | `tindakan_hargas` | tindakan_id, cabang_id, tarif, **tersedia** (false = tidak dilayani di cabang itu). Unik `(tindakan_id, cabang_id)`. Tanpa baris = harga dasar |
 | `tindakan_bhps` | tindakan_id, obat_id, jumlah `decimal(10,3)` (satuan stok obat, boleh fraksional). Unik `(tindakan_id, obat_id)`. Belum memotong stok (IN-02) |
 | `obats` | kode (unik), nama, satuan, harga, **stok** (int, hanya diubah via FarmasiService; masih global, belum per cabang), stok_minimum, is_active, deleted_at |
@@ -47,10 +57,14 @@ pengaturans (kunci → nilai JSON)
 ### Transaksi (milik satu cabang — trait `DalamCabang`)
 | Tabel | Kolom penting |
 |-------|---------------|
-| `kunjungans` | **cabang_id**, no_registrasi (unik), pasien_id, poli_id, dokter_id, tanggal, no_antrian, penjamin, no_penjamin, keluhan, **status**, dipanggil_at, selesai_at, created_by. Unik `(cabang_id, poli_id, tanggal, no_antrian)` |
-| `pemeriksaans` | kunjungan_id (unik), tekanan_darah (`"120/80"`), nadi, suhu, respirasi, berat_badan, tinggi_badan, subjektif, objektif, asesmen, plan, perawat_id, dokter_id |
+| `kunjungans` | **cabang_id**, no_registrasi (unik), pasien_id, poli_id, dokter_id, tanggal, no_antrian, penjamin, no_penjamin, keluhan, **akses_terbatas**, **status**, dipanggil_at, selesai_at, created_by. Unik `(cabang_id, poli_id, tanggal, no_antrian)` |
+| `pemeriksaans` | kunjungan_id (unik), tekanan_darah (`"120/80"`), nadi, suhu, respirasi, berat_badan, tinggi_badan, subjektif, objektif, asesmen, plan, perawat_id, dokter_id, **ditandatangani_at**, **ditandatangani_oleh**, **hash_ttd** (terkunci setelah ditandatangani) |
+| `pemeriksaan_addendums` | pemeriksaan_id, user_id, bagian, isi, alasan, created_at — tidak bisa diubah/dihapus |
+| `catatan_tindakans` | kunjungan_tindakan_id (unik), jenis, area, catatan, parameter (JSON parameter alat), sumber_daya_id (alat), dicatat_oleh |
+| `catatan_tindakan_titiks` | catatan_tindakan_id, tampilan, x, y (0..1), area, obat_id, batch_id, jumlah, satuan, kedalaman, alat (jarum/kanula), catatan |
+| `informed_consents` | uuid, cabang_id, kunjungan_id, pasien_id, kunjungan_tindakan_id, template_consent_id, judul, tindakan_nama, isi (snapshot), status, penandatangan_nama, hubungan, ttd_penandatangan & ttd_saksi (**terenkripsi**), saksi_nama, dokter_id, dibuat_oleh, ditandatangani_at, dicabut_at/_oleh, alasan_cabut, checksum, ip_address — tidak pernah dihapus |
 | `pemeriksaan_diagnosas` | pemeriksaan_id, icd10_id, jenis (`primer`/`sekunder`) |
-| `kunjungan_tindakans` | kunjungan_id, tindakan_id, jumlah, **tarif (snapshot harga cabang kunjungan)**, keterangan |
+| `kunjungan_tindakans` | kunjungan_id, tindakan_id, jumlah, **tarif (snapshot harga cabang kunjungan)**, **petugas_id**, **icd9cm_id**, keterangan |
 | `reseps` | **cabang_id** (= cabang kunjungan), no_resep, kunjungan_id (unik), dokter_id, **status**, catatan, apoteker_id, diserahkan_at |
 | `resep_items` | resep_id, obat_id, jumlah, aturan_pakai, **harga (snapshot)** |
 | `tagihans` | **cabang_id** (= cabang kunjungan), no_tagihan, kunjungan_id (unik), total, diskon, grand_total, **status**, metode_bayar, dibayar, kembalian, kasir_id, dibayar_at |
@@ -89,6 +103,10 @@ Sudah diuji `migrate` + `migrate:rollback` + `migrate` ulang di PostgreSQL 17 de
 | File | Isi | Modul |
 |------|-----|-------|
 | `2026_09_30_110001_create_katalog_treatment_tables` | `kategori_tindakans`, kolom `kategori_id`/`durasi_menit`/`buffer_menit` di `tindakans`, `tindakan_hargas`, `tindakan_bhps` | [F1-01](modul/F1-01-katalog-treatment.md) |
+| `2026_09_30_120001_create_booking_tables` (+ `120002` izin) | `sumber_dayas`, `tindakan_sumber_dayas`, `jadwal_praktiks`, `jadwal_pengecualians`, `appointments` | [F1-02](modul/F1-02-booking-jadwal.md) |
+| `2026_09_30_130001_create_kasir_tables` (+ `130002` izin) | `pembayarans`, `shift_kas`, tagihan tanpa kunjungan, pajak | [F1-03](modul/F1-03-kasir.md) |
+| `2026_09_30_140001_create_inventori_tables` (+ `140002` izin) | `stok_batches`, `kunjungan_tindakan_bhps`, stok desimal | [F1-04](modul/F1-04-inventori.md) |
+| `2026_09_30_150001_create_rme_estetika_tables` (+ `150002` izin) | `icd9cms` (+ 62 kode), `template_soaps`, `template_consents`, `catatan_tindakans`, `catatan_tindakan_titiks`, `informed_consents`, `pemeriksaan_addendums`, `kode_favorits`; kolom baru di `icd10s`, `tindakans`, `kunjungans`, `kunjungan_tindakans`, `pemeriksaans`, `users` | [F1-05](modul/F1-05-rme-estetika.md) |
 
 ## Model ↔ tabel
 
@@ -102,7 +120,13 @@ Selalu lakukan hal yang sama untuk model baru.
 | User | users | Auditable, SoftDeletes |
 | Poli | polis | Auditable, SoftDeletes |
 | Pasien | pasiens | Auditable, SoftDeletes |
-| Icd10 | icd10s | Auditable |
+| Icd10 | icd10s | Auditable. `kodeSensitif($kode)` = pola IMS/HIV |
+| Icd9cm | icd9cms | Auditable |
+| KodeFavorit | kode_favorits | — (preferensi pribadi) |
+| TemplateSoap / TemplateConsent | template_soaps / template_consents | Auditable, SoftDeletes |
+| CatatanTindakan / CatatanTindakanTitik | catatan_tindakans / catatan_tindakan_titiks | Auditable |
+| InformedConsent | informed_consents | Auditable (tanda tangan & naskah tidak disalin ke audit), route key `uuid` |
+| PemeriksaanAddendum | pemeriksaan_addendums | Auditable, menolak update/delete |
 | KategoriTindakan | kategori_tindakans | Auditable, SoftDeletes |
 | Tindakan | tindakans | Auditable, SoftDeletes. Scope `denganHargaCabang($cabangId)` (+`tarif_cabang`, `tersedia`), `tersediaDi($cabangId)` |
 | TindakanHarga | tindakan_hargas | Auditable (tercatat dengan `cabang_id` harganya) |
@@ -112,7 +136,7 @@ Selalu lakukan hal yang sama untuk model baru.
 | StokBatch | stok_batches | Auditable, **DalamCabang** — stok per cabang per batch (FEFO) |
 | KunjunganTindakanBhp | kunjungan_tindakan_bhps | Auditable — pemakaian BHP aktual |
 | Kunjungan | kunjungans | Auditable, **DalamCabang** |
-| Pemeriksaan | pemeriksaans | Auditable |
+| Pemeriksaan | pemeriksaans | Auditable; menolak update/delete setelah `ditandatangani_at` terisi |
 | PemeriksaanDiagnosa | pemeriksaan_diagnosas | Auditable |
 | KunjunganTindakan | kunjungan_tindakans | Auditable |
 | Resep / ResepItem | reseps / resep_items | Auditable, **DalamCabang** (Resep) |
@@ -148,4 +172,7 @@ petugas yang sudah dihapus tetap tampil di riwayat.
   BHP standar ikut tersimpan saat treatment di-soft delete. Kolom unik (NIK, email,
   kode) tetap terpakai oleh baris yang dihapus — pulihkan data lama, jangan membuat duplikat.
 - Rekam medis (pemeriksaan, diagnosa, tindakan, resep) tidak punya endpoint hapus; penggantian diagnosa/tindakan/item resep
-  saat pemeriksaan masih terbuka dilakukan per model sehingga tercatat di audit log.
+  saat pemeriksaan masih terbuka dilakukan per model sehingga tercatat di audit log. Tindakan kunjungan di-upsert (cocok `id`
+  atau `tindakan_id`) sehingga catatan & consent-nya tidak ikut terhapus saat pemeriksaan disimpan ulang.
+- Informed consent & addendum tidak pernah dihapus. Kode ICD-9-CM yang dipakai tindakan/treatment dan template consent yang masih
+  dipasang ke treatment tidak bisa dihapus.

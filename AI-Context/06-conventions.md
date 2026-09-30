@@ -49,7 +49,11 @@
 - Setiap test `RefreshDatabase` + `$this->seed(DatabaseSeeder::class)`; akun demo tersedia (`dokter@eklinik.test`, dst).
 - Test utama: `tests/Feature/AlurKlinikTest.php` — cakup alur penuh; perluas di sana untuk aturan bisnis baru.
   Test per fitur Fase 0: `PeranIzinTest`, `MultiCabangTest`, `AuditLogTest`, `KeamananTest`, `PengaturanTest`, `BerkasTest`.
-  Fase 1: `KatalogTreatmentTest`.
+  Fase 1: `KatalogTreatmentTest`, `BookingTest`, `KasirTest`, `InventoriTest`, `RmeEstetikaTest`.
+- Menutup pemeriksaan di test: penutup harus dokter ber-SIP (`dokter@eklinik.test` punya SIP; user factory tidak — isi `sip`), dan
+  treatment ber-template consent (TRT-001/002/011/012/022, TND-006/102) butuh consent. Test yang fokusnya bukan consent mematikan
+  `rme.wajib_informed_consent` lewat `PengaturanService::simpan(['rme' => ['wajib_informed_consent' => false]])`.
+- Tanda tangan consent di test: PNG sah dibuat manual (tanpa GD) — lihat `RmeEstetikaTest::ttd()`.
 - Jangan menulis ID tetap (`/api/obats/1`, `'poli_id' => 1`): di PostgreSQL sequence tidak di-reset antar-test. Ambil dari data
   (`Obat::value('id')`).
 - Menjalankan suite ke **PostgreSQL** (sebelum rilis / bila memakai SQL mentah): jalankan container `postgres:17-alpine` sementara
@@ -93,6 +97,11 @@
 | Edit file lewat skrip Python di Windows | `open(p, 'w')` menulis CRLF. Pakai `newline=''` / mode biner; Pint menormalkan PHP, file lain tidak. |
 | Queue worker dev gagal saat start pertama | Tabel `jobs`/`cache` belum ada sebelum `migrate`; container restart otomatis. |
 | Stack dev lambat / 504 di Windows | Bind mount kode lambat; jangan nyalakan profile `worker` bila tidak perlu, dan jangan menjalankan banyak stack dev bersamaan. `artisan` yang butuh menit = VM Docker kewalahan I/O. |
+| Setiap request stack dev 5–10 detik (uji E2E) | PHP men-stat ribuan file lewat bind mount. Di kontainer uji saja: tulis `opcache.validate_timestamps=0` ke `/usr/local/etc/php/conf.d/zz-e2e.ini` lalu `kill -USR2 1` (turun ke < 1 detik). Setelah itu perubahan kode PHP baru terbaca setelah `kill -USR2 1` lagi. Jangan `config:cache` di stack dev — file cache tertulis ke repo host. |
+| Mengubah pemeriksaan yang sudah ditandatangani | Model `Pemeriksaan` melempar `LogicException` (juga `PemeriksaanAddendum` untuk ubah/hapus). Koreksi = addendum. Untuk mensimulasikan manipulasi di test pakai `DB::table(...)->update()`. |
+| Menyimpan tindakan pemeriksaan | Kirim `tindakans[].id` agar baris (beserta catatan tindakan, consent, koreksi BHP) dipertahankan. Tanpa `id` backend mencocokkan `tindakan_id`; tindakan yang sama dua baris tanpa `id` bisa tertukar. |
+| Detail consent tanpa tanda tangan | `InformedConsent` menyembunyikan `ttd_*` & `checksum`; hanya `InformedConsentController::show` yang memanggil `makeVisible`. Jangan menambah tanda tangan ke `relasiRekamMedis` (ukuran & audit). |
+| Isi RME kunjungan berakses terbatas bocor | Endpoint baru yang membaca RME/berkas per kunjungan wajib memanggil `RekamMedisService::bolehLihat()` (atau `sembunyikanTerbatas()` untuk daftar). |
 
 ## Keamanan
 

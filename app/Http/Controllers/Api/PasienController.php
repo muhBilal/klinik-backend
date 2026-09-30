@@ -6,6 +6,7 @@ use App\Enums\Izin;
 use App\Http\Controllers\Controller;
 use App\Models\Pasien;
 use App\Services\AuditService;
+use App\Services\RekamMedisService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -46,23 +47,28 @@ class PasienController extends Controller
      * `?ringkas=1` hanya identitas pasien (tanpa riwayat kunjungan), mis. untuk form pendaftaran.
      * Riwayat kunjungan mencakup semua cabang; diagnosa hanya untuk pemegang izin rme.lihat.
      */
-    public function show(Request $request, Pasien $pasien, AuditService $audit): JsonResponse
+    public function show(Request $request, Pasien $pasien, AuditService $audit, RekamMedisService $rme): JsonResponse
     {
         if (! $request->boolean('ringkas')) {
             $rekamMedis = $request->user()->punyaIzin(Izin::RmeLihat);
 
             $pasien->load(['kunjungans' => fn ($q) => $q
                 ->withoutGlobalScope('cabang')
-                ->select(['id', 'cabang_id', 'pasien_id', 'poli_id', 'dokter_id', 'tanggal', 'penjamin', 'status'])
+                ->select(['id', 'cabang_id', 'pasien_id', 'poli_id', 'dokter_id', 'tanggal', 'penjamin', 'status', 'akses_terbatas'])
                 ->with([
                     'poli:id,nama', 'dokter:id,name', 'cabang:id,kode,nama',
                     ...($rekamMedis ? [
-                        'pemeriksaan:id,kunjungan_id',
+                        'pemeriksaan:id,kunjungan_id,dokter_id,perawat_id',
                         'pemeriksaan.diagnosas:id,pemeriksaan_id,icd10_id,jenis', 'pemeriksaan.diagnosas.icd10:id,kode,nama',
                     ] : []),
                 ])
                 ->latest('tanggal')->latest('id')
                 ->limit(50)]);
+
+            if ($rekamMedis) {
+                // Diagnosa kunjungan berakses terbatas (IMS) hanya untuk tim yang menangani (DR-03).
+                $rme->sembunyikanTerbatas($pasien->kunjungans, $request->user());
+            }
 
             $audit->catat('lihat', 'pasien', $pasien->id, ['pasien_id' => $pasien->id, 'label' => $pasien->auditLabel()]);
         }
