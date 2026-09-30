@@ -47,6 +47,8 @@ Route::get('berkas/{berkas}/unduh', [BerkasController::class, 'unduh'])->name('b
 Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
     // Profil & keamanan akun (tetap bisa diakses user yang wajib 2FA tetapi belum mengaktifkannya)
     Route::get('me', [AuthController::class, 'me']);
+    Route::patch('me', [AuthController::class, 'updateProfile']);
+    Route::put('me/theme', [AuthController::class, 'updateTheme']);
     Route::post('logout', [AuthController::class, 'logout']);
     Route::put('me/password', [ProfilController::class, 'ubahPassword']);
     Route::post('me/2fa', [ProfilController::class, 'mulai2fa']);

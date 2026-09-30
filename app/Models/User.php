@@ -20,7 +20,7 @@ use Laravel\Sanctum\HasApiTokens;
  * `role` = kode peran (`perans.kode`). Hak akses ditentukan izin peran: `punyaIzin(Izin::X)`.
  * `cabang_id` null = boleh mengakses semua cabang.
  */
-#[Fillable(['name', 'email', 'password', 'role', 'poli_id', 'cabang_id', 'sip', 'is_active'])]
+#[Fillable(['name', 'email', 'avatar', 'theme', 'password', 'role', 'poli_id', 'cabang_id', 'sip', 'is_active'])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes', 'two_factor_last_step', 'peran'])]
 class User extends Authenticatable
 {
@@ -45,6 +45,7 @@ class User extends Authenticatable
             'two_factor_recovery_codes' => 'encrypted:array',
             'two_factor_confirmed_at' => 'datetime',
             'two_factor_last_step' => 'integer',
+            'theme' => 'array',
         ];
     }
 

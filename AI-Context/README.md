@@ -12,6 +12,7 @@ Baca berurutan sebelum mengubah kode.
 | [05-api-reference.md](05-api-reference.md) | Daftar endpoint, izin yang dibutuhkan, payload |
 | [06-conventions.md](06-conventions.md) | Konvensi kode, cara menambah fitur, testing, jebakan umum |
 | [07-roadmap-progress.md](07-roadmap-progress.md) | Status pengerjaan PRD per fase & ID kebutuhan, rencana berikutnya |
+| [07-roadmap-modul.md](07-roadmap-modul.md) | Gap analysis modul & roadmap agar fleksibel untuk semua jenis klinik |
 | [modul/](modul/) | Dokumentasi per fitur/modul (satu file per fitur, lihat daftar di bawah) |
 | [PRD — Sistem Manajemen Klinik Estetika (eKlinik).md](PRD%20—%20Sistem%20Manajemen%20Klinik%20Estetika%20(eKlinik).md) | PRD produk (sumber kebutuhan & ID seperti `AD-01`) |
 
