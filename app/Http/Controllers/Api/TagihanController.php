@@ -15,6 +15,7 @@ class TagihanController extends Controller
     /** Relasi halaman detail / struk; juga dipakai respons bayar agar UI tidak perlu memuat ulang. */
     private const DETAIL = [
         'items:id,tagihan_id,kategori,deskripsi,jumlah,harga,subtotal', 'kasir:id,name',
+        'cabang:id,kode,nama,alamat,telepon',
         'kunjungan:id,pasien_id,poli_id,dokter_id,tanggal,penjamin,status',
         'kunjungan.pasien:id,no_rm,nama', 'kunjungan.poli:id,nama', 'kunjungan.dokter:id,name',
     ];

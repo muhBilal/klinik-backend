@@ -72,8 +72,9 @@ docker/php/, docker/nginx/  image & config untuk mode development
 
 ## Modul
 
-Auth & role · Pasien & pendaftaran (antrian per poli) · Pemeriksaan (SOAP, ICD-10, tindakan, resep) ·
-Kasir · Farmasi & kartu stok · Master data.
+Auth (token + idle timeout + 2FA TOTP) · Peran & izin (RBAC) · Multi-cabang · Pasien & pendaftaran (antrian per cabang/poli) ·
+Pemeriksaan (SOAP, ICD-10, tindakan, resep, lampiran klinis terenkripsi) · Kasir · Farmasi & kartu stok · Master data ·
+Pengaturan klinik · Audit log · Queue & scheduler. Progres PRD: [AI-Context/07-roadmap-progress.md](AI-Context/07-roadmap-progress.md).
 
 ## Dokumentasi
 

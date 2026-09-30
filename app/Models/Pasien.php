@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
 use App\Services\NomorUrutService;
 use Database\Factories\PasienFactory;
 use Illuminate\Database\Eloquent\Attributes\Appends;
@@ -11,7 +12,11 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
+/**
+ * Master pasien milik pusat (lintas cabang). Hapus = soft delete.
+ */
 #[Table('pasiens')]
 #[Appends(['umur'])]
 #[Fillable([
@@ -21,7 +26,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Pasien extends Model
 {
     /** @use HasFactory<PasienFactory> */
-    use HasFactory;
+    use Auditable, HasFactory, SoftDeletes;
 
     protected static function booted(): void
     {
@@ -50,8 +55,19 @@ class Pasien extends Model
         });
     }
 
+    /** Kunjungan di cabang aktif. Lintas cabang: `kunjungans()->withoutGlobalScope('cabang')`. */
     public function kunjungans(): HasMany
     {
         return $this->hasMany(Kunjungan::class);
+    }
+
+    public function auditLabel(): ?string
+    {
+        return "{$this->no_rm} · {$this->nama}";
+    }
+
+    public function auditPasienId(): ?int
+    {
+        return $this->id;
     }
 }

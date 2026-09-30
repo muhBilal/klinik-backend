@@ -50,7 +50,9 @@ return [
     |
     */
 
-    'expiration' => null,
+    // E-Klinik: token berlaku maksimal 12 jam (satu shift) sejak login. Batas idle diatur di
+    // pengaturan `keamanan.idle_timeout_menit` (AppServiceProvider). Token kedaluwarsa dibersihkan scheduler.
+    'expiration' => (int) env('SANCTUM_EXPIRATION', 720),
 
     /*
     |--------------------------------------------------------------------------

@@ -2,14 +2,17 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\Izin;
 use App\Enums\Penjamin;
-use App\Enums\Role;
 use App\Enums\StatusKunjungan;
 use App\Http\Controllers\Controller;
 use App\Models\Kunjungan;
 use App\Models\Pasien;
+use App\Models\User;
+use App\Services\AuditService;
 use App\Services\NomorUrutService;
 use App\Services\PemeriksaanService;
+use App\Support\CabangAktif;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +22,7 @@ use Illuminate\Validation\ValidationException;
 class KunjunganController extends Controller
 {
     /**
-     * Daftar kunjungan / antrian. Default: hari ini.
+     * Daftar kunjungan / antrian cabang aktif. Default: hari ini.
      */
     public function index(Request $request): JsonResponse
     {
@@ -32,8 +35,8 @@ class KunjunganController extends Controller
         ]);
 
         $kunjungans = Kunjungan::query()
-            ->select(['id', 'no_registrasi', 'pasien_id', 'poli_id', 'dokter_id', 'tanggal', 'no_antrian', 'penjamin', 'keluhan', 'status', 'created_at'])
-            ->with(['pasien:id,no_rm,nama,jenis_kelamin', 'poli:id,kode,nama', 'dokter:id,name'])
+            ->select(['id', 'cabang_id', 'no_registrasi', 'pasien_id', 'poli_id', 'dokter_id', 'tanggal', 'no_antrian', 'penjamin', 'keluhan', 'status', 'created_at'])
+            ->with(['pasien:id,no_rm,nama,jenis_kelamin', 'poli:id,kode,nama', 'dokter:id,name', 'cabang:id,kode,nama'])
             ->whereDate('tanggal', $request->input('tanggal', today()->toDateString()))
             ->when($request->filled('poli_id'), fn ($q) => $q->where('poli_id', $request->integer('poli_id')))
             ->when($request->filled('dokter_id'), fn ($q) => $q->where('dokter_id', $request->integer('dokter_id')))
@@ -43,6 +46,7 @@ class KunjunganController extends Controller
                 $q = $request->string('q')->trim();
                 $query->whereHas('pasien', fn ($p) => $p->where(fn ($w) => $w->whereLike('nama', "%{$q}%")->orWhere('no_rm', 'like', "{$q}%")));
             })
+            ->orderBy('cabang_id')
             ->orderBy('poli_id')
             ->orderBy('no_antrian');
 
@@ -50,20 +54,33 @@ class KunjunganController extends Controller
     }
 
     /**
-     * Pendaftaran kunjungan & pengambilan nomor antrian.
+     * Pendaftaran kunjungan & pengambilan nomor antrian di cabang aktif.
      */
-    public function store(Request $request, NomorUrutService $nomor): JsonResponse
+    public function store(Request $request, NomorUrutService $nomor, CabangAktif $cabang): JsonResponse
     {
+        $cabangId = $cabang->untukDataBaru();
+
         $data = $request->validate([
-            'pasien_id' => ['required', 'exists:pasiens,id'],
-            'poli_id' => ['required', Rule::exists('polis', 'id')->where('is_active', true)],
-            'dokter_id' => ['nullable', Rule::exists('users', 'id')->where('role', Role::Dokter->value)],
+            'pasien_id' => ['required', Rule::exists('pasiens', 'id')->whereNull('deleted_at')],
+            'poli_id' => ['required', Rule::exists('polis', 'id')->where('is_active', true)->whereNull('deleted_at')],
+            'dokter_id' => ['nullable', 'integer'],
             'penjamin' => ['required', Rule::enum(Penjamin::class)],
             'no_penjamin' => ['nullable', 'required_unless:penjamin,umum', 'string', 'max:30'],
             'keluhan' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $sudahTerdaftar = Kunjungan::where('pasien_id', $data['pasien_id'])
+        $dokterValid = ! isset($data['dokter_id']) || User::dokter()
+            ->whereKey($data['dokter_id'])
+            ->where(fn ($w) => $w->where('cabang_id', $cabangId)->orWhereNull('cabang_id'))
+            ->exists();
+
+        if (! $dokterValid) {
+            throw ValidationException::withMessages(['dokter_id' => 'Dokter tidak ditemukan atau tidak bertugas di cabang ini.']);
+        }
+
+        $sudahTerdaftar = Kunjungan::withoutGlobalScope('cabang')
+            ->where('cabang_id', $cabangId)
+            ->where('pasien_id', $data['pasien_id'])
             ->where('poli_id', $data['poli_id'])
             ->whereDate('tanggal', today())
             ->whereNotIn('status', [StatusKunjungan::Batal, StatusKunjungan::Selesai])
@@ -75,20 +92,34 @@ class KunjunganController extends Controller
 
         $kunjungan = DB::transaction(fn () => Kunjungan::create([
             ...$data,
+            'cabang_id' => $cabangId,
             'no_registrasi' => $nomor->noRegistrasi(today()),
-            'no_antrian' => $nomor->noAntrian($data['poli_id'], today()),
+            'no_antrian' => $nomor->noAntrian($cabangId, $data['poli_id'], today()),
             'tanggal' => today(),
             'status' => StatusKunjungan::Menunggu,
             'created_by' => $request->user()->id,
         ]));
 
         // Cukup untuk tiket antrian
-        return response()->json($kunjungan->load(['pasien:id,no_rm,nama', 'poli:id,kode,nama', 'dokter:id,name']), 201);
+        return response()->json($kunjungan->load(['pasien:id,no_rm,nama', 'poli:id,kode,nama', 'dokter:id,name', 'cabang:id,kode,nama']), 201);
     }
 
-    public function show(Kunjungan $kunjungan): JsonResponse
+    /**
+     * Detail kunjungan (read-only), termasuk kunjungan cabang lain milik pasien (riwayat lintas cabang).
+     * Isi rekam medis hanya untuk pemegang izin rme.lihat; aksesnya dicatat di audit log.
+     */
+    public function show(Request $request, int $kunjungan, AuditService $audit): JsonResponse
     {
-        return response()->json($kunjungan->loadDetail());
+        $rekamMedis = $request->user()->punyaIzin(Izin::RmeLihat);
+        $kunjungan = Kunjungan::withoutGlobalScope('cabang')->findOrFail($kunjungan)->loadDetail($rekamMedis);
+
+        if ($rekamMedis) {
+            $audit->catat('lihat', 'kunjungan', $kunjungan->id, [
+                'pasien_id' => $kunjungan->pasien_id, 'label' => "Rekam medis {$kunjungan->no_registrasi}",
+            ]);
+        }
+
+        return response()->json($kunjungan);
     }
 
     public function batal(Kunjungan $kunjungan): JsonResponse
@@ -108,19 +139,22 @@ class KunjunganController extends Controller
     }
 
     /**
-     * Riwayat kunjungan pasien (rekam medis) untuk ditampilkan saat pemeriksaan.
+     * Riwayat kunjungan pasien (rekam medis) lintas cabang untuk ditampilkan saat pemeriksaan.
      * `?kecuali={id}` mengecualikan kunjungan yang sedang diperiksa.
      */
-    public function riwayat(Request $request, Pasien $pasien): JsonResponse
+    public function riwayat(Request $request, Pasien $pasien, AuditService $audit): JsonResponse
     {
         $riwayat = $pasien->kunjungans()
-            ->select(['id', 'pasien_id', 'poli_id', 'tanggal'])
+            ->withoutGlobalScope('cabang')
+            ->select(['id', 'cabang_id', 'pasien_id', 'poli_id', 'tanggal'])
             ->whereIn('status', [StatusKunjungan::MenungguPembayaran, StatusKunjungan::Selesai])
             ->when($request->filled('kecuali'), fn ($q) => $q->whereKeyNot($request->integer('kecuali')))
-            ->with(['poli:id,nama', ...Kunjungan::relasiRekamMedis(), 'resep.items.obat:id,nama,satuan'])
+            ->with(['poli:id,nama', 'cabang:id,kode,nama', ...Kunjungan::relasiRekamMedis(), 'resep.items.obat:id,nama,satuan'])
             ->latest('tanggal')->latest('id')
             ->limit(20)
             ->get();
+
+        $audit->catat('lihat', 'pasien', $pasien->id, ['pasien_id' => $pasien->id, 'label' => "Riwayat rekam medis {$pasien->no_rm}"]);
 
         return response()->json($riwayat);
     }

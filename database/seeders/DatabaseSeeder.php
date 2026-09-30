@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Enums\JenisMutasi;
 use App\Enums\Role;
+use App\Models\Cabang;
 use App\Models\Icd10;
 use App\Models\Obat;
 use App\Models\Pasien;
@@ -11,6 +12,7 @@ use App\Models\Poli;
 use App\Models\Tindakan;
 use App\Models\User;
 use App\Services\FarmasiService;
+use Faker\Factory;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -24,29 +26,36 @@ class DatabaseSeeder extends Seeder
             return;
         }
 
+        // Satu cabang demo; cabang lain ditambahkan admin di menu Master Cabang.
+        $cabang = Cabang::create(['kode' => 'UTAMA', 'nama' => 'Klinik Utama', 'alamat' => 'Jl. Kesehatan No. 1', 'telepon' => '021-5550001',
+            'jam_buka' => '08:00', 'jam_tutup' => '21:00']);
+
         $polis = collect([
             ['kode' => 'UMUM', 'nama' => 'Poli Umum', 'tarif_konsultasi' => 50000],
             ['kode' => 'GIGI', 'nama' => 'Poli Gigi', 'tarif_konsultasi' => 75000],
             ['kode' => 'KIA', 'nama' => 'Poli KIA', 'tarif_konsultasi' => 60000],
         ])->map(fn ($p) => Poli::create($p))->keyBy('kode');
 
-        // Semua akun demo memakai password: password
+        // Semua akun demo memakai password: password. Administrator lintas cabang (cabang_id null), staf di cabang utama.
         $users = [
-            ['name' => 'Administrator', 'email' => 'admin@eklinik.test', 'role' => Role::Admin],
-            ['name' => 'Siti Pendaftaran', 'email' => 'pendaftaran@eklinik.test', 'role' => Role::Pendaftaran],
-            ['name' => 'Ns. Rina Perawat', 'email' => 'perawat@eklinik.test', 'role' => Role::Perawat],
-            ['name' => 'dr. Andi Wijaya', 'email' => 'dokter@eklinik.test', 'role' => Role::Dokter, 'poli_id' => $polis['UMUM']->id, 'sip' => '503/SIP-DU/001/2026'],
-            ['name' => 'drg. Maya Sari', 'email' => 'dokter.gigi@eklinik.test', 'role' => Role::Dokter, 'poli_id' => $polis['GIGI']->id, 'sip' => '503/SIP-DG/002/2026'],
-            ['name' => 'dr. Lestari, Sp.OG', 'email' => 'dokter.kia@eklinik.test', 'role' => Role::Dokter, 'poli_id' => $polis['KIA']->id, 'sip' => '503/SIP-DS/003/2026'],
-            ['name' => 'Budi Apoteker, S.Farm', 'email' => 'apoteker@eklinik.test', 'role' => Role::Apoteker],
-            ['name' => 'Dewi Kasir', 'email' => 'kasir@eklinik.test', 'role' => Role::Kasir],
+            ['name' => 'Administrator', 'email' => 'admin@eklinik.test', 'role' => Role::Admin->value, 'cabang_id' => null],
+            ['name' => 'Siti Pendaftaran', 'email' => 'pendaftaran@eklinik.test', 'role' => Role::Pendaftaran->value],
+            ['name' => 'Ns. Rina Perawat', 'email' => 'perawat@eklinik.test', 'role' => Role::Perawat->value],
+            ['name' => 'dr. Andi Wijaya', 'email' => 'dokter@eklinik.test', 'role' => Role::Dokter->value, 'poli_id' => $polis['UMUM']->id, 'sip' => '503/SIP-DU/001/2026'],
+            ['name' => 'drg. Maya Sari', 'email' => 'dokter.gigi@eklinik.test', 'role' => Role::Dokter->value, 'poli_id' => $polis['GIGI']->id, 'sip' => '503/SIP-DG/002/2026'],
+            ['name' => 'dr. Lestari, Sp.OG', 'email' => 'dokter.kia@eklinik.test', 'role' => Role::Dokter->value, 'poli_id' => $polis['KIA']->id, 'sip' => '503/SIP-DS/003/2026'],
+            ['name' => 'Budi Apoteker, S.Farm', 'email' => 'apoteker@eklinik.test', 'role' => Role::Apoteker->value],
+            ['name' => 'Dewi Kasir', 'email' => 'kasir@eklinik.test', 'role' => Role::Kasir->value],
+            // Peran non-sistem bawaan (dapat diubah di menu Peran & Izin)
+            ['name' => 'Nadia Terapis', 'email' => 'terapis@eklinik.test', 'role' => 'terapis'],
+            ['name' => 'Rudi Manajer', 'email' => 'manajer@eklinik.test', 'role' => 'manajer'],
         ];
 
         foreach ($users as $user) {
-            User::create([...$user, 'password' => 'password']);
+            User::create(['cabang_id' => $cabang->id, ...$user, 'password' => 'password']);
         }
 
-        $admin = User::where('role', Role::Admin)->first();
+        $admin = User::where('role', Role::Admin->value)->first();
 
         foreach ($this->icd10() as [$kode, $nama]) {
             Icd10::create(compact('kode', 'nama'));
@@ -62,7 +71,7 @@ class DatabaseSeeder extends Seeder
         }
 
         // Faker hanya tersedia di dependensi dev; image produksi dilewati tanpa pasien acak.
-        if (class_exists(\Faker\Factory::class)) {
+        if (class_exists(Factory::class)) {
             Pasien::factory(25)->create();
         }
     }

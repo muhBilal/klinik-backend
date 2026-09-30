@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Enums\Role;
+use App\Enums\Izin;
 use App\Enums\StatusKunjungan;
 use App\Enums\StatusResep;
 use App\Models\Kunjungan;
@@ -33,15 +33,16 @@ class PemeriksaanService
         $kunjungan->update([
             'status' => StatusKunjungan::Diperiksa,
             'dipanggil_at' => now(),
-            'dokter_id' => $kunjungan->dokter_id ?? ($user->role === Role::Dokter ? $user->id : null),
+            'dokter_id' => $kunjungan->dokter_id ?? ($user->tercatatSebagaiDokter() ? $user->id : null),
         ]);
 
         return $kunjungan;
     }
 
     /**
-     * Simpan (upsert) data pemeriksaan. Perawat hanya dapat mengisi tanda vital & anamnesis (subjektif);
-     * dokter mengisi seluruh SOAP, diagnosa, tindakan dan resep.
+     * Simpan (upsert) data pemeriksaan. Tanpa izin pemeriksaan.dokter (perawat, terapis) hanya tanda vital &
+     * anamnesis (subjektif) yang disimpan; pemegang izin pemeriksaan.dokter mengisi seluruh SOAP, diagnosa,
+     * tindakan dan resep.
      */
     public function simpan(Kunjungan $kunjungan, array $data, User $user): Kunjungan
     {
@@ -49,7 +50,7 @@ class PemeriksaanService
             throw ValidationException::withMessages(['status' => 'Pemeriksaan sudah ditutup dan tidak dapat diubah.']);
         }
 
-        $isPerawat = $user->role === Role::Perawat;
+        $isPerawat = ! $user->punyaIzin(Izin::PemeriksaanDokter);
 
         return DB::transaction(function () use ($kunjungan, $data, $user, $isPerawat) {
             $fields = $isPerawat
@@ -107,7 +108,8 @@ class PemeriksaanService
 
     private function syncDiagnosa(Pemeriksaan $pemeriksaan, array $diagnosas): void
     {
-        $pemeriksaan->diagnosas()->delete();
+        // Hapus per model (bukan query massal) agar setiap perubahan rekam medis tercatat di audit log.
+        $pemeriksaan->diagnosas()->get()->each->delete();
 
         foreach ($diagnosas as $index => $diagnosa) {
             $pemeriksaan->diagnosas()->create([
@@ -119,7 +121,7 @@ class PemeriksaanService
 
     private function syncTindakan(Kunjungan $kunjungan, array $tindakans): void
     {
-        $kunjungan->tindakans()->delete();
+        $kunjungan->tindakans()->get()->each->delete();
 
         $master = Tindakan::whereIn('id', Arr::pluck($tindakans, 'tindakan_id'))->get()->keyBy('id');
 
@@ -148,12 +150,13 @@ class PemeriksaanService
         }
 
         $resep ??= $kunjungan->resep()->create([
+            'cabang_id' => $kunjungan->cabang_id,
             'no_resep' => $this->nomor->noResep(now()),
             'status' => StatusResep::Menunggu,
         ]);
 
         $resep->update(['dokter_id' => $user->id, 'catatan' => $catatan]);
-        $resep->items()->delete();
+        $resep->items()->get()->each->delete();
 
         $obats = Obat::whereIn('id', Arr::pluck($items, 'obat_id'))->get()->keyBy('id');
 

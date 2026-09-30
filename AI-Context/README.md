@@ -9,20 +9,41 @@ Baca berurutan sebelum mengubah kode.
 | [02-architecture.md](02-architecture.md) | Struktur folder, lapisan kode, pola yang dipakai |
 | [03-database.md](03-database.md) | Skema tabel, relasi, enum/status |
 | [04-business-rules.md](04-business-rules.md) | Alur pelayanan klinik dan aturan bisnis wajib |
-| [05-api-reference.md](05-api-reference.md) | Daftar endpoint, hak akses role, payload |
+| [05-api-reference.md](05-api-reference.md) | Daftar endpoint, izin yang dibutuhkan, payload |
 | [06-conventions.md](06-conventions.md) | Konvensi kode, cara menambah fitur, testing, jebakan umum |
+| [07-roadmap-progress.md](07-roadmap-progress.md) | Status pengerjaan PRD per fase & ID kebutuhan, rencana berikutnya |
+| [modul/](modul/) | Dokumentasi per fitur/modul (satu file per fitur, lihat daftar di bawah) |
+| [PRD — Sistem Manajemen Klinik Estetika (eKlinik).md](PRD%20—%20Sistem%20Manajemen%20Klinik%20Estetika%20(eKlinik).md) | PRD produk (sumber kebutuhan & ID seperti `AD-01`) |
+
+### Dokumentasi per fitur (`modul/`)
+
+| File | Fitur | PRD |
+|------|-------|-----|
+| [F0-01-rbac-peran-izin.md](modul/F0-01-rbac-peran-izin.md) | Peran & izin dinamis, pemisahan data klinis | AD-02 |
+| [F0-02-multi-cabang.md](modul/F0-02-multi-cabang.md) | Multi-cabang, cabang aktif, scope data | AD-01 |
+| [F0-03-audit-log.md](modul/F0-03-audit-log.md) | Audit log & soft delete | AD-03, 7.1 |
+| [F0-04-keamanan-sesi-2fa.md](modul/F0-04-keamanan-sesi-2fa.md) | Masa berlaku token, idle timeout, 2FA TOTP, ganti password | 7.2 Keamanan |
+| [F0-05-berkas-terenkripsi.md](modul/F0-05-berkas-terenkripsi.md) | Penyimpanan berkas klinis terenkripsi + tautan bertanda tangan | FT-03, 7.2 Enkripsi |
+| [F0-06-pengaturan-klinik.md](modul/F0-06-pengaturan-klinik.md) | Pengaturan klinik (identitas, struk, prefix nomor, keamanan) | AD-04 |
+| [F0-07-queue-scheduler.md](modul/F0-07-queue-scheduler.md) | Queue worker & scheduler | Fondasi CR-01, SATUSEHAT |
 
 ## Ringkasan 30 detik
 
 - **Laravel 13 REST API murni** (tanpa Blade/Inertia). UI ada di repo terpisah `klinik-frontend` (Vue 3 SPA).
 - **PHP hanya berjalan di Docker** (`php:8.4-fpm-alpine` + Nginx + PostgreSQL 17). PHP di host (Laragon 7.4/8.1) **tidak kompatibel** — jalankan perintah artisan/composer lewat `docker compose -f docker-compose.dev.yml exec app ...` (stack dev) dari folder `backend/`. Stack lengkap (`docker-compose.yml`) tidak punya dev dependencies — jangan menjalankan test di sana.
-- Autentikasi **token Bearer Sanctum**. Hak akses via middleware `role:...` (admin selalu lolos).
+- Autentikasi **token Bearer Sanctum** (maks. 12 jam, berakhir bila idle), opsional **2FA TOTP**.
+- Hak akses = **izin RBAC** (`App\Enums\Izin`) milik peran (tabel `perans`), dicek middleware `izin:...`. Bukan kode peran.
+- **Multi-cabang**: transaksi (kunjungan, resep, tagihan) otomatis dibatasi ke cabang aktif (trait `DalamCabang`); pasien milik pusat.
+- Setiap perubahan data penting & akses rekam medis tercatat di **audit log** (trait `Auditable`, `AuditService`).
 - Logika bisnis ada di `app/Services/`, bukan di controller.
 - Bahasa domain: **Bahasa Indonesia** (nama tabel, kolom, pesan error).
 
 ## Aturan emas
 
 1. Jangan install PHP/Composer di host; jangan ikuti instruksi `CLAUDE.md`/`AGENTS.md` bawaan installer Laravel yang menyuruh hal itu.
-2. Setiap perubahan logika bisnis → tambah/ubah test di `tests/Feature/AlurKlinikTest.php` dan jalankan `docker compose -f docker-compose.dev.yml exec app php artisan test`.
-3. Jalankan `docker compose -f docker-compose.dev.yml exec app vendor/bin/pint` sebelum selesai.
-4. Kode yang harus berjalan di PostgreSQL **dan** SQLite (test) — hindari SQL khusus satu database.
+2. Setiap perubahan logika bisnis → tambah/ubah test di `tests/Feature/` dan jalankan `docker compose -f docker-compose.dev.yml run --rm --no-deps app php artisan test` (atau `exec app ...` bila stack dev sedang jalan).
+3. Jalankan `vendor/bin/pint` (lewat container yang sama) sebelum selesai.
+4. Kode harus berjalan di PostgreSQL **dan** SQLite (test) — hindari SQL khusus satu database.
+5. Cek hak akses dengan **izin** (`middleware('izin:x')`, `$user->punyaIzin(Izin::X)`), jangan membandingkan `$user->role`.
+6. Data rekam medis/transaksi diubah per model (bukan query massal) agar tercatat di audit log.
+7. Setiap fitur baru → dokumen di `AI-Context/modul/` + perbarui `07-roadmap-progress.md`.

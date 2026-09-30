@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\Role;
+use App\Enums\Izin;
 use App\Enums\StatusKunjungan;
 use App\Enums\StatusResep;
 use App\Enums\StatusTagihan;
@@ -13,12 +13,17 @@ use App\Models\Pasien;
 use App\Models\Poli;
 use App\Models\Resep;
 use App\Models\Tagihan;
+use App\Support\CabangAktif;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request): JsonResponse
+    /**
+     * Ringkasan hari ini untuk cabang aktif (semua cabang bila user lintas cabang tanpa pilihan cabang).
+     * Pasien & obat bersifat pusat (belum per cabang).
+     */
+    public function __invoke(Request $request, CabangAktif $cabang): JsonResponse
     {
         $today = today();
 
@@ -34,6 +39,7 @@ class DashboardController extends Controller
 
         return response()->json([
             'tanggal' => $today->toDateString(),
+            'cabang_id' => $cabang->id(),
             'kunjungan' => [
                 'total' => $kunjunganHariIni->except(StatusKunjungan::Batal->value)->sum(),
                 'per_status' => collect(StatusKunjungan::cases())
@@ -44,8 +50,8 @@ class DashboardController extends Controller
             'pasien_baru_hari_ini' => Pasien::whereDate('created_at', $today)->count(),
             'resep_menunggu' => Resep::where('status', StatusResep::Menunggu)->count(),
             'tagihan_belum_bayar' => Tagihan::where('status', StatusTagihan::BelumBayar)->count(),
-            // Hanya ditampilkan untuk kasir (admin selalu lolos), role lain tidak perlu menjalankan query-nya.
-            'pendapatan_hari_ini' => $request->user()->hasRole(Role::Kasir)
+            // Hanya untuk pemegang izin laporan.keuangan; peran lain tidak perlu menjalankan query-nya.
+            'pendapatan_hari_ini' => $request->user()->punyaIzin(Izin::LaporanKeuangan)
                 ? (int) Tagihan::where('status', StatusTagihan::Lunas)->whereDate('dibayar_at', $today)->sum('grand_total')
                 : null,
             'obat_stok_menipis' => Obat::where('is_active', true)->stokMenipis()->orderBy('stok')->limit(10)->get(['id', 'nama', 'satuan', 'stok']),

@@ -2,6 +2,8 @@
 
 // Terjemahan rule validasi yang dipakai aplikasi. Rule lain otomatis fallback ke bahasa Inggris.
 return [
+    'after' => ':attribute harus setelah :date.',
+    'after_or_equal' => ':attribute harus tanggal setelah atau sama dengan :date.',
     'array' => ':attribute harus berupa daftar.',
     'before_or_equal' => ':attribute harus tanggal sebelum atau sama dengan :date.',
     'between' => [
@@ -9,18 +11,24 @@ return [
         'string' => ':attribute harus di antara :min dan :max karakter.',
     ],
     'boolean' => ':attribute harus bernilai benar atau salah.',
+    'confirmed' => 'Konfirmasi :attribute tidak cocok.',
     'date' => ':attribute bukan tanggal yang valid.',
+    'date_format' => ':attribute harus berformat :format.',
+    'different' => ':attribute harus berbeda dengan :other.',
     'digits' => ':attribute harus :digits digit.',
     'distinct' => ':attribute memiliki nilai duplikat.',
     'email' => ':attribute harus alamat email yang valid.',
     'enum' => ':attribute yang dipilih tidak valid.',
     'exists' => ':attribute yang dipilih tidak valid.',
+    'file' => ':attribute harus berupa berkas.',
     'in' => ':attribute yang dipilih tidak valid.',
     'integer' => ':attribute harus bilangan bulat.',
     'max' => [
+        'file' => ':attribute maksimal :max KB.',
         'numeric' => ':attribute maksimal :max.',
         'string' => ':attribute maksimal :max karakter.',
     ],
+    'mimes' => ':attribute harus berjenis: :values.',
     'min' => [
         'numeric' => ':attribute minimal :min.',
         'string' => ':attribute minimal :min karakter.',
@@ -29,10 +37,15 @@ return [
     'password' => [
         'min' => ':attribute minimal :min karakter.',
     ],
+    'present' => ':attribute wajib dikirim.',
     'regex' => 'Format :attribute tidak valid.',
     'required' => ':attribute wajib diisi.',
     'required_if' => ':attribute wajib diisi bila :other adalah :value.',
     'required_unless' => ':attribute wajib diisi kecuali :other adalah :values.',
+    'required_without' => ':attribute wajib diisi bila :values tidak diisi.',
+    'size' => [
+        'string' => ':attribute harus :size karakter.',
+    ],
     'string' => ':attribute harus berupa teks.',
     'unique' => ':attribute sudah digunakan.',
 
@@ -63,5 +76,22 @@ return [
         'resep.*.obat_id' => 'obat',
         'resep.*.jumlah' => 'jumlah obat',
         'resep.*.aturan_pakai' => 'aturan pakai',
+        'kode' => 'kode',
+        'cabang_id' => 'cabang',
+        'jam_buka' => 'jam buka',
+        'jam_tutup' => 'jam tutup',
+        'password_lama' => 'password lama',
+        'izin' => 'izin',
+        'izin.*' => 'izin',
+        'kategori' => 'kategori',
+        'file' => 'berkas',
+        'kunjungan_id' => 'kunjungan',
+        'tantangan' => 'sesi login',
+        'klinik.nama' => 'nama klinik',
+        'klinik.email' => 'email klinik',
+        'cetak.lebar_struk' => 'lebar struk',
+        'keamanan.idle_timeout_menit' => 'batas waktu idle',
+        'keamanan.wajib_2fa' => 'peran wajib 2FA',
+        'keamanan.wajib_2fa.*' => 'peran wajib 2FA',
     ],
 ];

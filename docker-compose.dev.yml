@@ -1,6 +1,10 @@
 # Stack DEVELOPMENT backend saja (kode di-mount, dev dependencies lengkap):
 #   docker compose -f docker-compose.dev.yml up -d --build
 # Frontend dijalankan terpisah dengan `npm run dev`. Jangan jalankan bersamaan dengan docker-compose.yml (port sama).
+# `queue` & `scheduler` OPSIONAL (profile `worker`) — bind mount kode di Windows lambat, tiga container PHP yang
+# me-mount folder yang sama memperberat I/O. Nyalakan saat mengerjakan job/jadwal:
+#   docker compose -f docker-compose.dev.yml --profile worker up -d
+# Restart manual setelah mengubah kode job: docker compose -f docker-compose.dev.yml restart queue
 
 name: eklinik-dev
 
@@ -14,6 +18,32 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  queue:
+    profiles: ["worker"]
+    build: ./docker/php
+    container_name: eklinik-dev-queue
+    working_dir: /var/www/html
+    command: php artisan queue:work --sleep=3 --tries=3 --backoff=30
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  scheduler:
+    profiles: ["worker"]
+    build: ./docker/php
+    container_name: eklinik-dev-scheduler
+    working_dir: /var/www/html
+    command: php artisan schedule:work
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
   nginx:
     image: nginx:alpine

@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
+use App\Services\AuditService;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
@@ -15,6 +17,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 ])]
 class Pemeriksaan extends Model
 {
+    use Auditable;
+
     public const VITAL_FIELDS = ['tekanan_darah', 'nadi', 'suhu', 'respirasi', 'berat_badan', 'tinggi_badan'];
 
     public const SOAP_FIELDS = ['subjektif', 'objektif', 'asesmen', 'plan'];
@@ -32,7 +36,7 @@ class Pemeriksaan extends Model
 
     public function kunjungan(): BelongsTo
     {
-        return $this->belongsTo(Kunjungan::class);
+        return $this->belongsTo(Kunjungan::class)->withoutGlobalScope('cabang');
     }
 
     public function diagnosas(): HasMany
@@ -42,11 +46,21 @@ class Pemeriksaan extends Model
 
     public function perawat(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'perawat_id');
+        return $this->belongsTo(User::class, 'perawat_id')->withTrashed();
     }
 
     public function dokter(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'dokter_id');
+        return $this->belongsTo(User::class, 'dokter_id')->withTrashed();
+    }
+
+    public function auditLabel(): ?string
+    {
+        return "Pemeriksaan kunjungan #{$this->kunjungan_id}";
+    }
+
+    public function auditPasienId(): ?int
+    {
+        return app(AuditService::class)->pasienDariKunjungan($this->kunjungan_id);
     }
 }

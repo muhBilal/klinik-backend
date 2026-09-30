@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Enums\Penjamin;
 use App\Enums\StatusKunjungan;
+use App\Models\Concerns\Auditable;
+use App\Models\Concerns\DalamCabang;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
@@ -11,13 +13,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
+/**
+ * Kunjungan milik satu cabang (global scope `cabang`, lihat DalamCabang).
+ */
 #[Table('kunjungans')]
 #[Fillable([
-    'no_registrasi', 'pasien_id', 'poli_id', 'dokter_id', 'tanggal', 'no_antrian',
+    'cabang_id', 'no_registrasi', 'pasien_id', 'poli_id', 'dokter_id', 'tanggal', 'no_antrian',
     'penjamin', 'no_penjamin', 'keluhan', 'status', 'dipanggil_at', 'selesai_at', 'created_by',
 ])]
 class Kunjungan extends Model
 {
+    use Auditable, DalamCabang;
+
     protected function casts(): array
     {
         return [
@@ -31,17 +38,17 @@ class Kunjungan extends Model
 
     public function pasien(): BelongsTo
     {
-        return $this->belongsTo(Pasien::class);
+        return $this->belongsTo(Pasien::class)->withTrashed();
     }
 
     public function poli(): BelongsTo
     {
-        return $this->belongsTo(Poli::class);
+        return $this->belongsTo(Poli::class)->withTrashed();
     }
 
     public function dokter(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'dokter_id');
+        return $this->belongsTo(User::class, 'dokter_id')->withTrashed();
     }
 
     public function pemeriksaan(): HasOne
@@ -56,12 +63,17 @@ class Kunjungan extends Model
 
     public function resep(): HasOne
     {
-        return $this->hasOne(Resep::class);
+        return $this->hasOne(Resep::class)->withoutGlobalScope('cabang');
     }
 
     public function tagihan(): HasOne
     {
-        return $this->hasOne(Tagihan::class);
+        return $this->hasOne(Tagihan::class)->withoutGlobalScope('cabang');
+    }
+
+    public function berkas(): HasMany
+    {
+        return $this->hasMany(Berkas::class);
     }
 
     /**
@@ -82,17 +94,28 @@ class Kunjungan extends Model
     }
 
     /**
-     * Relasi untuk halaman detail kunjungan / pemeriksaan.
+     * Relasi untuk halaman detail kunjungan / pemeriksaan. `$rekamMedis = false` untuk pengguna tanpa izin
+     * rme.lihat: hanya data administrasi (tanpa SOAP, diagnosa, tindakan, resep).
      */
-    public function loadDetail(): static
+    public function loadDetail(bool $rekamMedis = true): static
     {
         return $this->load([
             'pasien:id,no_rm,nama,jenis_kelamin,tanggal_lahir,golongan_darah,alergi',
             'poli:id,kode,nama,tarif_konsultasi',
             'dokter:id,name,sip',
-            ...self::relasiRekamMedis(),
-            'resep.items.obat:id,nama,satuan,stok',
+            'cabang:id,kode,nama',
+            ...($rekamMedis ? [...self::relasiRekamMedis(), 'resep.items.obat:id,nama,satuan,stok'] : []),
             'tagihan:id,kunjungan_id,no_tagihan,total,grand_total,status',
         ]);
+    }
+
+    public function auditLabel(): ?string
+    {
+        return $this->no_registrasi;
+    }
+
+    public function auditPasienId(): ?int
+    {
+        return $this->pasien_id;
     }
 }

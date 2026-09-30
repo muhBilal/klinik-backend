@@ -51,7 +51,7 @@ class PoliController extends Controller
 
     public function destroy(Poli $poli): JsonResponse
     {
-        abort_if($poli->kunjungans()->exists(), 422, 'Poli sudah memiliki kunjungan. Nonaktifkan saja, jangan dihapus.');
+        abort_if($poli->kunjungans()->withoutGlobalScope('cabang')->exists(), 422, 'Poli sudah memiliki kunjungan. Nonaktifkan saja, jangan dihapus.');
 
         $poli->delete();
 

@@ -51,6 +51,7 @@ class TagihanService
         $total = array_sum(array_column($items, 'subtotal'));
 
         $tagihan = $kunjungan->tagihan()->create([
+            'cabang_id' => $kunjungan->cabang_id,
             'no_tagihan' => $this->nomor->noTagihan(now()),
             'total' => $total,
             'grand_total' => $total,
@@ -95,7 +96,7 @@ class TagihanService
                 'dibayar_at' => now(),
             ]);
 
-            $tagihan->kunjungan()->update(['status' => StatusKunjungan::Selesai]);
+            $tagihan->kunjungan->update(['status' => StatusKunjungan::Selesai]);
 
             return $tagihan;
         });

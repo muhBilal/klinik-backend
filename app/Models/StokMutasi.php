@@ -21,11 +21,11 @@ class StokMutasi extends Model
 
     public function obat(): BelongsTo
     {
-        return $this->belongsTo(Obat::class);
+        return $this->belongsTo(Obat::class)->withTrashed();
     }
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 }

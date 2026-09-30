@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Enums\MetodeBayar;
 use App\Enums\StatusTagihan;
+use App\Models\Concerns\Auditable;
+use App\Models\Concerns\DalamCabang;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
@@ -12,11 +14,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Table('tagihans')]
 #[Fillable([
-    'no_tagihan', 'kunjungan_id', 'total', 'diskon', 'grand_total', 'status',
+    'cabang_id', 'no_tagihan', 'kunjungan_id', 'total', 'diskon', 'grand_total', 'status',
     'metode_bayar', 'dibayar', 'kembalian', 'kasir_id', 'dibayar_at',
 ])]
 class Tagihan extends Model
 {
+    use Auditable, DalamCabang;
+
     protected function casts(): array
     {
         return [
@@ -33,7 +37,7 @@ class Tagihan extends Model
 
     public function kunjungan(): BelongsTo
     {
-        return $this->belongsTo(Kunjungan::class);
+        return $this->belongsTo(Kunjungan::class)->withoutGlobalScope('cabang');
     }
 
     public function items(): HasMany
@@ -43,6 +47,11 @@ class Tagihan extends Model
 
     public function kasir(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'kasir_id');
+        return $this->belongsTo(User::class, 'kasir_id')->withTrashed();
+    }
+
+    public function auditLabel(): ?string
+    {
+        return $this->no_tagihan;
     }
 }

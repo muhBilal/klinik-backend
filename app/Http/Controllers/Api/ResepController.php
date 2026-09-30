@@ -16,7 +16,7 @@ class ResepController extends Controller
         'items:id,resep_id,obat_id,jumlah,aturan_pakai,harga', 'items.obat:id,nama,satuan,stok',
         'kunjungan:id,pasien_id,poli_id', 'kunjungan.pasien:id,no_rm,nama,jenis_kelamin,tanggal_lahir,alergi',
         'kunjungan.poli:id,nama', 'kunjungan.tagihan:id,kunjungan_id,no_tagihan,status',
-        'dokter:id,name,sip', 'apoteker:id,name',
+        'dokter:id,name,sip', 'apoteker:id,name', 'cabang:id,kode,nama,alamat,telepon',
     ];
 
     public function index(Request $request): JsonResponse

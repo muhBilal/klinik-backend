@@ -2,23 +2,33 @@
 
 namespace App\Models;
 
-use App\Enums\Role;
+use App\Enums\Izin;
+use App\Models\Concerns\Auditable;
+use App\Services\PengaturanService;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'role', 'poli_id', 'sip', 'is_active'])]
-#[Hidden(['password', 'remember_token'])]
+/**
+ * `role` = kode peran (`perans.kode`). Hak akses ditentukan izin peran: `punyaIzin(Izin::X)`.
+ * `cabang_id` null = boleh mengakses semua cabang.
+ */
+#[Fillable(['name', 'email', 'password', 'role', 'poli_id', 'cabang_id', 'sip', 'is_active'])]
+#[Hidden(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes', 'two_factor_last_step', 'peran'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable;
+    use Auditable, HasApiTokens, HasFactory, Notifiable, SoftDeletes;
+
+    /** @var list<string>|null izin efektif, dihitung sekali per instance */
+    private ?array $izinMemo = null;
 
     /**
      * Get the attributes that should be cast.
@@ -30,27 +40,42 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'role' => Role::class,
             'is_active' => 'boolean',
+            'two_factor_secret' => 'encrypted',
+            'two_factor_recovery_codes' => 'encrypted:array',
+            'two_factor_confirmed_at' => 'datetime',
+            'two_factor_last_step' => 'integer',
         ];
     }
 
     public function poli(): BelongsTo
     {
-        return $this->belongsTo(Poli::class);
+        return $this->belongsTo(Poli::class)->withTrashed();
     }
 
-    /**
-     * Admin selalu lolos pengecekan role.
-     */
-    public function hasRole(Role|string ...$roles): bool
+    public function cabang(): BelongsTo
     {
-        if ($this->role === Role::Admin) {
-            return true;
-        }
+        return $this->belongsTo(Cabang::class)->withTrashed();
+    }
 
-        foreach ($roles as $role) {
-            if ($this->role === ($role instanceof Role ? $role : Role::from($role))) {
+    public function peran(): BelongsTo
+    {
+        return $this->belongsTo(Peran::class, 'role', 'kode');
+    }
+
+    /** @return list<string> */
+    public function izin(): array
+    {
+        return $this->izinMemo ??= $this->peran?->izin ?? [];
+    }
+
+    /** Punya salah satu izin yang disebut. */
+    public function punyaIzin(Izin|string ...$izin): bool
+    {
+        $milik = $this->izin();
+
+        foreach ($izin as $kode) {
+            if (in_array($kode instanceof Izin ? $kode->value : $kode, $milik, true)) {
                 return true;
             }
         }
@@ -58,8 +83,46 @@ class User extends Authenticatable
         return false;
     }
 
+    /** Muat ulang izin setelah peran/izin diubah pada instance yang sama. */
+    public function lupakanIzin(): void
+    {
+        $this->izinMemo = null;
+        $this->unsetRelation('peran');
+    }
+
+    /**
+     * Tenaga medis yang tercatat sebagai dokter pada kunjungan (bukan administrator yang kebetulan punya akses penuh).
+     */
+    public function tercatatSebagaiDokter(): bool
+    {
+        return ! $this->peran?->akses_penuh && $this->punyaIzin(Izin::PemeriksaanDokter);
+    }
+
+    public function aksesSemuaCabang(): bool
+    {
+        return $this->cabang_id === null;
+    }
+
+    public function twoFactorAktif(): bool
+    {
+        return $this->two_factor_confirmed_at !== null && filled($this->two_factor_secret);
+    }
+
+    /** Peran user termasuk daftar `keamanan.wajib_2fa`. */
+    public function wajib2fa(): bool
+    {
+        return in_array($this->role, (array) app(PengaturanService::class)->get('keamanan.wajib_2fa'), true);
+    }
+
+    /** Dokter aktif = user aktif yang perannya memegang izin pemeriksaan.dokter. */
     public function scopeDokter(Builder $query): void
     {
-        $query->where('role', Role::Dokter)->where('is_active', true);
+        $query->where('is_active', true)
+            ->whereHas('peran.izins', fn ($q) => $q->where('izin', Izin::PemeriksaanDokter->value));
+    }
+
+    public function auditLabel(): ?string
+    {
+        return $this->email;
     }
 }

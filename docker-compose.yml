@@ -1,8 +1,9 @@
 # Menjalankan seluruh E-Klinik (backend + frontend) dengan satu perintah dari folder backend/:
 #   docker compose up -d --build
 #
-# app = Nginx + PHP-FPM (API Laravel) + hasil build frontend Vue  -> http://localhost:8000
+# app = Nginx + PHP-FPM (API Laravel) + queue worker + scheduler + hasil build frontend Vue  -> http://localhost:8000
 # db  = PostgreSQL 17 (data di volume `pgdata`)
+# Berkas klinis terenkripsi disimpan di volume `berkas` (dibuka dengan APP_KEY — cadangkan APP_KEY!).
 #
 # Syarat: repo frontend berada di folder sejajar `../frontend`.
 # Nilai APP_KEY, APP_URL, DB_* diambil dari backend/.env.
@@ -38,6 +39,8 @@ services:
       QUEUE_CONNECTION: database
       # Isi data demo (akun, poli, obat, ICD-10) bila database masih kosong
       SEED_DEMO: ${SEED_DEMO:-true}
+    volumes:
+      - berkas:/var/www/html/storage/app/berkas
     depends_on:
       db:
         condition: service_healthy
@@ -63,3 +66,4 @@ services:
 
 volumes:
   pgdata:
+  berkas:

@@ -38,6 +38,16 @@ return [
             'report' => false,
         ],
 
+        // E-Klinik: berkas klinis terenkripsi (BerkasService). Di luar root disk `local` yang bisa disajikan,
+        // dan di Docker dipasang sebagai volume agar tidak hilang saat image dibangun ulang.
+        'berkas' => [
+            'driver' => 'local',
+            'root' => env('BERKAS_ROOT', storage_path('app/berkas')),
+            'visibility' => 'private',
+            'throw' => true,
+            'report' => true,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
