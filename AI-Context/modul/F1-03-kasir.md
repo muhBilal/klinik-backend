@@ -72,6 +72,20 @@ POST /api/shift-kas/{id}/tutup         kas_fisik, catatan?
 
 Respons shift menyertakan `rekap`: `per_metode[]`, `total`, `total_refund`, `kas_seharusnya`.
 
+## Persetujuan diskon & wajib shift (PRD v2 #2 · 1 Okt 2026)
+
+- **Diskon di atas batas peran** (BL-02) tidak lagi buntu: `POST /tagihans/{id}/bayar` menerima `persetujuan: {email, password}` atasan.
+  Tanpa persetujuan → 422 `diskon` + `perlu_persetujuan` (penanda UI menampilkan form atasan). Syarat penyetuju: aktif, bukan kasir itu
+  sendiri, memegang izin baru **`kasir.diskon`** (migration memberi ke `manajer`), bertugas di cabang tagihan atau lintas cabang, dan
+  diskon juga dalam batas peran penyetuju. Gagal → 422 `persetujuan`; salah password dibatasi 5×/menit per email+IP.
+- Penyetuju disimpan di `tagihans.diskon_disetujui_oleh` (relasi `penyetujuDiskon`, ikut di `DETAIL`) dan audit `setujui_diskon`.
+- Pengaturan baru `keuangan.wajib_shift` (default `false`): bila aktif, bayar tanpa shift terbuka → 422 `shift`.
+- `GET /shift-kas/aktif` kini mengembalikan JSON `null` sungguhan (sebelumnya `{}` karena perilaku `response()->json(null)`).
+- **Frontend:** `TagihanDetail` = split payment (hingga 5 baris metode + referensi, tombol "Pas", nominal cepat tunai, kurang/kembalian),
+  form persetujuan atasan, void (belum bayar) & refund (lunas) untuk `kasir.void`, rincian pembayaran & penyetuju di struk.
+  Halaman baru `/shift-kas` (`ShiftKasView`: buka dengan modal awal, rekap per metode, tutup dengan selisih, riwayat & cetak rekap);
+  banner status shift di daftar kasir. Pengaturan → kartu **Keuangan & Kasir** (pajak, batas diskon per peran, wajib shift, blokir BHP).
+
 ## Paket & promo (F1-08)
 
 - `bayar()` menghitung ulang potongan kode promo terpasang (dikunci, kuota bisa habis → 422 `kode`), menyimpan `diskon_promo`, mencatat

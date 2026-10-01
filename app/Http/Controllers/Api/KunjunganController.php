@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\AuditService;
 use App\Services\NomorUrutService;
 use App\Services\PemeriksaanService;
+use App\Services\PersetujuanDataService;
 use App\Services\RekamMedisService;
 use App\Support\CabangAktif;
 use Illuminate\Http\JsonResponse;
@@ -69,6 +70,8 @@ class KunjunganController extends Controller
             'no_penjamin' => ['nullable', 'required_unless:penjamin,umum', 'string', 'max:30'],
             'keluhan' => ['nullable', 'string', 'max:1000'],
         ]);
+
+        app(PersetujuanDataService::class)->pastikanAda((int) $data['pasien_id']);
 
         $dokterValid = ! isset($data['dokter_id']) || User::dokter()
             ->whereKey($data['dokter_id'])

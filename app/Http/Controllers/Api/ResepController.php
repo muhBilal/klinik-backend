@@ -13,7 +13,8 @@ class ResepController extends Controller
 {
     /** Relasi halaman detail resep; juga dipakai respons serahkan agar UI tidak perlu memuat ulang. */
     private const DETAIL = [
-        'items:id,resep_id,obat_id,jumlah,aturan_pakai,harga', 'items.obat:id,nama,satuan,stok',
+        'items:id,resep_id,obat_id,racikan,nama_racikan,bentuk,jumlah_racikan,satuan_racikan,jumlah,aturan_pakai,harga,biaya_racik',
+        'items.obat:id,nama,satuan,stok', 'items.komponens:id,resep_item_id,obat_id,jumlah,harga', 'items.komponens.obat:id,nama,satuan,stok',
         'kunjungan:id,pasien_id,poli_id', 'kunjungan.pasien:id,no_rm,nama,jenis_kelamin,tanggal_lahir,alergi',
         'kunjungan.poli:id,nama', 'kunjungan.tagihan:id,kunjungan_id,no_tagihan,status',
         'dokter:id,name,sip', 'apoteker:id,name', 'cabang:id,kode,nama,alamat,telepon',

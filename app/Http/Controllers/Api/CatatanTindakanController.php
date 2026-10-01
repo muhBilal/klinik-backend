@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\JenisCatatanTindakan;
+use App\Enums\PeranKomisi;
 use App\Http\Controllers\Controller;
 use App\Models\CatatanTindakan;
 use App\Models\CatatanTindakanTitik;
@@ -27,11 +28,13 @@ class CatatanTindakanController extends Controller
         $kunjungan = Kunjungan::withoutGlobalScope('cabang')->findOrFail($kunjunganTindakan->kunjungan_id);
         abort_unless($rekamMedis->bolehLihat($request->user(), $kunjungan), 403, 'Rekam medis kunjungan ini berakses terbatas.');
 
-        $kunjunganTindakan->load(['tindakan:id,nama,jenis_catatan', 'petugas:id,name', 'catatan' => fn ($q) => $q->with(CatatanTindakanService::RELASI)]);
+        $kunjunganTindakan->load(['tindakan:id,nama,jenis_catatan', 'petugas:id,name', 'petugasTambahan.user:id,name',
+            'catatan' => fn ($q) => $q->with(CatatanTindakanService::RELASI)]);
 
         return response()->json([
             'kunjungan_tindakan' => $kunjunganTindakan->only(['id', 'kunjungan_id', 'tindakan_id', 'jumlah', 'petugas_id']) + [
                 'tindakan' => $kunjunganTindakan->tindakan, 'petugas' => $kunjunganTindakan->petugas,
+                'petugas_tambahan' => $kunjunganTindakan->petugasTambahan,
             ],
             'jenis' => $kunjunganTindakan->catatan?->jenis ?? $kunjunganTindakan->tindakan?->jenis_catatan ?? JenisCatatanTindakan::Umum,
             'catatan' => $kunjunganTindakan->catatan,
@@ -50,6 +53,10 @@ class CatatanTindakanController extends Controller
             'catatan' => ['nullable', 'string', 'max:5000'],
             'sumber_daya_id' => ['nullable', 'integer'],
             'petugas_id' => ['sometimes', 'nullable', 'integer'],
+            // Petugas tambahan (asisten, terapis kedua) — AN-03, dasar split komisi; replace-all bila dikirim
+            'petugas_tambahan' => ['sometimes', 'array', 'max:5'],
+            'petugas_tambahan.*.user_id' => ['required', 'integer', 'distinct'],
+            'petugas_tambahan.*.peran' => ['required', Rule::enum(PeranKomisi::class)],
             'parameter' => ['nullable', 'array'],
             ...$parameter,
 

@@ -38,10 +38,10 @@ class AppointmentController extends Controller
 
         $appointments = Appointment::query()
             ->select(['id', 'cabang_id', 'no_booking', 'pasien_id', 'poli_id', 'petugas_id', 'mulai_at',
-                'selesai_at', 'status', 'catatan', 'kunjungan_id'])
+                'selesai_at', 'status', 'catatan', 'alasan_batal', 'kunjungan_id', 'minta_ubah_at', 'dikonfirmasi_via'])
             ->with(['pasien:id,no_rm,nama,no_hp', 'poli:id,kode,nama', 'petugas:id,name',
                 'tindakans:id,appointment_id,tindakan_id,durasi_menit,buffer_menit', 'tindakans.tindakan:id,kode,nama',
-                'sumberDayas:id,kode,nama,tipe'])
+                'sumberDayas:id,kode,nama,tipe', 'kunjungan:id,no_registrasi,no_antrian,status'])
             ->whereBetween('mulai_at', [$dari->copy()->startOfDay(), $sampai->copy()->endOfDay()])
             ->when($request->filled('petugas_id'), fn ($q) => $q->where('petugas_id', $request->integer('petugas_id')))
             ->when($request->filled('poli_id'), fn ($q) => $q->where('poli_id', $request->integer('poli_id')))
@@ -70,6 +70,7 @@ class AppointmentController extends Controller
             'tindakan_ids.*' => ['required', 'integer', 'distinct', Rule::exists('tindakans', 'id')->whereNull('deleted_at')],
             'sumber_daya_ids' => ['nullable', 'array'],
             'sumber_daya_ids.*' => ['integer', 'distinct'],
+            'kecuali_id' => ['nullable', 'integer'],
         ]);
 
         $cabangId = $cabangAktif->untukDataBaru();
@@ -86,8 +87,24 @@ class AppointmentController extends Controller
             ),
             'slot' => $jadwal->slotTersedia(
                 $cabangId, $data['petugas_id'], $request->date('tanggal'), $menit, $data['sumber_daya_ids'] ?? [],
+                $data['kecuali_id'] ?? null,
             ),
         ]);
+    }
+
+    /**
+     * Ruang/alat wajib untuk treatment yang dipilih di cabang aktif (BK-08). Dipakai form booking sebelum memilih slot.
+     */
+    public function kebutuhan(Request $request, CabangAktif $cabangAktif): JsonResponse
+    {
+        $data = $request->validate([
+            'tindakan_ids' => ['required', 'array', 'min:1', 'max:20'],
+            'tindakan_ids.*' => ['required', 'integer', 'distinct'],
+        ]);
+
+        $tindakans = Tindakan::whereKey($data['tindakan_ids'])->get(['id', 'nama']);
+
+        return response()->json($this->service->kebutuhan($tindakans, $cabangAktif->untukDataBaru()));
     }
 
     public function store(Request $request, CabangAktif $cabang): JsonResponse

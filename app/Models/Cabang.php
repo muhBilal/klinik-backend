@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Table('cabangs')]
-#[Fillable(['kode', 'nama', 'alamat', 'telepon', 'email', 'jam_buka', 'jam_tutup', 'is_active'])]
+#[Fillable(['kode', 'nama', 'alamat', 'telepon', 'email', 'jam_buka', 'jam_tutup', 'satusehat_location_id', 'is_active'])]
 class Cabang extends Model
 {
     use Auditable, SoftDeletes;

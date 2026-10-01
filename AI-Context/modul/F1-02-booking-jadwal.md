@@ -93,10 +93,31 @@ DELETE /api/sumber-dayas/{id}
 5 sumber daya di cabang utama (3 ruang, 2 alat). Jadwal praktik dokter & terapis: Senin–Jumat 09:00–17:00,
 Sabtu 09:00–13:00.
 
+## Ruang & alat wajib per treatment (BK-08, PRD v2 · 1 Okt 2026)
+
+- `tindakan_sumber_dayas` diisi lewat form Treatment (`sumber_daya_ids[]` di `POST/PUT /tindakans`; detail mengembalikan
+  `sumber_dayas`, daftar `sumber_dayas_count`).
+- **Aturan:** per treatment dan per **tipe** (ruang/alat), ambil ruang/alat terdaftar milik **cabang booking**. Bila ada, booking wajib
+  memakai minimal satu yang **aktif** dari kelompok itu (`BookingService::pastikanKebutuhan`, 422 `sumber_daya_ids`). Semua pilihan
+  nonaktif → treatment tidak bisa dibooking di cabang itu. Daftar milik cabang lain tidak berlaku. Dicek saat buat, dan saat ubah bila
+  treatment/ruang berubah.
+- `GET /appointments-kebutuhan?tindakan_ids[]=` → kelompok kebutuhan untuk form booking.
+- **Sinkron aman lintas cabang:** `TindakanService::syncSumberDaya` hanya mengganti ruang/alat yang terlihat dari cabang aktif
+  (`SumberDaya` ber-scope cabang); pilihan cabang lain dipertahankan. Ruang/alat cabang lain di payload → 422. Perubahan dicatat audit
+  (`tindakan`, `perubahan.sumber_daya_ids`).
+- `GET /jadwals` dan `GET /sumber-dayas` kini terbuka untuk `booking.lihat`, `jadwal.kelola`, atau `master.kelola`.
+- `appointments-slot` menerima `kecuali_id` agar reschedule tidak bentrok dengan booking itu sendiri.
+
+## Frontend (PRD v2 · 1 Okt 2026)
+
+Modul rail **Booking**: `/booking/kalender` (`BookingView`: timeline per petugas dengan area jam praktik, per ruang/alat, daftar
+mingguan; klik area kosong = booking baru di jam itu; detail → konfirmasi, ubah, batal + alasan, tidak hadir, check-in, hapus) dan
+`/booking/jadwal` (`JadwalView`: ringkasan mingguan semua petugas, jadwal rutin, salin Senin→Jumat, cuti & jadwal tambahan).
+Master **Ruang & Alat** di `/master/ruang-alat`. Form booking = `components/booking/BookingFormModal.vue` (dipakai juga tombol
+**Booking** di detail pasien dan aksi cepat Ctrl+K "Booking Baru").
+
 ## Belum dikerjakan
 
-- Kebutuhan ruang/alat **wajib** per treatment: tabel `tindakan_sumber_dayas` sudah ada tetapi belum diisi lewat UI
-  katalog, dan booking belum memaksa memilih ruang yang kompatibel.
 - Reminder H-1 & 2 jam (BK-06) — butuh job + kredensial WhatsApp Business API.
 - Booking online pasien & DP (BK-04, BK-05).
 

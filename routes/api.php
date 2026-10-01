@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AppointmentController;
+use App\Http\Controllers\Api\AturanKomisiController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BerkasController;
@@ -10,11 +11,14 @@ use App\Http\Controllers\Api\CatatanTindakanController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\Icd10Controller;
 use App\Http\Controllers\Api\Icd9cmController;
+use App\Http\Controllers\Api\ImporMasterController;
 use App\Http\Controllers\Api\InformedConsentController;
 use App\Http\Controllers\Api\JadwalController;
 use App\Http\Controllers\Api\KategoriTindakanController;
 use App\Http\Controllers\Api\KodeFavoritController;
+use App\Http\Controllers\Api\KomisiController;
 use App\Http\Controllers\Api\KunjunganController;
+use App\Http\Controllers\Api\LaporanController;
 use App\Http\Controllers\Api\ObatController;
 use App\Http\Controllers\Api\OdontogramController;
 use App\Http\Controllers\Api\PaketController;
@@ -23,14 +27,18 @@ use App\Http\Controllers\Api\PasienController;
 use App\Http\Controllers\Api\PemeriksaanController;
 use App\Http\Controllers\Api\PengaturanController;
 use App\Http\Controllers\Api\PeranController;
+use App\Http\Controllers\Api\PersetujuanDataController;
 use App\Http\Controllers\Api\PersetujuanFotoController;
 use App\Http\Controllers\Api\PoliController;
 use App\Http\Controllers\Api\ProfilController;
+use App\Http\Controllers\Api\ProfilKlinisController;
 use App\Http\Controllers\Api\PromoController;
 use App\Http\Controllers\Api\ProtokolFotoController;
 use App\Http\Controllers\Api\RencanaPerawatanController;
 use App\Http\Controllers\Api\ResepController;
+use App\Http\Controllers\Api\SatuSehatController;
 use App\Http\Controllers\Api\ShiftKasController;
+use App\Http\Controllers\Api\SistemController;
 use App\Http\Controllers\Api\StokBatchController;
 use App\Http\Controllers\Api\SumberDayaController;
 use App\Http\Controllers\Api\TagihanController;
@@ -38,6 +46,8 @@ use App\Http\Controllers\Api\TemplateConsentController;
 use App\Http\Controllers\Api\TemplateSoapController;
 use App\Http\Controllers\Api\TindakanController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\WebhookWhatsAppController;
+use App\Http\Controllers\Api\WhatsAppController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -55,6 +65,9 @@ use Illuminate\Support\Facades\Route;
 Route::get('info', [PengaturanController::class, 'info']);
 Route::post('login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 Route::post('login/2fa', [AuthController::class, 'login2fa'])->middleware('throttle:6,1');
+// Webhook WhatsApp Cloud API (BK-06, CR-01): verifikasi langganan & status/balasan bertanda tangan HMAC
+Route::get('webhook/whatsapp', [WebhookWhatsAppController::class, 'verifikasi'])->middleware('throttle:30,1');
+Route::post('webhook/whatsapp', [WebhookWhatsAppController::class, 'terima'])->middleware('throttle:600,1');
 Route::get('berkas/{berkas}/unduh', [BerkasController::class, 'unduh'])->name('berkas.unduh')->middleware('signed');
 
 Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
@@ -89,8 +102,23 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
         // Pasien (master pusat, lintas cabang)
         Route::middleware('izin:pasien.lihat')->group(function () {
             Route::get('pasiens', [PasienController::class, 'index']);
+            // Kandidat pasien ganda sebelum pasien baru disimpan (PS-02)
+            Route::get('pasiens-duplikat', [PasienController::class, 'duplikat']);
             Route::get('pasiens/{pasien}', [PasienController::class, 'show']);
         });
+
+        // Profil klinis & alergi terstruktur (PS-03): data klinis
+        Route::get('pasiens/{pasien}/profil-klinis', [ProfilKlinisController::class, 'show'])->middleware('izin:rme.lihat');
+        Route::put('pasiens/{pasien}/profil-klinis', [ProfilKlinisController::class, 'update'])->middleware('izin:pemeriksaan.vital,pemeriksaan.dokter');
+
+        // Consent UU PDP (PS-04): pemrosesan data & opt-in marketing
+        Route::get('pasiens/{pasien}/persetujuan-data', [PersetujuanDataController::class, 'index'])->middleware('izin:pasien.lihat');
+        Route::middleware('izin:pasien.kelola,rme.tindakan')->group(function () {
+            Route::get('pasiens/{pasien}/persetujuan-data/pratinjau', [PersetujuanDataController::class, 'pratinjau']);
+            Route::post('pasiens/{pasien}/persetujuan-data', [PersetujuanDataController::class, 'store']);
+            Route::post('persetujuan-datas/{persetujuanData}/cabut', [PersetujuanDataController::class, 'cabut']);
+        });
+        Route::get('persetujuan-datas/{persetujuanData}', [PersetujuanDataController::class, 'show'])->middleware('izin:pasien.kelola,rme.lihat');
         Route::get('pasiens/{pasien}/riwayat', [KunjunganController::class, 'riwayat'])->middleware('izin:rme.lihat');
         Route::middleware('izin:pasien.kelola')->group(function () {
             Route::post('pasiens', [PasienController::class, 'store']);
@@ -133,6 +161,10 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
             Route::get('appointments', [AppointmentController::class, 'index']);
             Route::get('appointments/{appointment}', [AppointmentController::class, 'show']);
             Route::get('appointments-slot', [AppointmentController::class, 'slot']);
+            Route::get('appointments-kebutuhan', [AppointmentController::class, 'kebutuhan']);
+        });
+        // Jadwal & ruang/alat juga dibaca pengelola jadwal dan katalog treatment (ruang/alat wajib, BK-08)
+        Route::middleware('izin:booking.lihat,jadwal.kelola,master.kelola')->group(function () {
             Route::get('jadwals', [JadwalController::class, 'index']);
             Route::get('sumber-dayas', [SumberDayaController::class, 'index']);
         });
@@ -235,10 +267,51 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
             Route::post('stok-batches', [StokBatchController::class, 'store']);
             Route::post('stok-batches/{stokBatch}/sesuaikan', [StokBatchController::class, 'sesuaikan']);
             Route::post('stok-batches/{stokBatch}/buang', [StokBatchController::class, 'buang']);
+            Route::post('stok-batches/{stokBatch}/mutasi', [StokBatchController::class, 'mutasi']);
 
             Route::get('kunjungan-tindakans/{kunjunganTindakan}/bhps', [BhpController::class, 'index']);
             Route::put('kunjungan-tindakans/{kunjunganTindakan}/bhps', [BhpController::class, 'update']);
         });
+
+        // Integrasi SATUSEHAT (PRD v2 5.14): pemantauan antrean & kirim ulang (SS-05), lookup IHS pasien (PS-05)
+        Route::middleware('izin:integrasi.kelola')->group(function () {
+            Route::get('satusehat/status', [SatuSehatController::class, 'status']);
+            Route::get('satusehat/kirims', [SatuSehatController::class, 'index']);
+            Route::post('satusehat/kirims/{kirim}/ulang', [SatuSehatController::class, 'ulang']);
+            Route::post('satusehat/kirim-ulang-gagal', [SatuSehatController::class, 'ulangSemua']);
+            Route::post('satusehat/tes-koneksi', [SatuSehatController::class, 'tesKoneksi']);
+
+            // Observabilitas: scheduler, antrean, job gagal (PRD v2 7.2)
+            Route::get('sistem/status', [SistemController::class, 'status']);
+            Route::get('sistem/job-gagal', [SistemController::class, 'jobGagal']);
+            Route::post('sistem/job-gagal/{uuid}/ulang', [SistemController::class, 'ulang']);
+            Route::delete('sistem/job-gagal/{uuid}', [SistemController::class, 'hapus']);
+
+            // WhatsApp (BK-06, CR-01)
+            Route::get('whatsapp/status', [WhatsAppController::class, 'status']);
+            Route::get('whatsapp/pesan', [WhatsAppController::class, 'index']);
+            Route::post('whatsapp/pesan/{pesan}/ulang', [WhatsAppController::class, 'ulang']);
+            Route::post('whatsapp/jadwalkan', [WhatsAppController::class, 'jadwalkan']);
+        });
+        Route::post('pasiens/{pasien}/satusehat', [SatuSehatController::class, 'lookupPasien'])->middleware('izin:pasien.kelola,integrasi.kelola');
+
+        // Laporan keuangan (LP-02, LP-03, AD-01 konsolidasi); ?format=csv (LP-06 sebagian)
+        Route::middleware('izin:laporan.keuangan')->group(function () {
+            Route::get('laporan/penjualan', [LaporanController::class, 'penjualan']);
+            Route::get('laporan/paket', [LaporanController::class, 'paket']);
+        });
+
+        // Komisi & jasa medis (KM-01, KM-03). Slip sendiri (`komisi/rincian` tanpa user_id) terbuka untuk semua petugas.
+        Route::get('komisi/rincian', [KomisiController::class, 'rincian']);
+        Route::middleware('izin:komisi.kelola,laporan.keuangan')->get('komisi/rekap', [KomisiController::class, 'rekap']);
+        Route::middleware('izin:komisi.kelola')->group(function () {
+            Route::get('aturan-komisis', [AturanKomisiController::class, 'index']);
+            Route::post('aturan-komisis', [AturanKomisiController::class, 'store']);
+            Route::put('aturan-komisis/{aturanKomisi}', [AturanKomisiController::class, 'update']);
+            Route::delete('aturan-komisis/{aturanKomisi}', [AturanKomisiController::class, 'destroy']);
+            Route::post('komisi/hitung-ulang', [KomisiController::class, 'hitungUlang']);
+        });
+        Route::middleware('izin:komisi.setujui')->post('komisi/setujui', [KomisiController::class, 'setujui']);
 
         // Kasir
         Route::middleware('izin:kasir.tagihan')->group(function () {
@@ -273,6 +346,8 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
         Route::middleware('izin:master.kelola')->group(function () {
             Route::apiResource('pakets', PaketController::class)->except('index');
             Route::delete('obats/{obat}', [ObatController::class, 'destroy']);
+            // Impor master resmi (AD-10): icd10 / icd9cm / obat
+            Route::post('impor-master/{jenis}', ImporMasterController::class)->where('jenis', 'icd10|icd9cm|obat');
 
             Route::post('polis', [PoliController::class, 'store']);
             Route::put('polis/{poli}', [PoliController::class, 'update']);

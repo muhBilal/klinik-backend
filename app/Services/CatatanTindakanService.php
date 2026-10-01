@@ -84,6 +84,10 @@ class CatatanTindakanService
                 $kunjunganTindakan->update(['petugas_id' => $data['petugas_id']]);
             }
 
+            if (array_key_exists('petugas_tambahan', $data)) {
+                $this->syncPetugasTambahan($kunjunganTindakan, $data['petugas_tambahan'] ?? [], $kunjungan->cabang_id);
+            }
+
             return $catatan->load(self::RELASI);
         });
     }
@@ -107,6 +111,29 @@ class CatatanTindakanService
                     str_replace('*', (string) $indeks, $field) => 'Petugas tidak ditemukan atau tidak bertugas di cabang ini.',
                 ]);
             }
+        }
+    }
+
+    /**
+     * Petugas tambahan per tindakan (AN-03), replace-all per model agar tercatat di audit.
+     *
+     * @param  list<array{user_id: int, peran: string}>  $petugas
+     */
+    private function syncPetugasTambahan(KunjunganTindakan $kunjunganTindakan, array $petugas, int $cabangId): void
+    {
+        $baru = collect($petugas)->keyBy(fn ($p) => (int) $p['user_id']);
+
+        if ($baru->isNotEmpty()) {
+            $this->pastikanPetugas($baru->keys()->values()->all(), $cabangId, 'petugas_tambahan.*.user_id');
+        }
+
+        $lama = $kunjunganTindakan->petugasTambahan()->get()->keyBy('user_id');
+        $lama->diffKeys($baru)->each->delete();
+
+        foreach ($baru as $userId => $p) {
+            ($lama->get($userId) ?? $kunjunganTindakan->petugasTambahan()->make(['user_id' => $userId]))
+                ->fill(['peran' => $p['peran']])
+                ->save();
         }
     }
 

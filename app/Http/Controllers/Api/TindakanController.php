@@ -32,7 +32,7 @@ class TindakanController extends Controller
             ->select(['id', 'kode', 'nama', 'kategori_id', 'icd9cm_id', 'template_consent_id', 'jenis_catatan', 'protokol_foto_id', 'per_gigi', 'kondisi_gigi_hasil', 'durasi_menit', 'buffer_menit', 'tarif', 'is_active'])
             ->denganHargaCabang($cabangId)
             ->with(['kategori:id,nama', 'icd9cm:id,kode,nama'])
-            ->withCount(['hargas', 'bhps'])
+            ->withCount(['hargas', 'bhps', 'sumberDayas'])
             ->when($request->boolean('aktif'), fn ($q) => $q->where('is_active', true)->tersediaDi($cabangId))
             ->when($request->filled('kategori_id'), fn ($q) => $q->where('kategori_id', $request->integer('kategori_id')))
             ->when($request->filled('q'), function ($query) use ($request) {
@@ -81,6 +81,8 @@ class TindakanController extends Controller
                 ->whereHas('cabang')->with('cabang:id,kode,nama,is_active'),
             'bhps' => fn ($q) => $q->select(['id', 'tindakan_id', 'obat_id', 'jumlah'])
                 ->with('obat:id,kode,nama,satuan,is_active'),
+            'sumberDayas' => fn ($q) => $q->select(['sumber_dayas.id', 'sumber_dayas.cabang_id', 'kode', 'nama', 'tipe', 'is_active'])
+                ->with('cabang:id,kode,nama'),
         ]);
     }
 
@@ -110,6 +112,10 @@ class TindakanController extends Controller
             'bhps' => ['sometimes', 'array', 'max:50'],
             'bhps.*.obat_id' => ['required', 'distinct', Rule::exists('obats', 'id')->whereNull('deleted_at')],
             'bhps.*.jumlah' => ['required', 'numeric', 'gt:0', 'max:99999', 'decimal:0,3'],
+
+            // Ruang/alat yang wajib dipakai saat booking (BK-08); hanya ruang/alat cabang yang terlihat pengguna yang diganti.
+            'sumber_daya_ids' => ['sometimes', 'array', 'max:50'],
+            'sumber_daya_ids.*' => ['integer', 'distinct', Rule::exists('sumber_dayas', 'id')->whereNull('deleted_at')],
         ]);
 
         // Kondisi hasil hanya bermakna untuk tindakan per gigi → otomatis per gigi.

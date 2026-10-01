@@ -54,6 +54,12 @@ class KunjunganTindakan extends Model
         return $this->belongsTo(Kunjungan::class)->withoutGlobalScope('cabang');
     }
 
+    /** Petugas tambahan (asisten, terapis kedua) selain pelaksana utama — AN-03, dasar split komisi. */
+    public function petugasTambahan(): HasMany
+    {
+        return $this->hasMany(KunjunganTindakanPetugas::class);
+    }
+
     /** Petugas yang melakukan tindakan (dokter/terapis/perawat, AN-03); dasar komisi. */
     public function petugas(): BelongsTo
     {

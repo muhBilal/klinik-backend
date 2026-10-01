@@ -113,6 +113,7 @@
 | Stack dev 500 "laravel.log could not be opened" | `docker compose run` (root) membuat `storage/logs/laravel.log` milik root saat test gagal; php-fpm (www-data) lalu tidak bisa menulis. `docker exec <app> chmod 666 storage/logs/laravel.log`. |
 | Detail consent tanpa tanda tangan | `InformedConsent` menyembunyikan `ttd_*` & `checksum`; hanya `InformedConsentController::show` yang memanggil `makeVisible`. Jangan menambah tanda tangan ke `relasiRekamMedis` (ukuran & audit). |
 | Kamera di E2E | Chrome headless: `--use-fake-ui-for-media-stream --use-fake-device-for-media-stream` + `context.grantPermissions(['camera'])`. Encode frame 1920 px di headless bisa beberapa detik — tunggu tombol jepret muncul lagi, jangan `waitForTimeout`. |
+| Menjalankan artisan ke database lain (uji PostgreSQL sementara) | Container dev membaca DB dari `.env` (`DB_HOST=db`). Tulis `-e DB_HOST=… -e DB_DATABASE=…` **langsung** di perintah — di zsh variabel `$E` berisi beberapa flag tidak dipecah, docker menerima satu argumen rusak dan artisan diam-diam memakai DB dev. Sebelum `migrate:fresh`/seed/insert massal, cek dulu `php artisan tinker --execute="echo config('database.connections.pgsql.host');"` dengan flag yang sama, dan `pg_dump` DB dev lebih dulu. (Pernah mengosongkan DB dev, 1 Okt 2026.) |
 | Isi RME kunjungan berakses terbatas bocor | Endpoint baru yang membaca RME/berkas per kunjungan wajib memanggil `RekamMedisService::bolehLihat()` (atau `sembunyikanTerbatas()` untuk daftar). |
 
 ## Keamanan

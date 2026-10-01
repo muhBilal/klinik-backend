@@ -51,7 +51,7 @@ class FarmasiService
     {
         return DB::transaction(function () use ($resep, $apoteker) {
             $resep = Resep::whereKey($resep->id)->lockForUpdate()
-                ->with(['items:id,resep_id,obat_id,jumlah', 'kunjungan:id', 'kunjungan.tagihan:id,kunjungan_id,status'])
+                ->with(['items:id,resep_id,obat_id,racikan,nama_racikan,jumlah', 'items.komponens', 'kunjungan:id', 'kunjungan.tagihan:id,kunjungan_id,status'])
                 ->firstOrFail();
 
             if ($resep->status !== StatusResep::Menunggu) {
@@ -62,26 +62,37 @@ class FarmasiService
                 throw ValidationException::withMessages(['tagihan' => 'Tagihan pasien belum lunas. Arahkan pasien ke kasir terlebih dahulu.']);
             }
 
-            $obats = Obat::withTrashed()->whereIn('id', $resep->items->pluck('obat_id'))->get()->keyBy('id');
+            // Kebutuhan stok per obat: obat jadi = jumlah; racikan (FR-01) = komponen per racikan × banyaknya racikan.
+            $kebutuhan = [];
+            foreach ($resep->items as $item) {
+                if ($item->racikan) {
+                    foreach ($item->komponens as $k) {
+                        $kebutuhan[$k->obat_id][] = [round($k->jumlah * $item->jumlah, 3), "Racikan {$item->nama_racikan}"];
+                    }
+                } else {
+                    $kebutuhan[$item->obat_id][] = [(float) $item->jumlah, 'Penyerahan resep'];
+                }
+            }
+
+            $obats = Obat::withTrashed()->whereIn('id', array_keys($kebutuhan))->get()->keyBy('id');
 
             // Stok diambil per cabang resep dengan FEFO (IN-01); kekurangan dilaporkan sekaligus.
-            $kurang = $resep->items
-                ->filter(fn ($item) => $obats[$item->obat_id]->stokDi($resep->cabang_id) + 0.0005 < $item->jumlah)
-                ->map(function ($item) use ($obats, $resep) {
-                    $obat = $obats[$item->obat_id];
+            $kurang = collect($kebutuhan)
+                ->filter(fn ($baris, $obatId) => $obats[$obatId]->stokDi($resep->cabang_id) + 0.0005 < array_sum(array_column($baris, 0)))
+                ->map(function ($baris, $obatId) use ($obats, $resep) {
+                    $obat = $obats[$obatId];
 
-                    return "{$obat->nama} (stok {$obat->stokDi($resep->cabang_id)}, diminta {$item->jumlah})";
+                    return "{$obat->nama} (stok {$obat->stokDi($resep->cabang_id)}, diminta ".array_sum(array_column($baris, 0)).')';
                 });
 
             if ($kurang->isNotEmpty()) {
                 throw ValidationException::withMessages(['stok' => 'Stok tidak mencukupi: '.$kurang->implode(', ')]);
             }
 
-            foreach ($resep->items as $item) {
-                $this->inventori->keluarkan(
-                    $obats[$item->obat_id], $resep->cabang_id, $item->jumlah, $apoteker,
-                    $resep->no_resep, 'Penyerahan resep',
-                );
+            foreach ($kebutuhan as $obatId => $baris) {
+                foreach ($baris as [$jumlah, $keterangan]) {
+                    $this->inventori->keluarkan($obats[$obatId], $resep->cabang_id, $jumlah, $apoteker, $resep->no_resep, $keterangan);
+                }
             }
 
             $resep->update([

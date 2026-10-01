@@ -36,7 +36,10 @@ enum Izin: string
     case KasirTagihan = 'kasir.tagihan';
     case KasirVoid = 'kasir.void';
     case KasirShift = 'kasir.shift';
+    case KasirDiskon = 'kasir.diskon';
     case PromoKelola = 'promo.kelola';
+    case KomisiKelola = 'komisi.kelola';
+    case KomisiSetujui = 'komisi.setujui';
     case LaporanKeuangan = 'laporan.keuangan';
 
     case MasterKelola = 'master.kelola';
@@ -45,6 +48,7 @@ enum Izin: string
     case PeranKelola = 'peran.kelola';
     case PengaturanKelola = 'pengaturan.kelola';
     case AuditLihat = 'audit.lihat';
+    case IntegrasiKelola = 'integrasi.kelola';
 
     public function label(): string
     {
@@ -69,7 +73,10 @@ enum Izin: string
             self::KasirTagihan => 'Tagihan & pembayaran',
             self::KasirVoid => 'Batalkan tagihan & refund pembayaran',
             self::KasirShift => 'Buka & tutup shift kas',
+            self::KasirDiskon => 'Setujui diskon di atas batas peran kasir',
             self::PromoKelola => 'Kelola voucher & kode promo',
+            self::KomisiKelola => 'Kelola aturan komisi & lihat rekap komisi semua petugas',
+            self::KomisiSetujui => 'Setujui & kunci periode komisi',
             self::LaporanKeuangan => 'Lihat pendapatan & laporan keuangan',
             self::MasterKelola => 'Kelola master poli, tindakan, ICD-10, hapus obat',
             self::CabangKelola => 'Kelola cabang klinik',
@@ -77,6 +84,7 @@ enum Izin: string
             self::PeranKelola => 'Kelola peran & izin',
             self::PengaturanKelola => 'Ubah pengaturan klinik',
             self::AuditLihat => 'Lihat audit log',
+            self::IntegrasiKelola => 'Pantau & kirim ulang integrasi SATUSEHAT / WhatsApp',
         };
     }
 
@@ -88,7 +96,7 @@ enum Izin: string
             self::PemeriksaanPanggil, self::PemeriksaanVital, self::PemeriksaanDokter => 'Pelayanan',
             self::RmeLihat, self::RmeTindakan, self::RmeTerbatas, self::BerkasKelola => 'Rekam Medis',
             self::FarmasiResep, self::FarmasiObat, self::InventoriKelola => 'Farmasi',
-            self::KasirTagihan, self::KasirVoid, self::KasirShift, self::PromoKelola, self::LaporanKeuangan => 'Keuangan',
+            self::KasirTagihan, self::KasirVoid, self::KasirShift, self::KasirDiskon, self::PromoKelola, self::KomisiKelola, self::KomisiSetujui, self::LaporanKeuangan => 'Keuangan',
             default => 'Administrasi',
         };
     }

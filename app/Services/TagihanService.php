@@ -24,7 +24,7 @@ class TagihanService
      */
     public function buatDariKunjungan(Kunjungan $kunjungan): Tagihan
     {
-        $kunjungan->loadMissing(['poli', 'tindakans.tindakan', 'tindakans.paketItem.paketPasien:id,no_paket', 'resep.items.obat']);
+        $kunjungan->loadMissing(['poli', 'tindakans.tindakan', 'tindakans.paketItem.paketPasien:id,no_paket', 'resep.items.obat', 'resep.items.komponens']);
 
         $items = [[
             'kategori' => 'konsultasi',
@@ -42,6 +42,7 @@ class TagihanService
             $items[] = [
                 'kategori' => 'tindakan',
                 'tindakan_id' => $tindakan->tindakan_id,
+                'kunjungan_tindakan_id' => $tindakan->id,
                 'deskripsi' => $paket ? "{$deskripsi} · paket {$paket->paketPasien->no_paket} sesi {$this->urutanSesi($tindakan)}/{$paket->jumlah_sesi}" : $deskripsi,
                 'jumlah' => $tindakan->jumlah,
                 'harga' => $paket ? 0 : $tindakan->tarif,
@@ -51,7 +52,7 @@ class TagihanService
         foreach ($kunjungan->resep?->items ?? [] as $item) {
             $items[] = [
                 'kategori' => 'obat',
-                'deskripsi' => "{$item->obat->nama} ({$item->obat->satuan})",
+                'deskripsi' => Str::limit($item->label(), 250, ''),
                 'jumlah' => $item->jumlah,
                 'harga' => $item->harga,
             ];

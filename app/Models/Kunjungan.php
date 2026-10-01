@@ -150,7 +150,9 @@ class Kunjungan extends Model
             'tindakans.catatan.titiks.batch:id,no_batch,kedaluwarsa',
             'informedConsents:id,uuid,kunjungan_id,kunjungan_tindakan_id,template_consent_id,judul,tindakan_nama,status,penandatangan_nama,hubungan,ditandatangani_at,dicabut_at,alasan_cabut',
             'resep:id,kunjungan_id,no_resep,status,catatan',
-            'resep.items:id,resep_id,obat_id,jumlah,aturan_pakai,harga',
+            'resep.items:id,resep_id,obat_id,racikan,nama_racikan,bentuk,jumlah_racikan,satuan_racikan,jumlah,aturan_pakai,harga,biaya_racik',
+            'resep.items.komponens:id,resep_item_id,obat_id,jumlah,harga',
+            'resep.items.komponens.obat:id,nama,satuan',
             'odontogramDicatat:id,kunjungan_id,kunjungan_tindakan_id,gigi,permukaan,kondisi,keterangan',
             'odontogramDiakhiri:id,kunjungan_id,berakhir_kunjungan_id,berakhir_karena_id,gigi,permukaan,kondisi',
         ];

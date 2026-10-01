@@ -18,9 +18,10 @@ class TagihanController extends Controller
     /** Relasi halaman detail / struk; juga dipakai respons bayar agar UI tidak perlu memuat ulang. */
     private const DETAIL = [
         'items:id,tagihan_id,kategori,tindakan_id,paket_id,deskripsi,jumlah,harga,subtotal', 'kasir:id,name',
+        'penyetujuDiskon:id,name',
         'promo:id,kode,nama,jenis,nilai',
         'paketPasiens:id,no_paket,nama,status,tagihan_id,berlaku_sampai',
-        'pembayarans:id,tagihan_id,metode,jumlah,referensi,dibayar_at,dikembalikan_at,alasan_refund',
+        'pembayarans:id,tagihan_id,metode,jumlah,diterima,referensi,dibayar_at,dikembalikan_at,alasan_refund',
         'pasien:id,no_rm,nama',
         'cabang:id,kode,nama,alamat,telepon',
         'kunjungan:id,pasien_id,poli_id,dokter_id,tanggal,penjamin,status',
@@ -72,6 +73,10 @@ class TagihanController extends Controller
             'metode_bayar' => ['required_without:pembayarans', Rule::enum(MetodeBayar::class)],
             'dibayar' => ['required_if:metode_bayar,tunai', 'nullable', 'integer', 'min:0'],
             'diskon' => ['nullable', 'integer', 'min:0'],
+            // Persetujuan atasan di tempat untuk diskon di atas batas peran kasir (BL-02)
+            'persetujuan' => ['nullable', 'array'],
+            'persetujuan.email' => ['required_with:persetujuan', 'email'],
+            'persetujuan.password' => ['required_with:persetujuan', 'string'],
         ]);
 
         $diskon = (int) ($data['diskon'] ?? 0);
@@ -87,7 +92,7 @@ class TagihanController extends Controller
         ]];
 
         return response()->json($kasir
-            ->bayar($tagihan, $pembayarans, $diskon, $request->user(), $adaSplit ? 'pembayarans' : 'dibayar')
+            ->bayar($tagihan, $pembayarans, $diskon, $request->user(), $adaSplit ? 'pembayarans' : 'dibayar', $data['persetujuan'] ?? null)
             ->load(self::DETAIL));
     }
 

@@ -179,8 +179,9 @@ Detail: [modul/F1-02](modul/F1-02-booking-jadwal.md)
 |--------|------|------|------------|
 | GET | `/appointments` | booking.lihat | `dari`, `sampai` (default hari ini), `petugas_id`, `poli_id`, `status`, `q`; + pasien, poli, petugas, tindakans, sumberDayas |
 | GET | `/appointments/{id}` | booking.lihat | bentuk detail booking |
-| GET | `/appointments-slot` | booking.lihat | `petugas_id*`, `tanggal*`, `tindakan_ids[]*`, `sumber_daya_ids[]?` → `{ durasi_menit, jam_kerja[], slot[] }` |
-| POST | `/appointments` | booking.kelola | `{ pasien_id*, poli_id?, petugas_id?, mulai_at*, tindakan_ids[]*, sumber_daya_ids[]?, catatan? }`; `selesai_at` dihitung server dari durasi + buffer |
+| GET | `/appointments-slot` | booking.lihat | `petugas_id*`, `tanggal*`, `tindakan_ids[]*`, `sumber_daya_ids[]?`, `kecuali_id?` (booking yang sedang di-reschedule) → `{ durasi_menit, jam_kerja[], slot[] }` |
+| GET | `/appointments-kebutuhan` | booking.lihat | `tindakan_ids[]*` → `[{ tindakan_id, tindakan, tipe, tipe_label, pilihan: [{id, kode, nama}] }]` ruang/alat wajib di cabang aktif (BK-08) |
+| POST | `/appointments` | booking.kelola | `{ pasien_id*, poli_id?, petugas_id?, mulai_at*, tindakan_ids[]*, sumber_daya_ids[]?, catatan? }`; `selesai_at` dihitung server dari durasi + buffer; treatment ber-ruang/alat wajib → 422 `sumber_daya_ids` bila tidak memilih salah satunya |
 | PUT | `/appointments/{id}` | booking.kelola | field yang dikirim saja; jadwal & bentrok dihitung ulang |
 | POST | `/appointments/{id}/konfirmasi` · `/batal` · `/tidak-hadir` | booking.kelola | `/batal` menerima `alasan_batal?`; `/tidak-hadir` hanya bila jadwal sudah lewat |
 | POST | `/appointments/{id}/checkin` | booking.kelola | hanya booking hari ini & berpoli → `{ appointment, kunjungan }` (201) |
@@ -199,7 +200,20 @@ Detail: [modul/F1-03](modul/F1-03-kasir.md)
 | GET | `/tagihans` | kasir.tagihan | `status`, `tanggal`, `metode_bayar`, `penjamin`, `poli_id`, `q`; cabang aktif |
 | GET | `/tagihans/{id}` | kasir.tagihan | items, pembayarans, pasien, kunjungan.pasien/poli/dokter, kasir, `cabang` (kop struk) |
 | POST | `/tagihans` | kasir.tagihan | tagihan tanpa kunjungan (produk/paket/deposit): `{ pasien_id?, keterangan?, items[]*{kategori*: produk/paket/deposit/lainnya, deskripsi*, jumlah*, harga*} }` |
-| POST | `/tagihans/{id}/bayar` | kasir.tagihan | **split payment**: `{ pembayarans[]{metode*, jumlah*, referensi?}, diskon? }`. Bentuk lama `{ metode_bayar*, dibayar, diskon? }` tetap diterima. Non-tunai tidak boleh melebihi tagihan |
+| POST | `/tagihans/{id}/bayar` | kasir.tagihan | **split payment**: `{ pembayarans[]{metode*, jumlah*, referensi?}, diskon? }`. Bentuk lama `{ metode_bayar*, dibayar, diskon? }` tetap diterima. Non-tunai tidak boleh melebihi tagihan. Diskon di atas batas peran: kirim `persetujuan{email, password}` atasan ber-izin `kasir.diskon` (tanpa itu 422 `diskon` + `perlu_persetujuan`). `keuangan.wajib_shift` → 422 `shift` bila belum buka shift |
+| POST | `/stok-batches/{id}/mutasi` | inventori.kelola | `{ cabang_tujuan_id*, jumlah*, keterangan? }` mutasi antar cabang (IN-05), batch & kedaluwarsa sama |
+| GET | `/komisi/rekap` · `/komisi/rincian` | komisi.kelola / laporan.keuangan · semua (slip sendiri) | `periode=YYYY-MM`; rincian `user_id?` (lain = komisi.kelola). Detail [modul/V2-04](modul/V2-04-komisi.md) |
+| POST | `/komisi/hitung-ulang` · `/komisi/setujui` | komisi.kelola · komisi.setujui | `{ periode*, catatan? }` |
+| GET/POST/PUT/DELETE | `/aturan-komisis` | komisi.kelola | `{ tindakan_id?, kategori_id?, cabang_id?, peran*, jenis* persen/nominal, nilai*, is_active, keterangan? }` |
+| GET/PUT | `/pasiens/{id}/profil-klinis` | rme.lihat · pemeriksaan.vital/.dokter | profil klinis & alergi + `peringatan[]` ([V2-05](modul/V2-05-profil-klinis-pdp.md)) |
+| GET/POST | `/pasiens/{id}/persetujuan-data` (+ `/pratinjau`), `/persetujuan-datas/{uuid}` (+ `/cabut`) | pasien.lihat · pasien.kelola/rme.tindakan | consent UU PDP pemrosesan & marketing |
+| GET | `/pasiens-duplikat` | pasien.lihat | kandidat pasien ganda: `nama, tanggal_lahir, no_hp, nik, kecuali_id` |
+| GET | `/laporan/penjualan` · `/laporan/paket` | laporan.keuangan | `dari*, sampai*, kelompok?, format=csv?` ([V2-06](modul/V2-06-laporan.md)) |
+| POST | `/impor-master/{icd10\|icd9cm\|obat}` | master.kelola | multipart `berkas` CSV → `{ baru, diperbarui, sama, galat[] }` ([V2-07](modul/V2-07-racikan-regulasi.md)) |
+| GET/POST | `/satusehat/status` · `/satusehat/kirims` (+ `/{id}/ulang`) · `/satusehat/kirim-ulang-gagal` · `/satusehat/tes-koneksi` | integrasi.kelola | [V2-08](modul/V2-08-satusehat.md) |
+| POST | `/pasiens/{id}/satusehat` | pasien.kelola / integrasi.kelola | lookup IHS pasien via NIK (PS-05) |
+| GET/POST | `/whatsapp/status` · `/whatsapp/pesan` (+ `/{id}/ulang`) · `/whatsapp/jadwalkan` | integrasi.kelola | [V2-09](modul/V2-09-whatsapp.md) |
+| GET/POST | `/webhook/whatsapp` | publik (verify token / HMAC) | webhook WhatsApp Cloud API |
 | POST | `/tagihans/{id}/batal` | kasir.void | `{ alasan_batal* }`; hanya tagihan belum bayar |
 | POST | `/tagihans/{id}/refund` | kasir.void | `{ alasan_refund* }`; hanya tagihan lunas; kunjungan kembali ke `menunggu_pembayaran` |
 | POST | `/reseps/{id}/batal` | farmasi.resep | `{ alasan_batal* }`; hanya resep yang belum diserahkan |
