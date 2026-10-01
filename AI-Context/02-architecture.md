@@ -17,6 +17,8 @@ app/
 │   ├── StatusRencanaPerawatan.php / StatusItemRencana.php  draf, disetujui, selesai, dibatalkan / rencana, selesai, batal
 │   ├── StatusPaketPasien.php   menunggu_bayar, aktif, dibatalkan, direfund, dialihkan (+ habis/kedaluwarsa dihitung)
 │   ├── JenisPotongan.php       persen, nominal (voucher & promo)
+│   ├── KategoriAlergi.php / KeparahanAlergi.php / TipeKulitFitzpatrick.php / StatusKehamilan.php  data klinis pasien (PS-03)
+│   ├── JenisPersetujuanData.php / StatusPersetujuanData.php / KanalMarketing.php  persetujuan UU PDP (PS-04)
 │   ├── PeranKomisi.php / SumberKomisi.php / JenisKomisi.php / StatusKomisiPeriode.php  komisi (dokter/terapis/asisten, tindakan/konsultasi, persen/nominal, draf/disetujui)
 │   ├── StatusKunjungan.php     menunggu, diperiksa, menunggu_pembayaran, selesai, batal
 │   ├── StatusResep.php         menunggu, diserahkan, batal
@@ -44,6 +46,8 @@ app/
 │   ├── OdontogramService.php   status per pasien/kunjungan, tetapkan (aturan penggantian), hapus/akhiri/pulihkan, sinkron dari tindakan per gigi
 │   ├── RencanaPerawatanService.php rencana perawatan gigi: item per fase, estimasi, setujui/revisi/batal, selesai dari kunjungan
 │   ├── PaketService.php        paket pasien: jual, aktif saat lunas (alokasi nilai/sesi), pemakaian & sisa, perpanjang, alihkan, refund sisa
+│   ├── DataKlinisService.php   data klinis pasien: profil (Fitzpatrick, hamil/menyusui, riwayat) & alergi replace-all per id
+│   ├── PersetujuanDataService.php persetujuan UU PDP: naskah, simpan (pemrosesan + opt-in marketing terpisah), cabut, pastikanBolehDaftar
 │   ├── KomisiService.php       komisi: periode, hitung dari tagihan lunas (komisi per treatment per peran), setujui & kunci, penyesuaian, ringkasan
 │   ├── PromoService.php        voucher & promo: pasang/lepas di tagihan, hitung potongan (syarat & kuota), catat/batalkan pemakaian
 │   ├── TindakanService.php     simpan treatment + sinkron harga per cabang & BHP standar (per model, ter-audit)
@@ -67,7 +71,7 @@ database/seeders/DatabaseSeeder.php   Data master + akun demo (peran dibuat migr
 database/factories/             UserFactory, PasienFactory
 tests/Feature/                  AlurKlinikTest, FilterTest, PeranIzinTest, MultiCabangTest, AuditLogTest,
                                 KeamananTest, PengaturanTest, BerkasTest, KatalogTreatmentTest, BookingTest,
-                                KasirTest, InventoriTest, RmeEstetikaTest, FotoKlinisTest, OdontogramTest, PaketPromoTest, KomisiTest
+                                KasirTest, InventoriTest, RmeEstetikaTest, FotoKlinisTest, OdontogramTest, PaketPromoTest, KomisiTest, DataKlinisPdpTest
 tests/Unit/TwoFactorServiceTest.php   Vektor uji RFC 6238
 ```
 

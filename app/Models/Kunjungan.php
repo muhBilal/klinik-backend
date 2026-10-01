@@ -167,11 +167,17 @@ class Kunjungan extends Model
     public function loadDetail(bool $rekamMedis = true): static
     {
         return $this->load([
-            'pasien:id,no_rm,nama,jenis_kelamin,tanggal_lahir,golongan_darah,alergi',
+            'pasien:id,no_rm,nama,jenis_kelamin,tanggal_lahir,golongan_darah',
             'poli:id,kode,nama,spesialisasi,tindakan_konsultasi_id',
             'dokter:id,name,sip',
             'cabang:id,kode,nama',
-            ...($rekamMedis ? [...self::relasiRekamMedis(), 'resep.items.obat:id,nama,satuan,stok'] : []),
+            ...($rekamMedis ? [
+                ...self::relasiRekamMedis(), 'resep.items.obat:id,nama,satuan,stok',
+                // Peringatan klinis pasien (PS-03): alergi, hamil/menyusui, Fitzpatrick, riwayat obat & penyakit
+                'pasien.klinis:id,pasien_id,fitzpatrick,status_kehamilan,status_kehamilan_at,riwayat_obat,riwayat_penyakit,updated_at',
+                'pasien.alergis:id,pasien_id,kategori,zat,obat_id,reaksi,keparahan',
+                'pasien.alergis.obat:id,kode,nama',
+            ] : []),
             'tagihan:id,kunjungan_id,no_tagihan,total,grand_total,status',
         ])
             // Jasa konsultasi poli di cabang kunjungan (estimasi biaya; yang ditagihkan dihitung ulang saat tagihan dibuat).

@@ -33,6 +33,7 @@ kunjungan_tindakans *─1 rencana_perawatan_items (rencana_item_id: item yang di
 pakets 1─* paket_items *─1 tindakans                     pakets 1─* paket_pasiens *─1 pasiens, *─1 tagihans (penjualan)
 paket_pasiens 1─* paket_pasien_items 1─* kunjungan_tindakans (paket_pasien_item_id: sesi dipakai)
 promos 1─* promo_pemakaians *─1 tagihans                tagihans *─1 promos (promo_id, diskon_promo)
+pasiens 1─1 pasien_klinis · 1─* pasien_alergis *─1 obats (opsional) · 1─* persetujuan_datas (pemrosesan / marketing)
 tindakans 1─* tindakan_komisis (komisi per peran)          polis *─1 tindakans (tindakan_konsultasi_id = jasa konsultasi)
 cabangs 1─* komisi_periodes 1─* komisi_barises *─1 users, *─1 kunjungan_tindakans / tagihans / tindakans (snapshot)
 obats 1─* stok_mutasis
@@ -66,7 +67,7 @@ pengaturans (kunci → nilai JSON)
 | `tindakan_hargas` | tindakan_id, cabang_id, tarif, **tersedia** (false = tidak dilayani di cabang itu). Unik `(tindakan_id, cabang_id)`. Tanpa baris = harga dasar |
 | `tindakan_bhps` | tindakan_id, obat_id, jumlah `decimal(10,3)` (satuan stok obat, boleh fraksional). Unik `(tindakan_id, obat_id)`. Belum memotong stok (IN-02) |
 | `obats` | kode (unik), nama, satuan, harga, **stok** (int, hanya diubah via FarmasiService; masih global, belum per cabang), stok_minimum, is_active, deleted_at |
-| `pasiens` | **no_rm** (unik, auto), nik (unik, 16 digit, nullable), no_bpjs, nama, jenis_kelamin (`L`/`P`), tempat_lahir, tanggal_lahir, golongan_darah, alamat, no_hp, pekerjaan, alergi, deleted_at. Appends: `umur` ("34 th"/"8 bln"). **Milik pusat, lintas cabang** |
+| `pasiens` | **no_rm** (unik, auto), nik (unik, 16 digit, nullable), no_bpjs, nama, jenis_kelamin (`L`/`P`), tempat_lahir, tanggal_lahir, golongan_darah, alamat, no_hp, pekerjaan, deleted_at (kolom `alergi` dihapus F1-10 → `pasien_alergis`). Appends: `umur` ("34 th"/"8 bln"). **Milik pusat, lintas cabang** |
 
 ### Transaksi (milik satu cabang — trait `DalamCabang`)
 | Tabel | Kolom penting |
@@ -93,6 +94,9 @@ pengaturans (kunci → nilai JSON)
 | `tagihan_items` | tagihan_id, kategori (`konsultasi`/`tindakan`/`obat`/`produk`/`paket`/...), **tindakan_id**, **paket_id**, deskripsi, jumlah, harga, subtotal |
 | `stok_mutasis` | obat_id, jenis, jumlah (**bertanda**: + masuk, − keluar), stok_akhir, referensi (mis. no_resep), keterangan, user_id |
 | `berkas` | uuid (unik, route key), cabang_id (informasi, **tidak** di-scope), pasien_id, kunjungan_id, **kunjungan_tindakan_id**, kategori, **protokol_foto_id**, **posisi**, **tahap** (sebelum/sesudah/kontrol), keterangan, nama_file, mime, ukuran (byte asli), **diambil_at**, **lebar**, **tinggi**, path & **thumbnail_path** (tersembunyi), checksum SHA-256 (tersembunyi), diunggah_oleh, deleted_at |
+| `pasien_klinis` | pasien_id (unik), fitzpatrick (I–VI), status_kehamilan (tidak/hamil/menyusui; null = belum ditanyakan), status_kehamilan_at, riwayat_obat, riwayat_penyakit, diperbarui_oleh — hanya rme.lihat |
+| `pasien_alergis` | pasien_id, kategori (obat/makanan/lingkungan/lainnya), zat, obat_id (opsional), reaksi, keparahan (ringan/sedang/berat), dicatat_oleh |
+| `persetujuan_datas` | uuid, pasien_id, cabang_id, jenis (`pemrosesan`/`marketing`), kanal (json), isi (snapshot), status (berlaku/diganti/dicabut), penandatangan_nama, hubungan, ttd (**terenkripsi**), dibuat_oleh, ditandatangani_at, berakhir_at, dicabut_oleh, alasan_cabut, checksum, ip_address — tidak pernah dihapus |
 | `persetujuan_fotos` | uuid, pasien_id, cabang_id, kunjungan_id, tingkat (klinis/edukasi/marketing), isi (snapshot), status (berlaku/diganti/dicabut), penandatangan_nama, hubungan, ttd (**terenkripsi**), dibuat_oleh, ditandatangani_at, berakhir_at, dicabut_oleh, alasan_cabut, checksum — tidak pernah dihapus |
 
 `cabang_id` di tabel transaksi nullable di skema (agar migrasi data lama aman) tetapi **selalu diisi aplikasi**.
@@ -131,6 +135,7 @@ Sudah diuji `migrate` + `migrate:rollback` + `migrate` ulang di PostgreSQL 17 de
 | `2026_09_30_140001_create_inventori_tables` (+ `140002` izin) | `stok_batches`, `kunjungan_tindakan_bhps`, stok desimal | [F1-04](modul/F1-04-inventori.md) |
 | `2026_10_01_100001_create_foto_klinis_tables` | `protokol_fotos` (+ 5 protokol), `persetujuan_fotos`; kolom foto di `berkas`, `tindakans.protokol_foto_id` | [F1-06](modul/F1-06-foto-klinis.md) |
 | `2026_10_01_130001_create_komisi_tables` | `aturan_komisis` (dihapus revisi), `komisi_periodes`, `komisi_barises`, `kunjungan_tindakans.asisten_id`; izin `komisi.kelola` → manajer | [F1-09](modul/F1-09-komisi.md) |
+| `2026_10_01_150001_create_data_klinis_dan_persetujuan_data_tables` | `pasien_klinis`, `pasien_alergis` (konversi teks `pasiens.alergi` lalu kolomnya dihapus), `persetujuan_datas` | [F1-10](modul/F1-10-data-klinis-pdp.md) |
 | `2026_10_01_140001_pindah_komisi_dan_konsultasi_ke_treatment` | `tindakan_komisis`, `polis.tindakan_konsultasi_id` (− `tarif_konsultasi`), `komisi_barises.tindakan_id` (− `aturan_komisi_id`), drop `aturan_komisis`; konversi data tarif poli → treatment konsultasi & aturan → komisi treatment | [F1-09](modul/F1-09-komisi.md) |
 | `2026_10_01_120001_create_paket_promo_tables` | `pakets`, `paket_items`, `paket_pasiens`, `paket_pasien_items`, `promos`, `promo_pemakaians`; `kunjungan_tindakans.paket_pasien_item_id`, `tagihans.promo_id/diskon_promo`, `tagihan_items.tindakan_id/paket_id`; izin `promo.kelola` (manajer, marketing) & `pasien.lihat` (kasir) | [F1-08](modul/F1-08-paket-promo.md) |
 | `2026_10_01_110001_create_odontogram_tables` | `polis.spesialisasi`, `tindakans.per_gigi/kondisi_gigi_hasil`, `odontogram_kondisis`, `rencana_perawatans`, `rencana_perawatan_items`, kolom gigi di `kunjungan_tindakans`; isi data lama dari kode/nama poli & ICD-9-CM 23.xx | [F1-07](modul/F1-07-odontogram.md) |
@@ -156,6 +161,8 @@ Selalu lakukan hal yang sama untuk model baru.
 | InformedConsent | informed_consents | Auditable (tanda tangan & naskah tidak disalin ke audit), route key `uuid` |
 | PemeriksaanAddendum | pemeriksaan_addendums | Auditable, menolak update/delete |
 | ProtokolFoto | protokol_fotos | Auditable, SoftDeletes |
+| PasienKlinis / PasienAlergi | pasien_klinis / pasien_alergis | Auditable (`auditPasienId` → jejak akses pasien); relasi `Pasien::klinis()`, `alergis()` |
+| PersetujuanData | persetujuan_datas | Auditable (ttd/naskah tidak disalin ke audit), route key `uuid`, `hitungChecksum()`; relasi `Pasien::persetujuanDatas()` |
 | PersetujuanFoto | persetujuan_fotos | Auditable (ttd/naskah tidak disalin ke audit), route key `uuid` |
 | OdontogramKondisi | odontogram_kondisis | Auditable; scope `aktif`, `berlakuPada($kunjunganId)`; menolak ubah/hapus isi bila kunjungannya sudah ditutup |
 | TindakanKomisi | tindakan_komisis | Auditable. `hitung($dasar, $jumlah)`, `teksNilai()`; relasi `Tindakan::komisis()` |

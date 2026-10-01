@@ -64,6 +64,35 @@ return [
             'publik' => false,
         ],
 
+        // Data pribadi (PS-04, UU No. 27/2022 PDP): opsi wajib persetujuan pemrosesan sebelum kunjungan didaftarkan / check-in.
+        // Naskah wajib ditinjau penasihat hukum klinik. Placeholder: {nama_pasien} {no_rm} {klinik} {tanggal}; marketing + {kanal}.
+        'pdp.wajib_persetujuan' => ['default' => false, 'rules' => ['boolean'], 'publik' => false],
+        'pdp.naskah_pemrosesan' => [
+            'default' => 'Saya, penanda tangan di bawah ini, atas nama pasien {nama_pasien} (No. RM {no_rm}), menyatakan telah mendapat '
+                .'penjelasan dan menyetujui {klinik} memproses data pribadi saya, termasuk data kesehatan, sesuai Undang-Undang Nomor 27 '
+                ."Tahun 2022 tentang Pelindungan Data Pribadi.\n\n"
+                .'Data yang diproses: identitas dan kontak; data kesehatan (anamnesis, alergi, hasil pemeriksaan, diagnosis, tindakan, '
+                ."resep, serta foto klinis sesuai persetujuan foto tersendiri); dan data pembayaran.\n\n"
+                .'Tujuan pemrosesan: pelayanan kesehatan dan estetika, penyelenggaraan rekam medis, penagihan, komunikasi terkait '
+                .'perawatan (jadwal dan pengingat kontrol), serta pemenuhan kewajiban hukum termasuk pelaporan kepada Kementerian '
+                ."Kesehatan.\n\n"
+                .'Data disimpan secara aman, hanya diakses petugas yang berwenang sesuai tugasnya, dan setiap aksesnya tercatat. Rekam '
+                ."medis disimpan sesuai ketentuan peraturan perundang-undangan.\n\n"
+                .'Saya berhak mengakses dan meminta salinan data, memperbaiki data yang tidak akurat, serta menarik persetujuan ini. '
+                .'Penarikan persetujuan tidak menghapus rekam medis yang wajib disimpan klinik dan dapat membatasi layanan yang dapat '
+                ."diberikan.\n\n{tanggal}",
+            'rules' => ['required', 'string', 'max:10000'],
+            'publik' => false,
+        ],
+        'pdp.naskah_marketing' => [
+            'default' => 'Saya, atas nama pasien {nama_pasien} (No. RM {no_rm}), bersedia menerima informasi promosi, program, dan '
+                ."penawaran dari {klinik} melalui: {kanal}.\n\n"
+                .'Persetujuan ini terpisah dari persetujuan pemrosesan data untuk pelayanan dan tidak memengaruhi layanan yang saya '
+                ."terima. Saya dapat berhenti atau mencabut persetujuan ini kapan saja dengan menghubungi klinik.\n\n{tanggal}",
+            'rules' => ['required', 'string', 'max:10000'],
+            'publik' => false,
+        ],
+
         // Jam operasional klinik (AD-04); dipakai sebagai batas wajar jadwal praktik & booking.
         'klinik.jam_buka' => ['default' => '08:00', 'rules' => ['required', 'date_format:H:i'], 'publik' => true],
         'klinik.jam_tutup' => ['default' => '21:00', 'rules' => ['required', 'date_format:H:i'], 'publik' => true],

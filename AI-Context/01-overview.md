@@ -7,7 +7,7 @@
 rekam medis estetika (tanda vital, SOAP dengan template, diagnosa ICD-10, tindakan ICD-9-CM + petugas, catatan tindakan: face
 chart injeksi & parameter laser, informed consent bertanda tangan, tanda tangan RME + addendum, akses terbatas kasus IMS,
 lampiran klinis terenkripsi, foto klinis before-after), kedokteran gigi (odontogram FDI, rencana perawatan berfase, tindakan &
-tagihan per gigi), katalog treatment, paket multi-sesi & voucher/promo, komisi & jasa medis (kategori, durasi, harga per cabang, BHP standar, consent wajib), resep
+tagihan per gigi), katalog treatment, paket multi-sesi & voucher/promo, komisi & jasa medis, data klinis pasien & persetujuan UU PDP (kategori, durasi, harga per cabang, BHP standar, consent wajib), resep
 elektronik, farmasi & inventori batch FEFO, kasir (split payment, shift, void/refund), multi-cabang, peran & izin dinamis,
 audit log, 2FA, dan pengaturan klinik. Status per fase: [07-roadmap-progress.md](07-roadmap-progress.md).
 
@@ -88,9 +88,12 @@ docker compose -f docker-compose.dev.yml run --rm --no-deps app php artisan test
 docker compose -f docker-compose.dev.yml run --rm --no-deps app vendor/bin/pint
 ```
 
-Stack dev terisolasi (mis. untuk uji end-to-end saat stack lengkap memakai port 8000):
-`APP_PORT=8010 DB_FORWARD_PORT=5433 docker compose -p eklinik-uji -f docker-compose.dev.yml up -d --build`, lalu
-`... down -v` untuk membongkar beserta database-nya.
+Stack dev terisolasi (mis. untuk uji end-to-end saat stack lengkap memakai port 8000). Sejak `docker-compose.dev.yml` memproxy API
+lewat service `frontend` (nginx tidak membuka port ke host), nyalakan tanpa frontend lalu buka API lewat nginx sementara:
+`DB_FORWARD_PORT=5433 docker compose -p eklinik-uji -f docker-compose.dev.yml up -d --no-deps db` → `... up -d --no-deps app nginx` →
+`docker run -d --rm --name eklinik-uji-web --network eklinik-uji_default -p 8010:80 -v <backend>:/var/www/html
+-v <backend>/docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro nginx:alpine` (Git Bash: `MSYS_NO_PATHCONV=1`), Vite lokal
+`VITE_API_URL=http://localhost:8010/api`. Bongkar: `docker stop eklinik-uji-web` lalu `... down -v`.
 
 Perintah sehari-hari (mode dev; singkat `DC="docker compose -f docker-compose.dev.yml"`):
 

@@ -14,7 +14,10 @@ class ResepController extends Controller
     /** Relasi halaman detail resep; juga dipakai respons serahkan agar UI tidak perlu memuat ulang. */
     private const DETAIL = [
         'items:id,resep_id,obat_id,jumlah,aturan_pakai,harga', 'items.obat:id,nama,satuan,stok',
-        'kunjungan:id,pasien_id,poli_id', 'kunjungan.pasien:id,no_rm,nama,jenis_kelamin,tanggal_lahir,alergi',
+        'kunjungan:id,pasien_id,poli_id', 'kunjungan.pasien:id,no_rm,nama,jenis_kelamin,tanggal_lahir',
+        // Farmasi perlu alergi & status hamil/menyusui untuk keamanan obat (PS-03), walau tanpa rme.lihat
+        'kunjungan.pasien.alergis:id,pasien_id,kategori,zat,obat_id,reaksi,keparahan',
+        'kunjungan.pasien.klinis:id,pasien_id,status_kehamilan,status_kehamilan_at',
         'kunjungan.poli:id,nama', 'kunjungan.tagihan:id,kunjungan_id,no_tagihan,status',
         'dokter:id,name,sip', 'apoteker:id,name', 'cabang:id,kode,nama,alamat,telepon',
     ];

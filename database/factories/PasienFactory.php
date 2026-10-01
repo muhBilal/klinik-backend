@@ -25,7 +25,6 @@ class PasienFactory extends Factory
             'alamat' => fake()->address(),
             'no_hp' => fake()->numerify('08##########'),
             'pekerjaan' => fake()->randomElement(['Wiraswasta', 'PNS', 'Pelajar', 'Ibu Rumah Tangga', 'Karyawan Swasta', 'Petani']),
-            'alergi' => fake()->optional(0.2)->randomElement(['Amoxicillin', 'Seafood', 'Debu', 'Sulfa']),
         ];
     }
 }

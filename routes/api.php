@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\BhpController;
 use App\Http\Controllers\Api\CabangController;
 use App\Http\Controllers\Api\CatatanTindakanController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\DataKlinisController;
 use App\Http\Controllers\Api\Icd10Controller;
 use App\Http\Controllers\Api\Icd9cmController;
 use App\Http\Controllers\Api\InformedConsentController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\Api\PasienController;
 use App\Http\Controllers\Api\PemeriksaanController;
 use App\Http\Controllers\Api\PengaturanController;
 use App\Http\Controllers\Api\PeranController;
+use App\Http\Controllers\Api\PersetujuanDataController;
 use App\Http\Controllers\Api\PersetujuanFotoController;
 use App\Http\Controllers\Api\PoliController;
 use App\Http\Controllers\Api\ProfilController;
@@ -98,6 +100,19 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
             Route::put('pasiens/{pasien}', [PasienController::class, 'update']);
         });
         Route::delete('pasiens/{pasien}', [PasienController::class, 'destroy'])->middleware('izin:pasien.hapus');
+
+        // Data klinis pasien (PS-03): baca rme.lihat; ubah oleh tenaga yang melakukan anamnesis
+        Route::get('pasiens/{pasien}/klinis', [DataKlinisController::class, 'show'])->middleware('izin:rme.lihat');
+        Route::put('pasiens/{pasien}/klinis', [DataKlinisController::class, 'update'])->middleware('izin:pemeriksaan.vital,pemeriksaan.dokter,rme.tindakan');
+
+        // Persetujuan data pribadi UU PDP (PS-04): pemrosesan & opt-in marketing terpisah; ditandatangani di front office
+        Route::get('pasiens/{pasien}/persetujuan-data', [PersetujuanDataController::class, 'index'])->middleware('izin:pasien.lihat');
+        Route::middleware('izin:pasien.kelola')->group(function () {
+            Route::get('pasiens/{pasien}/persetujuan-data/pratinjau', [PersetujuanDataController::class, 'pratinjau']);
+            Route::post('pasiens/{pasien}/persetujuan-data', [PersetujuanDataController::class, 'store']);
+            Route::post('persetujuan-datas/{persetujuanData}/cabut', [PersetujuanDataController::class, 'cabut']);
+        });
+        Route::get('persetujuan-datas/{persetujuanData}', [PersetujuanDataController::class, 'show'])->middleware('izin:pasien.kelola,rme.lihat');
 
         // Consent foto klinis bertingkat (FT-04): front office atau tenaga tindakan yang mengambil tanda tangan pasien
         Route::get('pasiens/{pasien}/persetujuan-foto', [PersetujuanFotoController::class, 'index'])->middleware('izin:pasien.lihat');

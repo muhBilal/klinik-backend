@@ -53,20 +53,24 @@ Bentuk `user` (login, `/me`):
 ## Pasien (master pusat, lintas cabang)
 | Method | Path | Izin | Keterangan |
 |--------|------|------|------------|
-| GET | `/pasiens` | pasien.lihat | `q` = nama (ilike) / no_rm / nik / no_bpjs (prefix); `jenis_kelamin`, `golongan_darah`, `bpjs=ya/tidak` |
-| GET | `/pasiens/{pasien}` | pasien.lihat | + 50 kunjungan terakhir **semua cabang** (poli, dokter, cabang; diagnosa hanya bila `rme.lihat`). `ringkas=1`: identitas saja. Tercatat audit `lihat` |
+| GET | `/pasiens` | pasien.lihat | `q` = nama (ilike) / no_rm / nik / no_bpjs (prefix); `jenis_kelamin`, `golongan_darah`, `bpjs=ya/tidak`, `persetujuan=belum/ada/marketing`. + `pdp_pemrosesan`, `pdp_marketing` (bool) |
+| GET | `/pasiens/{pasien}` | pasien.lihat | + 50 kunjungan terakhir **semua cabang** (poli, dokter, cabang; diagnosa hanya bila `rme.lihat`). `ringkas=1`: identitas saja. + `pdp_pemrosesan`, `pdp_marketing`. Tercatat audit `lihat` |
+| GET / PUT | `/pasiens/{pasien}/klinis` | rme.lihat / pemeriksaan.vital, pemeriksaan.dokter, rme.tindakan | data klinis `{ klinis, alergis[] }`; PUT kunci profil + `alergis[]` replace-all. Detail: [modul/F1-10](modul/F1-10-data-klinis-pdp.md) |
+| GET | `/pasiens/{pasien}/persetujuan-data` · `/pratinjau` | pasien.lihat · pasien.kelola | status `{ pemrosesan, marketing, riwayat, kanal }` · naskah `{ pemrosesan, marketing }` (`?kanal[]=`) |
+| POST | `/pasiens/{pasien}/persetujuan-data` | pasien.kelola | `{ setuju_pemrosesan* (accepted), marketing*, kanal (bila marketing), penandatangan_nama*, hubungan*, ttd* }` |
+| GET / POST | `/persetujuan-datas/{uuid}` · `/cabut` | pasien.kelola, rme.lihat · pasien.kelola | dokumen + ttd + `checksum_valid` (audit) · `{ alasan* }` |
 | GET | `/pasiens/{pasien}/riwayat` | rme.lihat | 20 kunjungan selesai terakhir semua cabang dengan rekam medis + `cabang`. `kecuali={kunjungan_id}`. Tercatat audit |
 | POST / PUT | `/pasiens`, `/pasiens/{pasien}` | pasien.kelola | lihat field di bawah |
 | DELETE | `/pasiens/{pasien}` | pasien.hapus | soft delete; ditolak bila punya kunjungan |
 
 Field pasien: `nama*`, `jenis_kelamin*` (L/P), `tanggal_lahir*` (≤ hari ini), `nik` (16 digit, unik), `no_bpjs` (13 digit),
-`tempat_lahir`, `golongan_darah` (A/B/AB/O/-), `alamat`, `no_hp`, `pekerjaan`, `alergi`.
+`tempat_lahir`, `golongan_darah` (A/B/AB/O/-), `alamat`, `no_hp`, `pekerjaan`. Alergi & data klinis lewat `/pasiens/{id}/klinis` (F1-10).
 
 ## Kunjungan & pemeriksaan (cabang aktif)
 | Method | Path | Izin | Keterangan |
 |--------|------|------|------------|
 | GET | `/kunjungans` | login | `tanggal` (default hari ini), `poli_id`, `dokter_id`, `status` (bisa koma), `penjamin`, `q`; + `cabang`; per_page default 50 |
-| GET | `/kunjungans/{id}` | login | detail (`loadDetail`, + `konsultasi`: jasa konsultasi poli di cabang kunjungan `{id, nama, tarif_cabang}` atau null), **termasuk cabang lain**. Tanpa `rme.lihat` — atau kunjungan berakses terbatas yang tidak boleh dibaca (`rme_disembunyikan: true`) — tanpa pemeriksaan/tindakans/informed_consents/resep. Dengan RME: tercatat audit `lihat` |
+| GET | `/kunjungans/{id}` | login | detail (`loadDetail`; ber-RME + `pasien.klinis`, `pasien.alergis[].obat`; + `konsultasi`: jasa konsultasi poli di cabang kunjungan `{id, nama, tarif_cabang}` atau null), **termasuk cabang lain**. Tanpa `rme.lihat` — atau kunjungan berakses terbatas yang tidak boleh dibaca (`rme_disembunyikan: true`) — tanpa pemeriksaan/tindakans/informed_consents/resep. Dengan RME: tercatat audit `lihat` |
 | POST | `/kunjungans` | kunjungan.daftar | `{ pasien_id*, poli_id*, dokter_id?, penjamin*, no_penjamin?, keluhan? }` → + `cabang`. 422 `cabang` bila cabang aktif belum dipilih |
 | POST | `/kunjungans/{id}/batal` | kunjungan.daftar | hanya status menunggu |
 | POST | `/kunjungans/{id}/panggil` | pemeriksaan.panggil | menunggu → diperiksa |

@@ -37,6 +37,7 @@ baru (mis. "Dokter Estetika", "Kasir Farmasi") dan mengatur izinnya dari menu **
 | Farmasi | `farmasi.resep`, `farmasi.obat` | resep & penyerahan; obat & stok |
 | Keuangan | `kasir.tagihan`, `laporan.keuangan` | tagihan & bayar (+ jual paket, pasang kode promo); pendapatan di dashboard |
 | | `promo.kelola` | kelola voucher & kode promo (F1-08) |
+| | (tanpa izin baru, F1-10) | data klinis pasien: baca `rme.lihat`, ubah `pemeriksaan.vital`/`pemeriksaan.dokter`/`rme.tindakan`; persetujuan UU PDP: status `pasien.lihat`, tanda tangan & cabut `pasien.kelola` |
 | | `komisi.kelola`, `komisi.setujui` | komisi per treatment (di master treatment, bersama `master.kelola`), hitung rekap & penyesuaian; setujui & kunci rekap (F1-09) |
 | Administrasi | `master.kelola`, `cabang.kelola`, `pengguna.kelola`, `peran.kelola`, `pengaturan.kelola`, `audit.lihat` | master data, cabang, pengguna, peran, pengaturan, audit log |
 

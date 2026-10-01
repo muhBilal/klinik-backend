@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\AuditService;
 use App\Services\NomorUrutService;
 use App\Services\PemeriksaanService;
+use App\Services\PersetujuanDataService;
 use App\Services\RekamMedisService;
 use App\Support\CabangAktif;
 use Illuminate\Http\JsonResponse;
@@ -57,7 +58,7 @@ class KunjunganController extends Controller
     /**
      * Pendaftaran kunjungan & pengambilan nomor antrian di cabang aktif.
      */
-    public function store(Request $request, NomorUrutService $nomor, CabangAktif $cabang): JsonResponse
+    public function store(Request $request, NomorUrutService $nomor, CabangAktif $cabang, PersetujuanDataService $pdp): JsonResponse
     {
         $cabangId = $cabang->untukDataBaru();
 
@@ -90,6 +91,9 @@ class KunjunganController extends Controller
         if ($sudahTerdaftar) {
             throw ValidationException::withMessages(['pasien_id' => 'Pasien sudah terdaftar di poli ini hari ini.']);
         }
+
+        // UU PDP (PS-04): bila diwajibkan klinik, pasien harus punya persetujuan pemrosesan data yang berlaku.
+        $pdp->pastikanBolehDaftar($data['pasien_id']);
 
         $kunjungan = DB::transaction(fn () => Kunjungan::create([
             ...$data,

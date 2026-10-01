@@ -27,6 +27,7 @@ class BookingService
         private JadwalService $jadwal,
         private NomorUrutService $nomor,
         private BhpService $bhp,
+        private PersetujuanDataService $pdp,
     ) {}
 
     /**
@@ -148,6 +149,8 @@ class BookingService
             if (! $appointment->poli_id) {
                 throw ValidationException::withMessages(['poli_id' => 'Booking belum punya poli; lengkapi sebelum check-in.']);
             }
+
+            $this->pdp->pastikanBolehDaftar($appointment->pasien_id);
 
             $cabangId = $appointment->cabang_id;
 

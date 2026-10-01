@@ -17,13 +17,14 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * Master pasien milik pusat (lintas cabang). Hapus = soft delete.
+ * Master pasien milik pusat (lintas cabang). Hapus = soft delete. Hanya identitas & kontak; data klinis (alergi, Fitzpatrick,
+ * hamil/menyusui, riwayat) ada di `klinis` & `alergis` agar terpisah aksesnya (PS-03), persetujuan UU PDP di `persetujuanDatas` (PS-04).
  */
 #[Table('pasiens')]
 #[Appends(['umur'])]
 #[Fillable([
     'nik', 'no_bpjs', 'nama', 'jenis_kelamin', 'tempat_lahir', 'tanggal_lahir',
-    'golongan_darah', 'alamat', 'no_hp', 'pekerjaan', 'alergi',
+    'golongan_darah', 'alamat', 'no_hp', 'pekerjaan',
 ])]
 class Pasien extends Model
 {
@@ -86,6 +87,24 @@ class Pasien extends Model
     public function paketPasiens(): HasMany
     {
         return $this->hasMany(PaketPasien::class);
+    }
+
+    /** Profil klinis (PS-03): Fitzpatrick, hamil/menyusui, riwayat obat & penyakit. Hanya untuk pemegang rme.lihat. */
+    public function klinis(): HasOne
+    {
+        return $this->hasOne(PasienKlinis::class);
+    }
+
+    /** Alergi terstruktur (PS-03). Hanya untuk pemegang rme.lihat (dan farmasi lewat resep). */
+    public function alergis(): HasMany
+    {
+        return $this->hasMany(PasienAlergi::class)->orderBy('id');
+    }
+
+    /** Persetujuan data pribadi UU PDP (PS-04): pemrosesan & opt-in marketing, termasuk riwayat. */
+    public function persetujuanDatas(): HasMany
+    {
+        return $this->hasMany(PersetujuanData::class);
     }
 
     public function auditLabel(): ?string

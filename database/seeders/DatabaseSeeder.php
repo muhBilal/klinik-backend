@@ -194,6 +194,17 @@ class DatabaseSeeder extends Seeder
         // Faker hanya tersedia di dependensi dev; image produksi dilewati tanpa pasien acak.
         if (class_exists(Factory::class)) {
             Pasien::factory(25)->create();
+
+            // Data klinis contoh (PS-03): Fitzpatrick, alergi obat bertaut master obat, alergi makanan, pasien menyusui
+            foreach (Pasien::orderBy('id')->take(6)->get() as $i => $pasien) {
+                $pasien->klinis()->create(['fitzpatrick' => ['III', 'IV', 'IV', 'V', 'III', 'II'][$i]]);
+            }
+            [$p1, $p2] = Pasien::orderBy('id')->take(2)->get()->all();
+            $p1->alergis()->create(['kategori' => 'obat', 'zat' => 'Amoxicillin', 'obat_id' => $obats['OBT-002']->id, 'reaksi' => 'Ruam & sesak napas', 'keparahan' => 'berat']);
+            $p2->alergis()->create(['kategori' => 'makanan', 'zat' => 'Udang', 'reaksi' => 'Gatal', 'keparahan' => 'ringan']);
+            Pasien::where('jenis_kelamin', 'P')->whereBetween('tanggal_lahir', [today()->subYears(45), today()->subYears(20)])
+                ->orderBy('id')->first()?->klinis()
+                ->updateOrCreate([], ['status_kehamilan' => 'menyusui', 'status_kehamilan_at' => today(), 'riwayat_obat' => 'Vitamin menyusui']);
         }
     }
 

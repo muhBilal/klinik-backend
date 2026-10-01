@@ -32,6 +32,8 @@ Status resep: `menunggu` → `diserahkan`. Status tagihan: `belum_bayar` → `lu
   cabang; mengubah data kunjungan cabang lain tidak bisa.
 
 ### Pendaftaran
+- Bila `pdp.wajib_persetujuan` aktif, pasien wajib punya persetujuan pemrosesan data (UU PDP) yang berlaku — juga saat check-in booking
+  (422 `persetujuan_data`). Bawaan mati: pasien tetap bisa didaftarkan, ditandai di daftar pasien & form pendaftaran.
 - Pasien tidak boleh didaftarkan dua kali ke poli yang sama **di cabang yang sama** pada hari yang sama selama kunjungan sebelumnya belum `selesai`/`batal`.
 - `no_antrian` berurutan **per cabang per poli per hari**; `tanggal` selalu `today()` (tidak bisa daftar untuk hari lain — booking dikerjakan di Fase 1).
 - `no_penjamin` wajib bila penjamin bukan `umum`.
@@ -117,6 +119,13 @@ Status resep: `menunggu` → `diserahkan`. Status tagihan: `belum_bayar` → `lu
   `paket.*`, oleh pemegang `kasir.void`; refund tunai mengurangi kas seharusnya shift.
 - Kode promo dipasang sebelum bayar, diperiksa ulang & dikunci saat bayar, dicatat saat lunas, kuota kembali saat refund. Potongan promo
   di luar batas diskon per peran; diskon manual + promo ≤ total; pajak dari nilai setelah keduanya.
+
+### Data klinis pasien & UU PDP (detail: [modul/F1-10-data-klinis-pdp.md](modul/F1-10-data-klinis-pdp.md))
+- Data klinis (alergi, Fitzpatrick, hamil/menyusui, riwayat obat & penyakit) terpisah dari identitas: baca `rme.lihat` (farmasi menerima
+  alergi & status hamil lewat resep), ubah `pemeriksaan.vital`/`pemeriksaan.dokter`/`rme.tindakan`; milik pasien, tidak terkunci bersama RME.
+- Hamil/menyusui hanya untuk perempuan, selalu bertanggal; alergi obat bisa bertaut master obat → peringatan resep (tidak memblokir).
+- Persetujuan pemrosesan & opt-in marketing = baris terpisah; formulir baru mengganti yang lama, tidak bersedia promosi mencabut opt-in;
+  cabut pemrosesan ikut mencabut marketing. Tidak pernah dihapus.
 
 ### Komisi (detail: [modul/F1-09-komisi.md](modul/F1-09-komisi.md))
 - Peran per tindakan: dokter = dokter kunjungan, terapis = pelaksana (`petugas_id`), asisten = `asisten_id`. Komisi diatur **per treatment
