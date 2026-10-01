@@ -12,6 +12,8 @@ use App\Models\User;
 use App\Services\AuditService;
 use App\Services\NomorUrutService;
 use App\Services\PemeriksaanService;
+use App\Services\PersetujuanDataService;
+use App\Services\RekamMedisService;
 use App\Support\CabangAktif;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -69,6 +71,8 @@ class KunjunganController extends Controller
             'keluhan' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        app(PersetujuanDataService::class)->pastikanAda((int) $data['pasien_id']);
+
         $dokterValid = ! isset($data['dokter_id']) || User::dokter()
             ->whereKey($data['dokter_id'])
             ->where(fn ($w) => $w->where('cabang_id', $cabangId)->orWhereNull('cabang_id'))
@@ -106,12 +110,17 @@ class KunjunganController extends Controller
 
     /**
      * Detail kunjungan (read-only), termasuk kunjungan cabang lain milik pasien (riwayat lintas cabang).
-     * Isi rekam medis hanya untuk pemegang izin rme.lihat; aksesnya dicatat di audit log.
+     * Isi rekam medis hanya untuk pemegang izin rme.lihat — dan untuk kunjungan berakses terbatas hanya tim yang
+     * menanganinya / pemegang rme.terbatas (`rme_disembunyikan: true`). Aksesnya dicatat di audit log.
      */
-    public function show(Request $request, int $kunjungan, AuditService $audit): JsonResponse
+    public function show(Request $request, int $kunjungan, AuditService $audit, RekamMedisService $rme): JsonResponse
     {
-        $rekamMedis = $request->user()->punyaIzin(Izin::RmeLihat);
-        $kunjungan = Kunjungan::withoutGlobalScope('cabang')->findOrFail($kunjungan)->loadDetail($rekamMedis);
+        $user = $request->user();
+        $kunjungan = Kunjungan::withoutGlobalScope('cabang')->findOrFail($kunjungan);
+        $izinRme = $user->punyaIzin(Izin::RmeLihat);
+        $rekamMedis = $izinRme && $rme->bolehLihat($user, $kunjungan);
+
+        $kunjungan->loadDetail($rekamMedis)->setAttribute('rme_disembunyikan', $izinRme && ! $rekamMedis);
 
         if ($rekamMedis) {
             $audit->catat('lihat', 'kunjungan', $kunjungan->id, [
@@ -142,17 +151,20 @@ class KunjunganController extends Controller
      * Riwayat kunjungan pasien (rekam medis) lintas cabang untuk ditampilkan saat pemeriksaan.
      * `?kecuali={id}` mengecualikan kunjungan yang sedang diperiksa.
      */
-    public function riwayat(Request $request, Pasien $pasien, AuditService $audit): JsonResponse
+    public function riwayat(Request $request, Pasien $pasien, AuditService $audit, RekamMedisService $rme): JsonResponse
     {
         $riwayat = $pasien->kunjungans()
             ->withoutGlobalScope('cabang')
-            ->select(['id', 'cabang_id', 'pasien_id', 'poli_id', 'tanggal'])
+            ->select(['id', 'cabang_id', 'pasien_id', 'poli_id', 'dokter_id', 'tanggal', 'status', 'akses_terbatas'])
             ->whereIn('status', [StatusKunjungan::MenungguPembayaran, StatusKunjungan::Selesai])
             ->when($request->filled('kecuali'), fn ($q) => $q->whereKeyNot($request->integer('kecuali')))
             ->with(['poli:id,nama', 'cabang:id,kode,nama', ...Kunjungan::relasiRekamMedis(), 'resep.items.obat:id,nama,satuan'])
             ->latest('tanggal')->latest('id')
             ->limit(20)
             ->get();
+
+        // Kunjungan berakses terbatas yang tidak ditangani user ini tampil tanpa isi rekam medis.
+        $rme->sembunyikanTerbatas($riwayat, $request->user());
 
         $audit->catat('lihat', 'pasien', $pasien->id, ['pasien_id' => $pasien->id, 'label' => "Riwayat rekam medis {$pasien->no_rm}"]);
 

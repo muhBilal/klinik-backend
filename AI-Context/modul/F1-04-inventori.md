@@ -3,7 +3,7 @@
 **PRD:** IN-01 (stok per gudang/cabang, per batch & kedaluwarsa, FEFO), IN-02 (potong stok otomatis dari BHP standar
 dengan koreksi pemakaian aktual), IN-03 (satuan fraksional & vial terbuka), AD-01 (stok per cabang) ·
 **Fase:** 1 · **Status:** selesai untuk IN-01, IN-02, IN-03 dan alert kedaluwarsa.
-Belum: purchase order & retur supplier (IN-04, Fase 2), mutasi antar cabang (IN-05, Fase 2), HPP per treatment (IN-06, Fase 2).
+Belum: purchase order & retur supplier (IN-04, Fase 2), HPP per treatment (IN-06, Fase 2). Mutasi antar cabang (IN-05) selesai di PRD v2 #3.
 
 ## Konsep
 
@@ -45,6 +45,10 @@ total tetap konsisten.
 Dipisah dua tahap supaya koreksi pemakaian tidak perlu membatalkan mutasi stok yang sudah tercatat.
 Setelah dipotong, koreksi lewat endpoint BHP ditolak — selisih diselesaikan lewat stok opname.
 
+UI koreksi pemakaian: tab **Pemakaian BHP** di modal catatan tindakan pemeriksaan ([F1-05](F1-05-rme-estetika.md)).
+Sejak F1-05 tindakan kunjungan di-upsert, sehingga koreksi BHP tidak hilang saat pemeriksaan disimpan ulang (kecuali `jumlah`
+tindakan diubah — draft dihitung ulang dari standar). Check-in booking juga menyiapkan draft BHP.
+
 **Stok kurang saat pemeriksaan ditutup**: perilakunya mengikuti pengaturan `inventori.blokir_bhp_stok_kurang`.
 Default `false` — pemeriksaan tetap bisa ditutup, baris ditinggal `stok_dipotong = false`, dan peringatan
 dikembalikan ke petugas. Alasannya rekam medis & tagihan tidak boleh tersandera data stok yang belum rapi.
@@ -70,6 +74,17 @@ PUT  /api/kunjungan-tindakans/{id}/bhps   bhps[]{obat_id,jumlah,batch_id?}   rep
 
 Endpoint lama `/api/obats/{id}/mutasi` tetap ada: kini masuk/keluar lewat batch "tanpa nomor" di cabang aktif,
 dan `penyesuaian` berarti stok akhir yang diinginkan **di cabang itu**.
+
+## Mutasi antar cabang & frontend (PRD v2 #3 · 1 Okt 2026)
+
+- `POST /api/stok-batches/{id}/mutasi` `{cabang_tujuan_id, jumlah, keterangan?}` (izin `inventori.kelola`): sebagian isi batch pindah ke
+  cabang aktif lain dengan **nomor batch & kedaluwarsa sama** (`InventoriService::pindahCabang`, memakai `terima` di tujuan sehingga batch
+  sama digabung). Kartu stok mencatat keluar (asal) + masuk (tujuan) dengan `referensi` sama `MUTASI-…`. Total lintas cabang tetap.
+  Ditolak: cabang sama/nonaktif, melebihi isi batch, batch kedaluwarsa, desimal untuk obat non-fraksional.
+- Frontend `/farmasi/stok` (`StokBatchView`, menu Farmasi → Stok Batch): tab stok tersedia / akan kedaluwarsa (30–180 hari) / batch
+  kosong, terima barang per batch, opname per batch (selisih langsung terlihat), mutasi antar cabang, buang batch kedaluwarsa atau
+  vial yang lewat masa pakai setelah dibuka. Tombol **Batch** di Obat & Stok membuka `?obat_id=`. Input jumlah `step="any"` — aturan
+  fraksional divalidasi backend.
 
 ## Kode
 

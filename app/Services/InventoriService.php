@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\JenisMutasi;
+use App\Models\Cabang;
 use App\Models\Obat;
 use App\Models\StokBatch;
 use App\Models\StokMutasi;
@@ -171,6 +172,58 @@ class InventoriService
             $batch->save();
 
             $this->catat($obat, $batch->cabang_id, $batch, JenisMutasi::Penyesuaian, $delta, $user, null, $keterangan);
+
+            return $batch;
+        });
+    }
+
+    /**
+     * Mutasi antar cabang (IN-05): pindahkan sebagian isi satu batch ke cabang lain dengan nomor batch & kedaluwarsa
+     * yang sama. Tercatat dua kali di kartu stok (keluar di cabang asal, masuk di cabang tujuan) dengan referensi yang sama.
+     */
+    public function pindahCabang(StokBatch $batch, int $cabangTujuanId, float $jumlah, User $user, ?string $keterangan = null): StokBatch
+    {
+        if ($jumlah <= 0) {
+            throw ValidationException::withMessages(['jumlah' => 'Jumlah mutasi harus lebih dari nol.']);
+        }
+
+        return DB::transaction(function () use ($batch, $cabangTujuanId, $jumlah, $user, $keterangan) {
+            $batch = StokBatch::withoutGlobalScope('cabang')->whereKey($batch->id)->lockForUpdate()->firstOrFail();
+            $obat = Obat::withTrashed()->whereKey($batch->obat_id)->firstOrFail();
+
+            if ($batch->cabang_id === $cabangTujuanId) {
+                throw ValidationException::withMessages(['cabang_tujuan_id' => 'Cabang tujuan sama dengan cabang asal.']);
+            }
+
+            $tujuan = Cabang::whereKey($cabangTujuanId)->where('is_active', true)->first();
+
+            if (! $tujuan) {
+                throw ValidationException::withMessages(['cabang_tujuan_id' => 'Cabang tujuan tidak aktif.']);
+            }
+
+            $this->pastikanJumlahSah($obat, $jumlah);
+
+            if ($batch->jumlah + self::EPSILON < $jumlah) {
+                throw ValidationException::withMessages([
+                    'jumlah' => "Isi batch tinggal {$this->angka($batch->jumlah)} {$obat->satuan}.",
+                ]);
+            }
+
+            if ($batch->kedaluwarsa?->isPast()) {
+                throw ValidationException::withMessages(['jumlah' => 'Batch sudah kedaluwarsa dan tidak boleh dimutasi.']);
+            }
+
+            $asal = Cabang::withTrashed()->whereKey($batch->cabang_id)->value('nama');
+            $referensi = 'MUTASI-'.now()->format('YmdHis').'-'.$batch->id;
+
+            $batch->jumlah = round($batch->jumlah - $jumlah, 3);
+            $batch->save();
+            $this->catat($obat, $batch->cabang_id, $batch, JenisMutasi::Keluar, -$jumlah, $user, $referensi,
+                trim("Mutasi ke {$tujuan->nama}. ".($keterangan ?? '')));
+
+            $masuk = $this->terima($obat, $tujuan->id, $jumlah, $batch->no_batch, $batch->kedaluwarsa, $user,
+                trim("Mutasi dari {$asal}. ".($keterangan ?? '')));
+            StokMutasi::where('batch_id', $masuk->id)->latest('id')->first()?->update(['referensi' => $referensi]);
 
             return $batch;
         });

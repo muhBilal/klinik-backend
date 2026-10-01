@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 #[Table('pembayarans')]
 #[Fillable([
-    'tagihan_id', 'shift_id', 'metode', 'jumlah', 'referensi', 'kasir_id', 'dibayar_at',
+    'tagihan_id', 'shift_id', 'metode', 'jumlah', 'diterima', 'referensi', 'kasir_id', 'dibayar_at',
     'dikembalikan_at', 'dikembalikan_oleh', 'alasan_refund',
 ])]
 class Pembayaran extends Model
@@ -28,6 +28,7 @@ class Pembayaran extends Model
         return [
             'metode' => MetodeBayar::class,
             'jumlah' => 'integer',
+            'diterima' => 'integer',
             'dibayar_at' => 'datetime',
             'dikembalikan_at' => 'datetime',
         ];

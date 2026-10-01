@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\Penjamin;
 use App\Enums\StatusAppointment;
 use App\Enums\StatusKunjungan;
+use App\Enums\TipeSumberDaya;
 use App\Models\Appointment;
 use App\Models\Kunjungan;
 use App\Models\SumberDaya;
@@ -26,6 +27,7 @@ class BookingService
     public function __construct(
         private JadwalService $jadwal,
         private NomorUrutService $nomor,
+        private BhpService $bhp,
     ) {}
 
     /**
@@ -33,9 +35,12 @@ class BookingService
      */
     public function buat(array $data, int $cabangId, User $user): Appointment
     {
+        app(PersetujuanDataService::class)->pastikanAda((int) $data['pasien_id']);
+
         return DB::transaction(function () use ($data, $cabangId, $user) {
             $tindakans = $this->tindakans($data['tindakan_ids'] ?? [], $cabangId);
             $sumberDayaIds = $this->sumberDayaIds($data['sumber_daya_ids'] ?? [], $cabangId);
+            $this->pastikanKebutuhan($tindakans, $sumberDayaIds, $cabangId);
 
             $mulai = CarbonImmutable::parse($data['mulai_at']);
             $selesai = $mulai->addMinutes($this->jadwal->durasiTotal($tindakans));
@@ -75,6 +80,10 @@ class BookingService
                 ? $this->sumberDayaIds($data['sumber_daya_ids'] ?? [], $cabangId)
                 : $appointment->sumberDayas()->pluck('sumber_dayas.id')->all();
 
+            if (array_key_exists('tindakan_ids', $data) || array_key_exists('sumber_daya_ids', $data)) {
+                $this->pastikanKebutuhan($tindakans, $sumberDayaIds, $cabangId);
+            }
+
             $petugasId = array_key_exists('petugas_id', $data) ? $data['petugas_id'] : $appointment->petugas_id;
             $mulai = CarbonImmutable::parse($data['mulai_at'] ?? $appointment->mulai_at);
             $selesai = $mulai->addMinutes($this->jadwal->durasiTotal($tindakans));
@@ -87,6 +96,10 @@ class BookingService
                 'mulai_at' => $mulai,
                 'selesai_at' => $selesai,
             ]);
+            // Permintaan ubah jadwal dari WhatsApp sudah ditangani staf
+            if ($appointment->minta_ubah_at) {
+                $appointment->forceFill(['minta_ubah_at' => null])->save();
+            }
 
             if (array_key_exists('tindakan_ids', $data)) {
                 $this->syncTindakan($appointment, $tindakans);
@@ -104,6 +117,7 @@ class BookingService
         $this->pastikanBelumSelesai($appointment);
 
         $appointment->update(['status' => StatusAppointment::Dikonfirmasi, 'dikonfirmasi_at' => now()]);
+        $appointment->forceFill(['dikonfirmasi_via' => 'staf'])->save();
 
         return $appointment;
     }
@@ -165,16 +179,22 @@ class BookingService
             ]);
 
             foreach ($appointment->tindakans()->with('tindakan')->get() as $baris) {
-                $tarif = Tindakan::withTrashed()
+                $tindakan = Tindakan::withTrashed()
                     ->whereKey($baris->tindakan_id)
+                    ->select(['id', 'icd9cm_id'])
                     ->denganHargaCabang($cabangId)
-                    ->value('tarif_cabang');
+                    ->first();
 
-                $kunjungan->tindakans()->create([
+                $kunjunganTindakan = $kunjungan->tindakans()->create([
                     'tindakan_id' => $baris->tindakan_id,
                     'jumlah' => 1,
-                    'tarif' => (int) $tarif,
+                    'tarif' => (int) $tindakan->tarif_cabang,
+                    'petugas_id' => $appointment->petugas_id,
+                    'icd9cm_id' => $tindakan->icd9cm_id,
                 ]);
+
+                // Draft BHP sama seperti tindakan yang dicatat di pemeriksaan (IN-02).
+                $this->bhp->siapkanDariStandar($kunjunganTindakan);
             }
 
             $appointment->update([
@@ -231,6 +251,68 @@ class BookingService
         return $ids;
     }
 
+    /**
+     * Ruang/alat wajib untuk treatment yang dipilih di satu cabang (BK-08), dikelompokkan per treatment & tipe.
+     * Treatment yang punya daftar ruang/alat di cabang itu wajib memakai minimal satu dari setiap tipe yang tercantum.
+     * Daftar di cabang lain tidak berlaku.
+     *
+     * @param  Collection<int, Tindakan>  $tindakans
+     * @return list<array{tindakan_id: int, tindakan: string, tipe: string, tipe_label: string, pilihan: list<array{id: int, kode: string, nama: string}>}>
+     */
+    public function kebutuhan(Collection $tindakans, int $cabangId): array
+    {
+        $baris = DB::table('tindakan_sumber_dayas')
+            ->join('sumber_dayas', 'sumber_dayas.id', '=', 'tindakan_sumber_dayas.sumber_daya_id')
+            ->whereIn('tindakan_sumber_dayas.tindakan_id', $tindakans->pluck('id'))
+            ->where('sumber_dayas.cabang_id', $cabangId)
+            ->whereNull('sumber_dayas.deleted_at')
+            ->orderBy('sumber_dayas.nama')
+            ->get(['tindakan_sumber_dayas.tindakan_id', 'sumber_dayas.id', 'sumber_dayas.kode', 'sumber_dayas.nama',
+                'sumber_dayas.tipe', 'sumber_dayas.is_active']);
+
+        $hasil = [];
+        foreach ($tindakans as $tindakan) {
+            foreach ($baris->where('tindakan_id', $tindakan->id)->groupBy('tipe') as $tipe => $grup) {
+                $hasil[] = [
+                    'tindakan_id' => $tindakan->id,
+                    'tindakan' => $tindakan->nama,
+                    'tipe' => $tipe,
+                    'tipe_label' => TipeSumberDaya::from($tipe)->label(),
+                    // Ruang/alat nonaktif tetap dihitung sebagai kebutuhan, tetapi tidak bisa dipilih.
+                    'pilihan' => $grup->filter(fn ($r) => (bool) $r->is_active)
+                        ->map(fn ($r) => ['id' => $r->id, 'kode' => $r->kode, 'nama' => $r->nama])->values()->all(),
+                ];
+            }
+        }
+
+        return $hasil;
+    }
+
+    /**
+     * @param  Collection<int, Tindakan>  $tindakans
+     * @param  list<int>  $sumberDayaIds
+     */
+    private function pastikanKebutuhan(Collection $tindakans, array $sumberDayaIds, int $cabangId): void
+    {
+        foreach ($this->kebutuhan($tindakans, $cabangId) as $k) {
+            $ids = array_column($k['pilihan'], 'id');
+
+            if ($ids === []) {
+                throw ValidationException::withMessages([
+                    'sumber_daya_ids' => "{$k['tindakan']} butuh {$k['tipe_label']}, tetapi tidak ada yang aktif di cabang ini.",
+                ]);
+            }
+
+            if (! array_intersect($ids, $sumberDayaIds)) {
+                $nama = implode(' / ', array_column($k['pilihan'], 'nama'));
+
+                throw ValidationException::withMessages([
+                    'sumber_daya_ids' => "{$k['tindakan']} butuh {$k['tipe_label']}: pilih {$nama}.",
+                ]);
+            }
+        }
+    }
+
     /** @param  list<int>  $sumberDayaIds */
     private function pastikanBebas(int $cabangId, ?int $petugasId, array $sumberDayaIds, CarbonImmutable $mulai, CarbonImmutable $selesai, ?int $kecuali = null): void
     {
@@ -241,6 +323,16 @@ class BookingService
 
             if (! $petugasValid) {
                 throw ValidationException::withMessages(['petugas_id' => 'Petugas tidak ditemukan atau tidak bertugas di cabang ini.']);
+            }
+
+            // Dokter tanpa SIP berlaku pada tanggal booking tidak boleh dijadwalkan (AD-05, UU 17/2023)
+            $petugas = User::find($petugasId);
+            if ($petugas->tercatatSebagaiDokter()
+                && (blank($petugas->sip) || ($petugas->sip_berlaku_sampai && $petugas->sip_berlaku_sampai->lt($mulai->startOfDay())))) {
+                throw ValidationException::withMessages([
+                    'petugas_id' => "SIP {$petugas->name} ".(blank($petugas->sip) ? 'belum tercatat' : 'berakhir '.$petugas->sip_berlaku_sampai->translatedFormat('d M Y'))
+                        .'; dokter tidak dapat dijadwalkan pada tanggal ini.',
+                ]);
             }
 
             if ($this->jadwal->jamKerja($cabangId, $petugasId, $mulai) === []) {

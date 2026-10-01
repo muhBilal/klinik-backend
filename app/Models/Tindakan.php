@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\JenisCatatanTindakan;
+use App\Enums\KondisiGigi;
 use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Table;
@@ -16,7 +18,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * Treatment / tindakan (PRD TR-01). Master pusat: `tarif` = harga dasar, ditimpa per cabang lewat `hargas`.
  */
 #[Table('tindakans')]
-#[Fillable(['kode', 'nama', 'kategori_id', 'durasi_menit', 'buffer_menit', 'tarif', 'is_active'])]
+#[Fillable([
+    'kode', 'nama', 'kategori_id', 'icd9cm_id', 'template_consent_id', 'jenis_catatan', 'protokol_foto_id', 'per_gigi', 'kondisi_gigi_hasil',
+    'durasi_menit', 'buffer_menit', 'tarif', 'is_active',
+])]
 class Tindakan extends Model
 {
     use Auditable, SoftDeletes;
@@ -28,6 +33,10 @@ class Tindakan extends Model
             'durasi_menit' => 'integer',
             'buffer_menit' => 'integer',
             'is_active' => 'boolean',
+            'jenis_catatan' => JenisCatatanTindakan::class,
+            // Tindakan gigi (DG-01/07): wajib nomor gigi; kondisi odontogram hasil tindakan
+            'per_gigi' => 'boolean',
+            'kondisi_gigi_hasil' => KondisiGigi::class,
             // Kolom hasil scope denganHargaCabang()
             'tarif_cabang' => 'integer',
             'tersedia' => 'boolean',
@@ -37,6 +46,24 @@ class Tindakan extends Model
     public function kategori(): BelongsTo
     {
         return $this->belongsTo(KategoriTindakan::class, 'kategori_id')->withTrashed();
+    }
+
+    /** Kode ICD-9-CM default, disalin ke tindakan kunjungan (RM-02). */
+    public function icd9cm(): BelongsTo
+    {
+        return $this->belongsTo(Icd9cm::class);
+    }
+
+    /** Diisi = treatment wajib informed consent sebelum pemeriksaan ditutup (RM-03). */
+    public function templateConsent(): BelongsTo
+    {
+        return $this->belongsTo(TemplateConsent::class)->withTrashed();
+    }
+
+    /** Protokol foto yang disarankan saat mengambil foto klinis treatment ini (FT-01). */
+    public function protokolFoto(): BelongsTo
+    {
+        return $this->belongsTo(ProtokolFoto::class)->withTrashed();
     }
 
     public function hargas(): HasMany

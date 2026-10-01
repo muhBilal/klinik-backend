@@ -30,10 +30,13 @@ baru (mis. "Dokter Estetika", "Kasir Farmasi") dan mengatur izinnya dari menu **
 | Pelayanan | `pemeriksaan.panggil` | panggil pasien dari antrian |
 | | `pemeriksaan.vital` | tanda vital + anamnesis (S) |
 | | `pemeriksaan.dokter` | SOAP lengkap, diagnosa, tindakan, resep, selesai pemeriksaan; **penanda dokter** (`/dokters`, `poli_id` wajib) |
-| Rekam Medis | `rme.lihat` | isi rekam medis (SOAP, diagnosa, tindakan, resep), riwayat, daftar & buka berkas |
+| Rekam Medis | `rme.lihat` | isi rekam medis (SOAP, diagnosa, tindakan, resep), riwayat, daftar & buka berkas, buka informed consent, verifikasi tanda tangan |
+| | `rme.tindakan` | catatan tindakan (area, face chart, parameter alat), ambil & cabut informed consent (F1-05) |
+| | `rme.terbatas` | buka rekam medis kunjungan berakses terbatas (mis. IMS) yang tidak ditangani sendiri (F1-05) |
 | | `berkas.kelola` | unggah & hapus lampiran klinis |
 | Farmasi | `farmasi.resep`, `farmasi.obat` | resep & penyerahan; obat & stok |
-| Keuangan | `kasir.tagihan`, `laporan.keuangan` | tagihan & bayar; pendapatan di dashboard |
+| Keuangan | `kasir.tagihan`, `laporan.keuangan` | tagihan & bayar (+ jual paket, pasang kode promo); pendapatan di dashboard |
+| | `promo.kelola` | kelola voucher & kode promo (F1-08) |
 | Administrasi | `master.kelola`, `cabang.kelola`, `pengguna.kelola`, `peran.kelola`, `pengaturan.kelola`, `audit.lihat` | master data, cabang, pengguna, peran, pengaturan, audit log |
 
 ## Peta peran bawaan → izin (migration `2026_09_30_100002`)
@@ -49,6 +52,11 @@ baru (mis. "Dokter Estetika", "Kasir Farmasi") dan mengatur izinnya dari menu **
 | terapis | pasien.lihat, pemeriksaan.panggil, pemeriksaan.vital, rme.lihat, berkas.kelola |
 | manajer | pasien.lihat, laporan.keuangan, audit.lihat |
 | marketing | pasien.lihat |
+
+Tambahan per modul (migration `*_beri_izin_*_ke_peran`): booking/jadwal (F1-02), kasir.void/kasir.shift (F1-03),
+inventori.kelola (F1-04), **`rme.tindakan` → perawat, dokter, terapis** (F1-05), **`promo.kelola` → manajer, marketing** dan
+**`pasien.lihat` → kasir** (menjual paket ke pasien; identitas saja, F1-08). `rme.terbatas` sengaja tidak diberikan ke peran
+bawaan: tim yang menangani kunjungan tetap bisa membukanya.
 
 Peta ini mempertahankan perilaku sebelum RBAC (semua test lama tetap lulus), dengan dua perubahan sesuai PRD:
 `GET /pasiens` kini butuh `pasien.lihat` (sebelumnya semua role), dan detail kunjungan/pasien tanpa `rme.lihat` tidak memuat isi rekam medis.

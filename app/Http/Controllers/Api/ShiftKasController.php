@@ -34,7 +34,8 @@ class ShiftKasController extends Controller
     {
         $shift = $this->service->shiftTerbuka($cabang->untukDataBaru(), $request->user());
 
-        return response()->json($shift ? $this->detail($shift) : null);
+        // response()->json(null) menghasilkan "{}"; kirim JSON null yang sebenarnya.
+        return $shift ? response()->json($this->detail($shift)) : JsonResponse::fromJsonString('null');
     }
 
     public function store(Request $request, CabangAktif $cabang): JsonResponse

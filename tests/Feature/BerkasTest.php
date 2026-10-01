@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\Berkas;
 use App\Models\Pasien;
 use App\Models\User;
+use App\Services\PengaturanService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -34,6 +35,8 @@ class BerkasTest extends TestCase
         $this->seed(DatabaseSeeder::class);
         Storage::fake('berkas');
         $this->pasien = Pasien::first();
+        // Test ini fokus enkripsi & tautan; kewajiban consent foto diuji di FotoKlinisTest.
+        app(PengaturanService::class)->simpan(['foto' => ['wajib_consent' => false]]);
     }
 
     private function as(string $email): User

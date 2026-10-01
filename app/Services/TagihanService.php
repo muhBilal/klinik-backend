@@ -2,10 +2,14 @@
 
 namespace App\Services;
 
+use App\Enums\StatusKunjungan;
 use App\Enums\StatusTagihan;
 use App\Models\Kunjungan;
+use App\Models\KunjunganTindakan;
 use App\Models\Tagihan;
+use App\Support\Gigi;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class TagihanService
 {
@@ -15,11 +19,12 @@ class TagihanService
     ) {}
 
     /**
-     * Susun tagihan dari biaya konsultasi poli, tindakan dan obat pada resep.
+     * Susun tagihan dari biaya konsultasi poli, tindakan dan obat pada resep (BL-01). Tindakan yang memakai sesi paket
+     * (TR-02) ditagih Rp 0 dengan keterangan nomor paket & urutan sesi.
      */
     public function buatDariKunjungan(Kunjungan $kunjungan): Tagihan
     {
-        $kunjungan->loadMissing(['poli', 'tindakans.tindakan', 'resep.items.obat']);
+        $kunjungan->loadMissing(['poli', 'tindakans.tindakan', 'tindakans.paketItem.paketPasien:id,no_paket', 'resep.items.obat', 'resep.items.komponens']);
 
         $items = [[
             'kategori' => 'konsultasi',
@@ -29,18 +34,25 @@ class TagihanService
         ]];
 
         foreach ($kunjungan->tindakans as $tindakan) {
+            // Tindakan per gigi ditagih per gigi, mis. "Tambal gigi komposit — gigi 16 (MO)" (DG-07).
+            $gigi = Gigi::format($tindakan->gigi, $tindakan->permukaan);
+            $deskripsi = $gigi ? Str::limit($tindakan->tindakan->nama, 180, '')." — {$gigi}" : Str::limit($tindakan->tindakan->nama, 180, '');
+            $paket = $tindakan->paketItem;
+
             $items[] = [
                 'kategori' => 'tindakan',
-                'deskripsi' => $tindakan->tindakan->nama,
+                'tindakan_id' => $tindakan->tindakan_id,
+                'kunjungan_tindakan_id' => $tindakan->id,
+                'deskripsi' => $paket ? "{$deskripsi} · paket {$paket->paketPasien->no_paket} sesi {$this->urutanSesi($tindakan)}/{$paket->jumlah_sesi}" : $deskripsi,
                 'jumlah' => $tindakan->jumlah,
-                'harga' => $tindakan->tarif,
+                'harga' => $paket ? 0 : $tindakan->tarif,
             ];
         }
 
         foreach ($kunjungan->resep?->items ?? [] as $item) {
             $items[] = [
                 'kategori' => 'obat',
-                'deskripsi' => "{$item->obat->nama} ({$item->obat->satuan})",
+                'deskripsi' => Str::limit($item->label(), 250, ''),
                 'jumlah' => $item->jumlah,
                 'harga' => $item->harga,
             ];
@@ -69,11 +81,24 @@ class TagihanService
         return $tagihan;
     }
 
+    /** Urutan sesi terakhir yang dipakai tindakan ini, mis. "3" atau "3–4" bila memakai dua sesi sekaligus. */
+    private function urutanSesi(KunjunganTindakan $tindakan): string
+    {
+        $sebelumnya = (int) KunjunganTindakan::where('paket_pasien_item_id', $tindakan->paket_pasien_item_id)
+            ->where('id', '<', $tindakan->id)
+            ->whereHas('kunjungan', fn ($q) => $q->where('status', '!=', StatusKunjungan::Batal->value))
+            ->sum('jumlah');
+        $awal = $sebelumnya + 1;
+        $akhir = $sebelumnya + $tindakan->jumlah;
+
+        return $awal === $akhir ? (string) $awal : "{$awal}–{$akhir}";
+    }
+
     /**
      * Tagihan berdiri sendiri tanpa kunjungan — penjualan produk OTC, paket, deposit
      * (PRD FR-04, TR-02; temuan teknis 8.3 #3).
      *
-     * @param  list<array{kategori: string, deskripsi: string, jumlah: int, harga: int}>  $items
+     * @param  list<array{kategori: string, deskripsi: string, jumlah: int, harga: int, tindakan_id?: int, paket_id?: int}>  $items
      */
     public function buatMandiri(int $cabangId, ?int $pasienId, array $items, ?string $keterangan = null): Tagihan
     {

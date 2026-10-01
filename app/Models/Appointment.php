@@ -35,6 +35,7 @@ class Appointment extends Model
             'status' => StatusAppointment::class,
             'dikonfirmasi_at' => 'datetime',
             'checkin_at' => 'datetime',
+            'minta_ubah_at' => 'datetime',
         ];
     }
 

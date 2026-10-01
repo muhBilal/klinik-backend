@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\Spesialisasi;
 use App\Http\Controllers\Controller;
 use App\Models\Poli;
 use Illuminate\Http\JsonResponse;
@@ -19,7 +20,7 @@ class PoliController extends Controller
         $polis = $this->filterAktif(Poli::query(), $request)
             ->when(
                 $request->boolean('aktif'),
-                fn ($q) => $q->select(['id', 'kode', 'nama'])->where('is_active', true),
+                fn ($q) => $q->select(['id', 'kode', 'nama', 'spesialisasi'])->where('is_active', true),
                 fn ($q) => $q->withCount('dokters'),
             )
             ->when($request->filled('q'), function ($query) use ($request) {
@@ -60,11 +61,19 @@ class PoliController extends Controller
 
     private function validated(Request $request, ?Poli $poli = null): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'kode' => ['required', 'string', 'max:10', Rule::unique('polis')->ignore($poli)],
             'nama' => ['required', 'string', 'max:255'],
+            // Modul spesialisasi di pemeriksaan (PRD bagian 6), mis. odontogram untuk poli gigi
+            'spesialisasi' => ['nullable', Rule::enum(Spesialisasi::class)],
             'tarif_konsultasi' => ['required', 'integer', 'min:0'],
             'is_active' => ['boolean'],
         ]);
+
+        if (array_key_exists('spesialisasi', $data)) {
+            $data['spesialisasi'] ??= Spesialisasi::Umum->value;
+        }
+
+        return $data;
     }
 }

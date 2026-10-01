@@ -49,7 +49,16 @@
 - Setiap test `RefreshDatabase` + `$this->seed(DatabaseSeeder::class)`; akun demo tersedia (`dokter@eklinik.test`, dst).
 - Test utama: `tests/Feature/AlurKlinikTest.php` — cakup alur penuh; perluas di sana untuk aturan bisnis baru.
   Test per fitur Fase 0: `PeranIzinTest`, `MultiCabangTest`, `AuditLogTest`, `KeamananTest`, `PengaturanTest`, `BerkasTest`.
-  Fase 1: `KatalogTreatmentTest`.
+  Fase 1: `KatalogTreatmentTest`, `BookingTest`, `KasirTest`, `InventoriTest`, `RmeEstetikaTest`, `FotoKlinisTest`.
+- Unggah `foto_klinis` di test butuh persetujuan foto (`POST /pasiens/{id}/persetujuan-foto`) atau matikan `foto.wajib_consent`.
+- Kunjungan kedua pasien di poli yang sama pada hari yang sama ditolak ("sudah terdaftar") selama kunjungan pertama belum `selesai` —
+  test multi-kunjungan memajukan waktu (`$this->travel(1)->days()`, lihat `OdontogramTest::kunjunganGigi`).
+- Nama helper test jangan bentrok dengan method final PHPUnit (`status()`, `name()`, dll.).
+  Data biner (JPEG 1x1, PNG tanda tangan) ada di trait `tests/Concerns/BuatBerkasUji`.
+- Menutup pemeriksaan di test: penutup harus dokter ber-SIP (`dokter@eklinik.test` punya SIP; user factory tidak — isi `sip`), dan
+  treatment ber-template consent (TRT-001/002/011/012/022, TND-006/102) butuh consent. Test yang fokusnya bukan consent mematikan
+  `rme.wajib_informed_consent` lewat `PengaturanService::simpan(['rme' => ['wajib_informed_consent' => false]])`.
+- Tanda tangan consent di test: PNG sah dibuat manual (tanpa GD) — lihat `RmeEstetikaTest::ttd()`.
 - Jangan menulis ID tetap (`/api/obats/1`, `'poli_id' => 1`): di PostgreSQL sequence tidak di-reset antar-test. Ambil dari data
   (`Obat::value('id')`).
 - Menjalankan suite ke **PostgreSQL** (sebelum rilis / bila memakai SQL mentah): jalankan container `postgres:17-alpine` sementara
@@ -93,6 +102,19 @@
 | Edit file lewat skrip Python di Windows | `open(p, 'w')` menulis CRLF. Pakai `newline=''` / mode biner; Pint menormalkan PHP, file lain tidak. |
 | Queue worker dev gagal saat start pertama | Tabel `jobs`/`cache` belum ada sebelum `migrate`; container restart otomatis. |
 | Stack dev lambat / 504 di Windows | Bind mount kode lambat; jangan nyalakan profile `worker` bila tidak perlu, dan jangan menjalankan banyak stack dev bersamaan. `artisan` yang butuh menit = VM Docker kewalahan I/O. |
+| Setiap request stack dev 5–10 detik (uji E2E) | PHP men-stat ribuan file lewat bind mount. Di kontainer uji saja: tulis `opcache.validate_timestamps=0` ke `/usr/local/etc/php/conf.d/zz-e2e.ini` lalu `kill -USR2 1` (turun ke < 1 detik). Setelah itu perubahan kode PHP baru terbaca setelah `kill -USR2 1` lagi. Jangan `config:cache` di stack dev — file cache tertulis ke repo host. |
+| Mengubah pemeriksaan yang sudah ditandatangani | Model `Pemeriksaan` melempar `LogicException` (juga `PemeriksaanAddendum` untuk ubah/hapus). Koreksi = addendum. Untuk mensimulasikan manipulasi di test pakai `DB::table(...)->update()`. |
+| Menyimpan tindakan pemeriksaan | Kirim `tindakans[].id` agar baris (beserta catatan tindakan, consent, koreksi BHP, kondisi odontogram turunan) dipertahankan. Tanpa `id` backend mencocokkan `tindakan_id` + `gigi`; tindakan yang sama dua baris tanpa `id` pada gigi yang sama bisa tertukar. |
+| `Builder::value('kolom')` Eloquent | Menerapkan cast model (mis. `status` jadi enum). Untuk nilai mentah pakai `->toBase()->value(...)` (lihat `OdontogramKondisi::kunjunganTerbuka`). |
+| Hash RME & kolom baru | `RekamMedisService::hash` dipakai memverifikasi RME lama. Kolom/relasi baru ditambahkan ke isi hash **hanya bila terisi** agar hash tanda tangan lama tetap cocok (contoh gigi tindakan & odontogram). |
+| Atribut hitungan di model lalu `update()` | `setAttribute('sisa_sesi', …)` ikut tersimpan sebagai kolom → error "no such column". Lepas dulu (`PaketService::lepasRingkasan`) atau hitung di variabel. |
+| Dependensi service melingkar | `KasirService` ← `TagihanService` ← `PaketService`/`PromoService`. Kasir memanggil keduanya lewat `app(...)` di dalam method, bukan constructor. |
+| Batal/refund tagihan di test | Route butuh `kasir.tagihan` **dan** `kasir.void` → pakai admin; manajer hanya `kasir.void` (cukup untuk kebijakan paket). |
+| Stack dev 500 "laravel.log could not be opened" | `docker compose run` (root) membuat `storage/logs/laravel.log` milik root saat test gagal; php-fpm (www-data) lalu tidak bisa menulis. `docker exec <app> chmod 666 storage/logs/laravel.log`. |
+| Detail consent tanpa tanda tangan | `InformedConsent` menyembunyikan `ttd_*` & `checksum`; hanya `InformedConsentController::show` yang memanggil `makeVisible`. Jangan menambah tanda tangan ke `relasiRekamMedis` (ukuran & audit). |
+| Kamera di E2E | Chrome headless: `--use-fake-ui-for-media-stream --use-fake-device-for-media-stream` + `context.grantPermissions(['camera'])`. Encode frame 1920 px di headless bisa beberapa detik — tunggu tombol jepret muncul lagi, jangan `waitForTimeout`. |
+| Menjalankan artisan ke database lain (uji PostgreSQL sementara) | Container dev membaca DB dari `.env` (`DB_HOST=db`). Tulis `-e DB_HOST=… -e DB_DATABASE=…` **langsung** di perintah — di zsh variabel `$E` berisi beberapa flag tidak dipecah, docker menerima satu argumen rusak dan artisan diam-diam memakai DB dev. Sebelum `migrate:fresh`/seed/insert massal, cek dulu `php artisan tinker --execute="echo config('database.connections.pgsql.host');"` dengan flag yang sama, dan `pg_dump` DB dev lebih dulu. (Pernah mengosongkan DB dev, 1 Okt 2026.) |
+| Isi RME kunjungan berakses terbatas bocor | Endpoint baru yang membaca RME/berkas per kunjungan wajib memanggil `RekamMedisService::bolehLihat()` (atau `sembunyikanTerbatas()` untuk daftar). |
 
 ## Keamanan
 

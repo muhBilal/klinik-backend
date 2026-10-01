@@ -2,15 +2,19 @@
 
 namespace App\Services;
 
+use App\Enums\Izin;
 use App\Enums\MetodeBayar;
 use App\Enums\StatusKunjungan;
 use App\Enums\StatusTagihan;
+use App\Models\PaketPasien;
 use App\Models\Pembayaran;
 use App\Models\ShiftKas;
 use App\Models\Tagihan;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -56,11 +60,12 @@ class KasirService
             }
 
             $tunai = (int) $shift->pembayarans()->berlaku()->where('metode', MetodeBayar::Tunai)->sum('jumlah');
+            $refundTunai = $this->refundPaket($shift, MetodeBayar::Tunai);
 
             $shift->update([
                 'ditutup_at' => now(),
                 'kas_fisik' => $kasFisik,
-                'selisih' => $kasFisik - ($shift->modal_awal + $tunai),
+                'selisih' => $kasFisik - ($shift->modal_awal + $tunai - $refundTunai),
                 'catatan' => $catatan,
             ]);
 
@@ -82,38 +87,55 @@ class KasirService
 
         $refund = (int) $shift->pembayarans()->whereNotNull('dikembalikan_at')->sum('jumlah');
         $tunai = (int) ($perMetode->firstWhere('metode', MetodeBayar::Tunai->value)['total'] ?? 0);
+        // Pengembalian sisa paket (TR-02) = uang keluar di shift ini; yang tunai mengurangi kas seharusnya.
+        $refundPaket = $this->refundPaket($shift);
+        $refundPaketTunai = $this->refundPaket($shift, MetodeBayar::Tunai);
 
         return [
             'per_metode' => $perMetode,
             'total' => (int) $perMetode->sum('total'),
-            'total_refund' => $refund,
-            'kas_seharusnya' => $shift->modal_awal + $tunai,
+            'total_refund' => $refund + $refundPaket,
+            'refund_paket' => $refundPaket,
+            'kas_seharusnya' => $shift->modal_awal + $tunai - $refundPaketTunai,
         ];
     }
 
+    private function refundPaket(ShiftKas $shift, ?MetodeBayar $metode = null): int
+    {
+        return (int) PaketPasien::where('refund_shift_id', $shift->id)
+            ->when($metode, fn ($q) => $q->where('refund_metode', $metode))
+            ->sum('refund_nominal');
+    }
+
     /**
-     * Bayar tagihan, boleh beberapa metode sekaligus (BL-03).
+     * Bayar tagihan, boleh beberapa metode sekaligus (BL-03). Kode promo yang terpasang diperiksa ulang & dihitung ulang
+     * (kuota bisa habis sejak dipasang) lalu dicatat pemakaiannya (TR-06); paket yang dijual lewat tagihan ini aktif (TR-02).
      *
      * @param  list<array{metode: string, jumlah: int, referensi?: string}>  $pembayarans
-     * @param  int  $diskon  diskon nominal; dibatasi oleh batas peran (BL-02)
+     * @param  int  $diskon  diskon manual nominal; dibatasi oleh batas peran (BL-02), di luar potongan promo
      * @param  string  $kunciNominal  field tujuan pesan error nominal; klien lama memakai `dibayar`
+     * @param  array{email: string, password: string}|null  $persetujuan  kredensial atasan bila diskon di atas batas peran
      */
-    public function bayar(Tagihan $tagihan, array $pembayarans, int $diskon, User $kasir, string $kunciNominal = 'pembayarans'): Tagihan
+    public function bayar(Tagihan $tagihan, array $pembayarans, int $diskon, User $kasir, string $kunciNominal = 'pembayarans', ?array $persetujuan = null): Tagihan
     {
-        return DB::transaction(function () use ($tagihan, $pembayarans, $diskon, $kasir, $kunciNominal) {
+        return DB::transaction(function () use ($tagihan, $pembayarans, $diskon, $kasir, $kunciNominal, $persetujuan) {
             $tagihan = Tagihan::withoutGlobalScope('cabang')->whereKey($tagihan->id)->lockForUpdate()->firstOrFail();
 
             if ($tagihan->status !== StatusTagihan::BelumBayar) {
                 throw ValidationException::withMessages(['status' => 'Tagihan ini sudah dibayar atau dibatalkan.']);
             }
 
-            if ($diskon > $tagihan->total) {
-                throw ValidationException::withMessages(['diskon' => 'Diskon tidak boleh melebihi total tagihan.']);
+            $diskonPromo = $tagihan->promo_id
+                ? app(PromoService::class)->hitung($tagihan->promo()->firstOrFail(), $tagihan, kunci: true)
+                : 0;
+
+            if ($diskon + $diskonPromo > $tagihan->total) {
+                throw ValidationException::withMessages(['diskon' => 'Diskon (termasuk potongan promo) tidak boleh melebihi total tagihan.']);
             }
 
-            $this->pastikanDiskonDiizinkan($tagihan, $diskon, $kasir);
+            $penyetuju = $this->pastikanDiskonDiizinkan($tagihan, $diskon, $kasir, $persetujuan);
 
-            $grandTotal = $this->hitungGrandTotal($tagihan->total, $diskon, $tagihan->pajak_persen);
+            $grandTotal = $this->hitungGrandTotal($tagihan->total, $diskon + $diskonPromo, $tagihan->pajak_persen);
             $baris = $this->normalkanPembayaran($pembayarans, $kunciNominal);
             $dibayar = (int) $baris->sum('jumlah');
 
@@ -130,9 +152,15 @@ class KasirService
 
             $shift = $this->shiftTerbuka($tagihan->cabang_id, $kasir);
 
+            if (! $shift && $this->pengaturan->get('keuangan.wajib_shift')) {
+                throw ValidationException::withMessages(['shift' => 'Buka shift kas terlebih dahulu sebelum menerima pembayaran.']);
+            }
+
             $tagihan->update([
                 'diskon' => $diskon,
-                'pajak' => $grandTotal - ($tagihan->total - $diskon),
+                'diskon_disetujui_oleh' => $penyetuju?->id,
+                'diskon_promo' => $diskonPromo,
+                'pajak' => $grandTotal - ($tagihan->total - $diskon - $diskonPromo),
                 'grand_total' => $grandTotal,
                 'metode_bayar' => $baris->count() === 1 ? $baris->first()['metode'] : null,
                 'dibayar' => $dibayar,
@@ -143,16 +171,48 @@ class KasirService
                 'dibayar_at' => now(),
             ]);
 
+            // Kembalian dikurangkan dari baris tunai (dari yang terakhir) agar `jumlah` = uang yang benar-benar masuk kas;
+            // uang yang diserahkan pasien tetap tercatat di `diterima` untuk struk.
+            $sisaKembalian = $dibayar - $grandTotal;
+            $baris = $baris->reverse()->map(function ($b) use (&$sisaKembalian) {
+                $b['diterima'] = null;
+                if ($sisaKembalian > 0 && $b['metode'] === MetodeBayar::Tunai->value) {
+                    $potong = min($sisaKembalian, (int) $b['jumlah']);
+                    $b['diterima'] = (int) $b['jumlah'];
+                    $b['jumlah'] = (int) $b['jumlah'] - $potong;
+                    $sisaKembalian -= $potong;
+                }
+
+                return $b;
+            })->reverse()->filter(fn ($b) => $b['jumlah'] > 0 || $b['diterima'])->values();
+
             foreach ($baris as $b) {
                 $tagihan->pembayarans()->create([
                     'shift_id' => $shift?->id,
                     'metode' => $b['metode'],
                     'jumlah' => $b['jumlah'],
+                    'diterima' => $b['diterima'],
                     'referensi' => $b['referensi'] ?? null,
                     'kasir_id' => $kasir->id,
                     'dibayar_at' => now(),
                 ]);
             }
+
+            if ($penyetuju) {
+                app(AuditService::class)->catat('setujui_diskon', 'tagihan', $tagihan->id, [
+                    'label' => $tagihan->no_tagihan,
+                    'pasien_id' => $tagihan->pasien_id ?? $tagihan->kunjungan?->pasien_id,
+                    'perubahan' => [
+                        'diskon' => ['lama' => null, 'baru' => $diskon],
+                        'penyetuju' => ['lama' => null, 'baru' => $penyetuju->name],
+                        'kasir' => ['lama' => null, 'baru' => $kasir->name],
+                    ],
+                ]);
+            }
+
+            app(PromoService::class)->catatPemakaian($tagihan);
+            app(PaketService::class)->aktifkanDariTagihan($tagihan);
+            app(KomisiService::class)->catatDariTagihan($tagihan);
 
             // Kunjungan selesai hanya bila semua tagihannya sudah lunas/batal.
             if ($kunjungan = $tagihan->kunjungan) {
@@ -188,6 +248,8 @@ class KasirService
                 'alasan_batal' => $alasan,
             ]);
 
+            app(PaketService::class)->batalDariTagihan($tagihan);
+
             return $tagihan;
         });
     }
@@ -204,6 +266,11 @@ class KasirService
             if ($tagihan->status !== StatusTagihan::Lunas) {
                 throw ValidationException::withMessages(['status' => 'Hanya tagihan lunas yang bisa direfund.']);
             }
+
+            // Paket yang dijual lewat tagihan ini hanya bisa direfund penuh bila belum dipakai (TR-02); kuota promo kembali.
+            app(PaketService::class)->refundPenuhDariTagihan($tagihan, $alasan, $user);
+            app(PromoService::class)->batalkanPemakaian($tagihan);
+            app(KomisiService::class)->batalkanDariTagihan($tagihan);
 
             // Per model agar setiap refund tercatat di audit log.
             foreach ($tagihan->pembayarans()->berlaku()->get() as $pembayaran) {
@@ -249,29 +316,89 @@ class KasirService
      *
      * Peran berakses penuh dan peran yang tidak tercantum tidak dibatasi — batas bersifat opt-in
      * agar klinik yang belum mengaturnya tetap berjalan seperti sebelumnya. Persen 0 = dilarang.
+     *
+     * Diskon di atas batas boleh bila atasan menyetujui di tempat (PRD v2 9.6): email + password atasan yang aktif,
+     * bertugas di cabang tagihan (atau lintas cabang), memegang `kasir.diskon`, dan batas perannya sendiri mencukupi.
+     * Mengembalikan penyetuju (null bila tidak perlu persetujuan).
+     *
+     * @param  array{email: string, password: string}|null  $persetujuan
      */
-    private function pastikanDiskonDiizinkan(Tagihan $tagihan, int $diskon, User $kasir): void
+    private function pastikanDiskonDiizinkan(Tagihan $tagihan, int $diskon, User $kasir, ?array $persetujuan = null): ?User
     {
-        if ($diskon === 0 || $kasir->peran?->akses_penuh) {
-            return;
+        if ($this->dalamBatas($tagihan, $diskon, $kasir)) {
+            return null;
         }
 
-        $batas = $this->pengaturan->get('keuangan.batas_diskon_persen') ?? [];
+        if (! $persetujuan) {
+            $persen = $this->batasPersen($kasir);
 
-        if (! array_key_exists($kasir->role, $batas)) {
-            return;
-        }
-
-        $persen = (int) $batas[$kasir->role];
-        $maks = (int) floor($tagihan->total * $persen / 100);
-
-        if ($diskon > $maks) {
             throw ValidationException::withMessages([
                 'diskon' => $persen === 0
                     ? 'Peran Anda tidak boleh memberi diskon. Minta persetujuan atasan.'
-                    : "Diskon melebihi batas peran Anda ({$persen}% = Rp ".number_format($maks, 0, ',', '.').').',
+                    : "Diskon melebihi batas peran Anda ({$persen}% = Rp ".number_format($this->batasNominal($tagihan, $persen), 0, ',', '.').'). Minta persetujuan atasan.',
+                'perlu_persetujuan' => 'Diskon ini butuh persetujuan atasan.',
             ]);
         }
+
+        $kunci = 'setujui-diskon:'.strtolower($persetujuan['email']).'|'.request()->ip();
+
+        if (RateLimiter::tooManyAttempts($kunci, 5)) {
+            throw ValidationException::withMessages([
+                'persetujuan' => 'Terlalu banyak percobaan. Coba lagi dalam '.RateLimiter::availableIn($kunci).' detik.',
+            ]);
+        }
+
+        $penyetuju = User::where('email', $persetujuan['email'])->where('is_active', true)->first();
+
+        if (! $penyetuju || ! Hash::check($persetujuan['password'], $penyetuju->password)) {
+            RateLimiter::hit($kunci, 60);
+
+            throw ValidationException::withMessages(['persetujuan' => 'Email atau password atasan salah.']);
+        }
+
+        RateLimiter::clear($kunci);
+
+        if ($penyetuju->is($kasir)) {
+            throw ValidationException::withMessages(['persetujuan' => 'Persetujuan harus dari pengguna lain (atasan).']);
+        }
+
+        if (! $penyetuju->punyaIzin(Izin::KasirDiskon)) {
+            throw ValidationException::withMessages(['persetujuan' => "{$penyetuju->name} tidak berwenang menyetujui diskon."]);
+        }
+
+        if ($penyetuju->cabang_id !== null && $penyetuju->cabang_id !== $tagihan->cabang_id) {
+            throw ValidationException::withMessages(['persetujuan' => "{$penyetuju->name} tidak bertugas di cabang tagihan ini."]);
+        }
+
+        if (! $this->dalamBatas($tagihan, $diskon, $penyetuju)) {
+            throw ValidationException::withMessages(['persetujuan' => "Diskon juga melebihi batas peran {$penyetuju->name}."]);
+        }
+
+        return $penyetuju;
+    }
+
+    private function dalamBatas(Tagihan $tagihan, int $diskon, User $user): bool
+    {
+        if ($diskon === 0 || $user->peran?->akses_penuh) {
+            return true;
+        }
+
+        $persen = $this->batasPersen($user);
+
+        return $persen === null || $diskon <= $this->batasNominal($tagihan, $persen);
+    }
+
+    /** Persen batas diskon peran user, atau null bila tidak dibatasi. */
+    private function batasPersen(User $user): ?int
+    {
+        $batas = $this->pengaturan->get('keuangan.batas_diskon_persen') ?? [];
+
+        return array_key_exists($user->role, $batas) ? (int) $batas[$user->role] : null;
+    }
+
+    private function batasNominal(Tagihan $tagihan, int $persen): int
+    {
+        return (int) floor($tagihan->total * $persen / 100);
     }
 
     /**

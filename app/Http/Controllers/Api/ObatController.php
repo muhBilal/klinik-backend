@@ -17,7 +17,7 @@ class ObatController extends Controller
     public function index(Request $request): JsonResponse
     {
         $obats = $this->filterAktif(Obat::query(), $request)
-            ->select(['id', 'kode', 'nama', 'satuan', 'harga', 'stok', 'stok_minimum', 'is_active'])
+            ->select(['id', 'kode', 'nama', 'satuan', 'jenis', 'no_bpom', 'fraksional', 'jam_pakai_setelah_buka', 'harga', 'stok', 'stok_minimum', 'is_active'])
             ->when($request->boolean('aktif'), fn ($q) => $q->where('is_active', true))
             ->when($request->boolean('menipis'), fn ($q) => $q->stokMenipis())
             ->when($request->filled('satuan'), fn ($q) => $q->where('satuan', $request->input('satuan')))
@@ -100,13 +100,30 @@ class ObatController extends Controller
 
     private function validated(Request $request, ?Obat $obat = null): array
     {
-        return $request->validate([
+        // Nomor BPOM dinormalkan dulu (tanpa spasi, huruf besar) agar "na 1821..." lolos format
+        if ($request->filled('no_bpom')) {
+            $request->merge(['no_bpom' => strtoupper(str_replace(' ', '', (string) $request->input('no_bpom')))]);
+        }
+
+        $data = $request->validate([
             'kode' => ['required', 'string', 'max:20', Rule::unique('obats')->ignore($obat)],
             'nama' => ['required', 'string', 'max:255'],
             'satuan' => ['required', 'string', 'max:20'],
+            // Jenis produk & nomor BPOM (AD-06): skincare/kosmetik yang dijual wajib bernomor notifikasi kosmetik (NA/NB/NC/ND/NE + 11 digit)
+            'jenis' => ['nullable', Rule::in(Obat::JENIS)],
+            'no_bpom' => ['nullable', 'string', 'max:30', Rule::requiredIf(fn () => $request->input('jenis') === 'skincare'),
+                Rule::when($request->input('jenis') === 'skincare', ['regex:/^N[A-E]\d{11}$/i'])],
+            // Satuan fraksional & masa pakai setelah dibuka (IN-03)
+            'fraksional' => ['boolean'],
+            'jam_pakai_setelah_buka' => ['nullable', 'integer', 'between:1,8760'],
             'harga' => ['required', 'integer', 'min:0'],
             'stok_minimum' => ['required', 'integer', 'min:0'],
             'is_active' => ['boolean'],
+        ], [
+            'no_bpom.required' => 'Nomor notifikasi BPOM wajib untuk produk skincare/kosmetik yang dijual.',
+            'no_bpom.regex' => 'Format nomor notifikasi kosmetik BPOM: NA/NB/NC/ND/NE diikuti 11 digit, mis. NA18210100123.',
         ]);
+
+        return ['jenis' => $data['jenis'] ?? 'obat'] + $data;
     }
 }

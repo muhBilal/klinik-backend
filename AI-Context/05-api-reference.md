@@ -39,11 +39,14 @@ Bentuk `user` (login, `/me`):
 |--------|------|------|------------|
 | GET | `/dashboard` | login | ringkasan hari ini **cabang aktif** (+`cabang_id`): kunjungan per status/poli, pasien, resep menunggu, tagihan belum bayar, pendapatan (`null` tanpa `laporan.keuangan`), obat stok menipis |
 | GET | `/cabangs` | login | **array**. Pemegang `cabang.kelola`: semua cabang + `users_count` (`status`, `q`); lainnya: cabang aktif yang boleh diakses |
-| GET | `/polis` | login | **array**. Tanpa filter: data lengkap + `dokters_count`. `aktif=1`: ringkas `{id, kode, nama}` |
+| GET | `/polis` | login | **array**. Tanpa filter: data lengkap + `dokters_count`. `aktif=1`: ringkas `{id, kode, nama, spesialisasi}` |
 | GET | `/polis/{poli}` | login | + `dokters` |
 | GET | `/dokters` | login | `poli_id` — **array** `[id, name, poli_id, cabang_id, sip]`; dengan cabang aktif: dokter cabang itu + dokter lintas cabang |
-| GET | `/icd10s` | login | `q`, `huruf` |
-| GET | `/tindakans` | login | `q`, `aktif=1` (juga sembunyikan yang tidak dilayani di cabang), `status`, `kategori_id`, `cabang_id` (default cabang aktif). + `kategori`, `tarif_cabang`, `tersedia`, `hargas_count`, `bhps_count` |
+| GET | `/icd10s` | login | `q`, `huruf`, `favorit=1`; + `sensitif`, `favorit` (favorit dokter tampil paling atas) |
+| GET | `/icd9cms` | login | `q`, `favorit=1`; + `favorit` |
+| GET | `/template-soaps` | login | **array**; `poli_id` (template poli itu + umum), `aktif=1`, `status`, `q`; + `poli`, `tindakan`, `diagnosas` |
+| GET | `/petugas` | login | **array** petugas medis (dokter/perawat/terapis) cabang aktif + lintas cabang |
+| GET | `/tindakans` | login | `q`, `aktif=1` (juga sembunyikan yang tidak dilayani di cabang), `status`, `kategori_id`, `cabang_id` (default cabang aktif). + `kategori`, `icd9cm`, `icd9cm_id`, `template_consent_id`, `jenis_catatan`, `per_gigi`, `kondisi_gigi_hasil`, `tarif_cabang`, `tersedia`, `hargas_count`, `bhps_count` |
 | GET | `/kategori-tindakans` | login | **array**. `aktif=1`: `{id, nama}` aktif; tanpa filter: lengkap + `tindakans_count`. `status`, `q` |
 | GET | `/obats`, `/obats/{obat}` | login | `q`, `aktif=1`, `menipis=1`, `satuan`, `status` |
 
@@ -63,12 +66,15 @@ Field pasien: `nama*`, `jenis_kelamin*` (L/P), `tanggal_lahir*` (≤ hari ini), 
 | Method | Path | Izin | Keterangan |
 |--------|------|------|------------|
 | GET | `/kunjungans` | login | `tanggal` (default hari ini), `poli_id`, `dokter_id`, `status` (bisa koma), `penjamin`, `q`; + `cabang`; per_page default 50 |
-| GET | `/kunjungans/{id}` | login | detail (`loadDetail`), **termasuk cabang lain**. Tanpa `rme.lihat`: tanpa pemeriksaan/tindakans/resep. Dengan `rme.lihat`: tercatat audit `lihat` |
+| GET | `/kunjungans/{id}` | login | detail (`loadDetail`), **termasuk cabang lain**. Tanpa `rme.lihat` — atau kunjungan berakses terbatas yang tidak boleh dibaca (`rme_disembunyikan: true`) — tanpa pemeriksaan/tindakans/informed_consents/resep. Dengan RME: tercatat audit `lihat` |
 | POST | `/kunjungans` | kunjungan.daftar | `{ pasien_id*, poli_id*, dokter_id?, penjamin*, no_penjamin?, keluhan? }` → + `cabang`. 422 `cabang` bila cabang aktif belum dipilih |
 | POST | `/kunjungans/{id}/batal` | kunjungan.daftar | hanya status menunggu |
 | POST | `/kunjungans/{id}/panggil` | pemeriksaan.panggil | menunggu → diperiksa |
 | PUT | `/kunjungans/{id}/pemeriksaan` | pemeriksaan.vital, pemeriksaan.dokter | upsert, lihat payload |
-| POST | `/kunjungans/{id}/selesai` | pemeriksaan.dokter | diperiksa → menunggu_pembayaran + buat tagihan |
+| POST | `/kunjungans/{id}/selesai` | pemeriksaan.dokter | diperiksa → menunggu_pembayaran + buat tagihan + **tanda tangan RME**. 422 `sip` (SIP tidak aktif), `informed_consent` (consent wajib kurang) |
+| POST | `/kunjungans/{id}/addendum` | pemeriksaan.dokter | `{ bagian*, isi*, alasan* }`; hanya RME yang sudah ditandatangani → 201 |
+| GET | `/kunjungans/{id}/verifikasi` | rme.lihat | `{ ditandatangani, valid, ditandatangani_at, penandatangan }` — cocokkan hash tanda tangan |
+| POST / DELETE | `/kode-favorits` | pemeriksaan.dokter | `{ jenis*: icd10/icd9cm, kode_id* }` |
 
 Payload `PUT /pemeriksaan` (semua opsional; tanpa `pemeriksaan.dokter` hanya vital + `subjektif` yang dipakai):
 ```json
@@ -76,12 +82,29 @@ Payload `PUT /pemeriksaan` (semua opsional; tanpa `pemeriksaan.dokter` hanya vit
   "tekanan_darah": "120/80", "nadi": 88, "suhu": 37.5, "respirasi": 20, "berat_badan": 60, "tinggi_badan": 165,
   "subjektif": "...", "objektif": "...", "asesmen": "...", "plan": "...",
   "diagnosas": [{ "icd10_id": 5, "jenis": "primer" }],
-  "tindakans": [{ "tindakan_id": 1, "jumlah": 1, "keterangan": null }],
+  "akses_terbatas": false,
+  "tindakans": [{ "id": 12, "tindakan_id": 1, "jumlah": 1, "keterangan": null, "petugas_id": 9, "icd9cm_id": 58,
+                  "gigi": 16, "permukaan": "MO", "rencana_item_id": null, "paket_pasien_item_id": null }],
   "resep": [{ "obat_id": 1, "jumlah": 10, "aturan_pakai": "3 x 1 sesudah makan" }],
   "catatan_resep": "..."
 }
 ```
-Respons: kunjungan lengkap (`loadDetail`).
+Respons: kunjungan lengkap (`loadDetail`). `tindakans[].id` = id baris tindakan kunjungan yang sudah ada (upsert); tanpa `id`
+baris dicocokkan lewat `tindakan_id` + `gigi`. `gigi` (FDI) wajib untuk treatment `per_gigi`; `permukaan` wajib bila kondisi hasilnya
+per permukaan; `rencana_item_id` = item rencana perawatan gigi yang dikerjakan (gigi/permukaan diambil dari item bila kosong);
+`paket_pasien_item_id` = sesi paket pasien yang dipakai (ditagih Rp 0; 422 bila paket tidak aktif/kedaluwarsa/sisa kurang).
+
+## RME estetika
+Detail & payload: [modul/F1-05](modul/F1-05-rme-estetika.md)
+
+| Method | Path | Izin | Keterangan |
+|--------|------|------|------------|
+| GET / PUT | `/kunjungan-tindakans/{id}/catatan` | rme.lihat / rme.tindakan | catatan tindakan: area, catatan, petugas, `parameter` (energi), `sumber_daya_id`, `titiks[]` (injeksi, replace-all) |
+| GET | `/kunjungans/{id}/informed-consents/pratinjau` | rme.tindakan | `template_consent_id*`, `kunjungan_tindakan_id?` → naskah ter-render |
+| POST | `/kunjungans/{id}/informed-consents` | rme.tindakan | `{ template_consent_id*, kunjungan_tindakan_id?, keputusan*, penandatangan_nama*, hubungan*, ttd_penandatangan* (PNG data URL), saksi_nama?, ttd_saksi? }` |
+| GET | `/informed-consents/{uuid}` | rme.lihat | naskah + tanda tangan + `checksum_valid`; tercatat audit |
+| POST | `/informed-consents/{uuid}/cabut` | rme.tindakan | `{ alasan* }` |
+| GET | `/template-consents` | rme.tindakan, master.kelola | **array**; `aktif=1` ringkas |
 
 ## Berkas klinis terenkripsi
 | Method | Path | Izin | Keterangan |
@@ -90,8 +113,54 @@ Respons: kunjungan lengkap (`loadDetail`).
 | POST | `/berkas` | berkas.kelola | multipart: `file*` (jpg/jpeg/png/webp/pdf, maks. 10 MB), `kategori*`, `pasien_id*`, `kunjungan_id?`, `keterangan?` → 201 |
 | GET | `/berkas/{uuid}/tautan` | rme.lihat | `{ url, kedaluwarsa }` — signed URL berlaku 5 menit. Tercatat audit `akses_berkas` |
 | DELETE | `/berkas/{uuid}` | berkas.kelola | soft delete |
+| POST | `/berkas/tautan` | rme.lihat | `{ uuids*[] (≤60), pratinjau? }` → `[{ uuid, url, kedaluwarsa }]`; berkas terbatas dilewati; tiap tautan tercatat |
+
+Foto klinis (F1-06, detail [modul/F1-06](modul/F1-06-foto-klinis.md)): `POST /berkas` menerima `thumbnail` (JPEG ≤ 1 MB),
+`protokol_foto_id`, `posisi`, `tahap`, `kunjungan_tindakan_id`, `diambil_at`, `lebar`, `tinggi`; 422 `consent_foto` bila pasien belum
+menyetujui foto. `GET /berkas` + filter `protokol_foto_id`, `posisi`, `tahap` dan item + `protokol`, `kunjungan`, `ada_thumbnail`.
+`GET /berkas/{uuid}/tautan?pratinjau=1` = thumbnail.
+
+| Method | Path | Izin | Keterangan |
+|--------|------|------|------------|
+| GET | `/protokol-fotos` | login | **array**; `aktif=1` |
+| POST / PUT / DELETE | `/protokol-fotos`, `/{id}` | master.kelola | `{ nama*, deskripsi, posisi*[]{kode?, label*, petunjuk?}, is_active }` |
+| GET | `/pasiens/{id}/persetujuan-foto` | pasien.lihat | `{ aktif, riwayat, tingkat }` |
+| GET | `/pasiens/{id}/persetujuan-foto/pratinjau` | pasien.kelola, rme.tindakan | `?tingkat=` → `{ isi }` |
+| POST | `/pasiens/{id}/persetujuan-foto` | pasien.kelola, rme.tindakan | `{ tingkat*, penandatangan_nama*, hubungan*, ttd*, kunjungan_id? }` |
+| GET | `/persetujuan-fotos/{uuid}` | pasien.kelola, rme.lihat | naskah + tanda tangan + `checksum_valid`; tercatat audit |
+| POST | `/persetujuan-fotos/{uuid}/cabut` | pasien.kelola, rme.tindakan | `{ alasan* }` |
 
 Bentuk berkas: `{ uuid, cabang_id, pasien_id, kunjungan_id, kategori, keterangan, nama_file, mime, ukuran, diunggah_oleh, pengunggah: {id, name}, created_at }` (tanpa `id`, `path`, `checksum`).
+
+## Paket multi-sesi & voucher/promo
+Detail & aturan: [modul/F1-08](modul/F1-08-paket-promo.md)
+
+| Method | Path | Izin | Keterangan |
+|--------|------|------|------------|
+| GET | `/pakets` | login | **array**; `aktif=1`; + `items.tindakan`, `nilai_normal`, `terjual_count` |
+| POST / GET / PUT / DELETE | `/pakets`, `/{id}` | master.kelola | `{ kode*, nama*, harga*, masa_berlaku_hari, lintas_cabang, is_active, items*[]{tindakan_id*, jumlah_sesi*} }` |
+| GET | `/pasiens/{id}/pakets` | pasien.lihat, kasir.tagihan, rme.tindakan, pemeriksaan.dokter | **array**; `aktif=1`; + sisa per item, `status_efektif` |
+| POST | `/pasiens/{id}/pakets` | kasir.tagihan | `{ paket_id*, catatan }` → paket `menunggu_bayar` + `tagihan_id` |
+| GET | `/paket-pasiens/{id}` | sama dengan daftar | + `pemakaian[]`, `refund_sisa` |
+| POST | `/paket-pasiens/{id}/perpanjang` · `/alihkan` · `/refund` | kasir.void | `{berlaku_sampai*, alasan*}` · `{pasien_id*, alasan*}` · `{metode* tunai/transfer, referensi, alasan*}` |
+| apiResource | `/promos` | promo.kelola | paginated; + `dipakai`, nama `tindakans`/`pakets`/`cabangs` |
+| POST / DELETE | `/tagihans/{id}/promo` | kasir.tagihan | `{ kode* }` → tagihan detail; DELETE = lepas |
+
+## Kedokteran gigi: odontogram & rencana perawatan
+Detail & aturan: [modul/F1-07](modul/F1-07-odontogram.md)
+
+| Method | Path | Izin | Keterangan |
+|--------|------|------|------------|
+| GET | `/odontogram/referensi` | login | `{ kondisi[]{kode, label, cakupan, kelompok, warna}, permukaan }` |
+| GET | `/pasiens/{id}/odontogram` | rme.lihat | `?kunjungan_id=` → status pada kunjungan itu + `perubahan{dicatat, diakhiri}`; + `bisa_diubah`, `kunjungans[]` (riwayat); tercatat audit |
+| POST | `/kunjungans/{id}/odontogram` | pemeriksaan.dokter, rme.tindakan | `{ gigi*, kondisi*, permukaan[], keterangan }` → 201; kunjungan harus `diperiksa` |
+| DELETE | `/kunjungans/{id}/odontogram/{kondisi}` | pemeriksaan.dokter, rme.tindakan | hapus koreksi di kunjungan ini |
+| POST | `/kunjungans/{id}/odontogram/{kondisi}/akhiri` · `/pulihkan` | pemeriksaan.dokter, rme.tindakan | akhiri kondisi lama / batalkan pengakhiran manual |
+| GET | `/pasiens/{id}/rencana-perawatans` | rme.lihat | **array**; `aktif=1`; + `estimasi_total`, `estimasi_selesai`, `estimasi_per_fase[]` |
+| POST | `/pasiens/{id}/rencana-perawatans` | pemeriksaan.dokter | `{ judul*, catatan, kunjungan_id, dokter_id, items*[]{fase*, gigi, permukaan, tindakan_id*, jumlah, keterangan} }` |
+| GET / PUT | `/rencana-perawatans/{id}` | rme.lihat / pemeriksaan.dokter | PUT hanya draf; `items[].id` = upsert |
+| POST | `/rencana-perawatans/{id}/setujui` | pemeriksaan.dokter, rme.tindakan | `{ penyetuju_nama? }` |
+| POST | `/rencana-perawatans/{id}/revisi` · `/batal` | pemeriksaan.dokter | revisi: disetujui → draf; batal: `{ alasan* }` |
 
 ## Farmasi
 | Method | Path | Izin | Keterangan |
@@ -110,8 +179,9 @@ Detail: [modul/F1-02](modul/F1-02-booking-jadwal.md)
 |--------|------|------|------------|
 | GET | `/appointments` | booking.lihat | `dari`, `sampai` (default hari ini), `petugas_id`, `poli_id`, `status`, `q`; + pasien, poli, petugas, tindakans, sumberDayas |
 | GET | `/appointments/{id}` | booking.lihat | bentuk detail booking |
-| GET | `/appointments-slot` | booking.lihat | `petugas_id*`, `tanggal*`, `tindakan_ids[]*`, `sumber_daya_ids[]?` → `{ durasi_menit, jam_kerja[], slot[] }` |
-| POST | `/appointments` | booking.kelola | `{ pasien_id*, poli_id?, petugas_id?, mulai_at*, tindakan_ids[]*, sumber_daya_ids[]?, catatan? }`; `selesai_at` dihitung server dari durasi + buffer |
+| GET | `/appointments-slot` | booking.lihat | `petugas_id*`, `tanggal*`, `tindakan_ids[]*`, `sumber_daya_ids[]?`, `kecuali_id?` (booking yang sedang di-reschedule) → `{ durasi_menit, jam_kerja[], slot[] }` |
+| GET | `/appointments-kebutuhan` | booking.lihat | `tindakan_ids[]*` → `[{ tindakan_id, tindakan, tipe, tipe_label, pilihan: [{id, kode, nama}] }]` ruang/alat wajib di cabang aktif (BK-08) |
+| POST | `/appointments` | booking.kelola | `{ pasien_id*, poli_id?, petugas_id?, mulai_at*, tindakan_ids[]*, sumber_daya_ids[]?, catatan? }`; `selesai_at` dihitung server dari durasi + buffer; treatment ber-ruang/alat wajib → 422 `sumber_daya_ids` bila tidak memilih salah satunya |
 | PUT | `/appointments/{id}` | booking.kelola | field yang dikirim saja; jadwal & bentrok dihitung ulang |
 | POST | `/appointments/{id}/konfirmasi` · `/batal` · `/tidak-hadir` | booking.kelola | `/batal` menerima `alasan_batal?`; `/tidak-hadir` hanya bila jadwal sudah lewat |
 | POST | `/appointments/{id}/checkin` | booking.kelola | hanya booking hari ini & berpoli → `{ appointment, kunjungan }` (201) |
@@ -130,7 +200,20 @@ Detail: [modul/F1-03](modul/F1-03-kasir.md)
 | GET | `/tagihans` | kasir.tagihan | `status`, `tanggal`, `metode_bayar`, `penjamin`, `poli_id`, `q`; cabang aktif |
 | GET | `/tagihans/{id}` | kasir.tagihan | items, pembayarans, pasien, kunjungan.pasien/poli/dokter, kasir, `cabang` (kop struk) |
 | POST | `/tagihans` | kasir.tagihan | tagihan tanpa kunjungan (produk/paket/deposit): `{ pasien_id?, keterangan?, items[]*{kategori*: produk/paket/deposit/lainnya, deskripsi*, jumlah*, harga*} }` |
-| POST | `/tagihans/{id}/bayar` | kasir.tagihan | **split payment**: `{ pembayarans[]{metode*, jumlah*, referensi?}, diskon? }`. Bentuk lama `{ metode_bayar*, dibayar, diskon? }` tetap diterima. Non-tunai tidak boleh melebihi tagihan |
+| POST | `/tagihans/{id}/bayar` | kasir.tagihan | **split payment**: `{ pembayarans[]{metode*, jumlah*, referensi?}, diskon? }`. Bentuk lama `{ metode_bayar*, dibayar, diskon? }` tetap diterima. Non-tunai tidak boleh melebihi tagihan. Diskon di atas batas peran: kirim `persetujuan{email, password}` atasan ber-izin `kasir.diskon` (tanpa itu 422 `diskon` + `perlu_persetujuan`). `keuangan.wajib_shift` → 422 `shift` bila belum buka shift |
+| POST | `/stok-batches/{id}/mutasi` | inventori.kelola | `{ cabang_tujuan_id*, jumlah*, keterangan? }` mutasi antar cabang (IN-05), batch & kedaluwarsa sama |
+| GET | `/komisi/rekap` · `/komisi/rincian` | komisi.kelola / laporan.keuangan · semua (slip sendiri) | `periode=YYYY-MM`; rincian `user_id?` (lain = komisi.kelola). Detail [modul/V2-04](modul/V2-04-komisi.md) |
+| POST | `/komisi/hitung-ulang` · `/komisi/setujui` | komisi.kelola · komisi.setujui | `{ periode*, catatan? }` |
+| GET/POST/PUT/DELETE | `/aturan-komisis` | komisi.kelola | `{ tindakan_id?, kategori_id?, cabang_id?, peran*, jenis* persen/nominal, nilai*, is_active, keterangan? }` |
+| GET/PUT | `/pasiens/{id}/profil-klinis` | rme.lihat · pemeriksaan.vital/.dokter | profil klinis & alergi + `peringatan[]` ([V2-05](modul/V2-05-profil-klinis-pdp.md)) |
+| GET/POST | `/pasiens/{id}/persetujuan-data` (+ `/pratinjau`), `/persetujuan-datas/{uuid}` (+ `/cabut`) | pasien.lihat · pasien.kelola/rme.tindakan | consent UU PDP pemrosesan & marketing |
+| GET | `/pasiens-duplikat` | pasien.lihat | kandidat pasien ganda: `nama, tanggal_lahir, no_hp, nik, kecuali_id` |
+| GET | `/laporan/penjualan` · `/laporan/paket` | laporan.keuangan | `dari*, sampai*, kelompok?, format=csv?` ([V2-06](modul/V2-06-laporan.md)) |
+| POST | `/impor-master/{icd10\|icd9cm\|obat}` | master.kelola | multipart `berkas` CSV → `{ baru, diperbarui, sama, galat[] }` ([V2-07](modul/V2-07-racikan-regulasi.md)) |
+| GET/POST | `/satusehat/status` · `/satusehat/kirims` (+ `/{id}/ulang`) · `/satusehat/kirim-ulang-gagal` · `/satusehat/tes-koneksi` | integrasi.kelola | [V2-08](modul/V2-08-satusehat.md) |
+| POST | `/pasiens/{id}/satusehat` | pasien.kelola / integrasi.kelola | lookup IHS pasien via NIK (PS-05) |
+| GET/POST | `/whatsapp/status` · `/whatsapp/pesan` (+ `/{id}/ulang`) · `/whatsapp/jadwalkan` | integrasi.kelola | [V2-09](modul/V2-09-whatsapp.md) |
+| GET/POST | `/webhook/whatsapp` | publik (verify token / HMAC) | webhook WhatsApp Cloud API |
 | POST | `/tagihans/{id}/batal` | kasir.void | `{ alasan_batal* }`; hanya tagihan belum bayar |
 | POST | `/tagihans/{id}/refund` | kasir.void | `{ alasan_refund* }`; hanya tagihan lunas; kunjungan kembali ke `menunggu_pembayaran` |
 | POST | `/reseps/{id}/batal` | farmasi.resep | `{ alasan_batal* }`; hanya resep yang belum diserahkan |
@@ -155,16 +238,19 @@ Detail: [modul/F1-04](modul/F1-04-inventori.md)
 ## Master data
 | Method | Path | Izin |
 |--------|------|------|
-| POST / PUT / DELETE | `/polis`, `/polis/{poli}` — `{ kode*, nama*, tarif_konsultasi*, is_active }` | master.kelola |
-| apiResource (kecuali index) | `/tindakans` — `{ kode*, nama*, kategori_id, durasi_menit* (1–720), buffer_menit (0–240), tarif* (harga dasar), is_active, hargas?: [{cabang_id*, tarif*, tersedia}], bhps?: [{obat_id*, jumlah* (desimal ≤3)}] }`; `hargas`/`bhps` replace-all bila dikirim. Show/store/update → + `kategori`, `hargas[].cabang`, `bhps[].obat`. Detail: [modul/F1-01](modul/F1-01-katalog-treatment.md) | master.kelola |
+| POST / PUT / DELETE | `/polis`, `/polis/{poli}` — `{ kode*, nama*, spesialisasi (umum/gigi/kulit/estetika/lainnya), tarif_konsultasi*, is_active }` | master.kelola |
+| apiResource (kecuali index) | `/tindakans` — `{ kode*, nama*, kategori_id, icd9cm_id, template_consent_id (diisi = wajib consent), jenis_catatan (umum/injeksi/energi), per_gigi, kondisi_gigi_hasil (kode odontogram; diisi = per_gigi), durasi_menit* (1–720), buffer_menit (0–240), tarif* (harga dasar), is_active, hargas?: [{cabang_id*, tarif*, tersedia}], bhps?: [{obat_id*, jumlah* (desimal ≤3)}] }`; `hargas`/`bhps` replace-all bila dikirim. Show/store/update → + `kategori`, `hargas[].cabang`, `bhps[].obat`. Detail: [modul/F1-01](modul/F1-01-katalog-treatment.md) | master.kelola |
 | POST / PUT / DELETE | `/kategori-tindakans`, `/kategori-tindakans/{kategori}` — `{ nama* (unik), deskripsi, is_active }`; hapus ditolak bila masih dipakai | master.kelola |
-| apiResource (kecuali index) | `/icd10s` — `{ kode*, nama* }` | master.kelola |
+| apiResource (kecuali index) | `/icd10s` — `{ kode*, nama*, sensitif? }` (kosong = otomatis untuk kode IMS/HIV) | master.kelola |
+| apiResource (kecuali index) | `/icd9cms` — `{ kode* (mis. 86.3), nama* }`; hapus ditolak bila dipakai | master.kelola |
+| POST / PUT / DELETE | `/template-soaps`, `/{id}` — `{ nama*, poli_id, tindakan_id, subjektif, objektif, asesmen, plan, icd10_ids[], akses_terbatas, is_active }` | master.kelola |
+| POST / GET / PUT / DELETE | `/template-consents`, `/{id}` — `{ nama*, isi*, is_active }`; hapus ditolak bila dipasang ke treatment | master.kelola |
 | POST / GET / PUT / DELETE | `/cabangs`, `/cabangs/{cabang}` — `{ kode* (A-Z0-9-, disimpan huruf besar), nama*, alamat, telepon, email, jam_buka (H:i), jam_tutup (H:i, > jam_buka), is_active }` | cabang.kelola |
 
 ## Administrasi
 | Method | Path | Izin | Keterangan |
 |--------|------|------|------------|
-| apiResource | `/users` | pengguna.kelola | `{ name*, email*, password* (opsional saat update, min 8), role* (kode peran), poli_id (wajib bila peran berizin pemeriksaan.dokter), cabang_id (null = semua cabang), sip, is_active }`; filter `role`, `poli_id`, `cabang_id`, `status`, `q`. Relasi `poli`, `cabang`, `peran` |
+| apiResource | `/users` | pengguna.kelola | `{ name*, email*, password* (opsional saat update, min 8), role* (kode peran), poli_id (wajib bila peran berizin pemeriksaan.dokter), cabang_id (null = semua cabang), sip, sip_berlaku_sampai, is_active }`; filter `role`, `poli_id`, `cabang_id`, `status`, `q`. Relasi `poli`, `cabang`, `peran` |
 | GET | `/perans` | peran.kelola, pengguna.kelola | **array** peran + `izin` (array kode) + `users_count` |
 | GET | `/izins` | peran.kelola, pengguna.kelola | katalog `[{ grup, izin: [{ kode, label }] }]` |
 | POST / PUT | `/perans`, `/perans/{peran}` | peran.kelola | `{ kode* (^[a-z][a-z0-9_]*$; diabaikan untuk peran sistem), nama*, deskripsi, izin: [kode] }` |

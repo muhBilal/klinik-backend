@@ -78,6 +78,8 @@ class CabangController extends Controller
             'email' => ['nullable', 'email', 'max:100'],
             'jam_buka' => ['nullable', 'date_format:H:i'],
             'jam_tutup' => ['nullable', 'date_format:H:i', 'after:jam_buka'],
+            // Location FHIR SATUSEHAT cabang (SS-01)
+            'satusehat_location_id' => ['nullable', 'string', 'max:64'],
             'is_active' => ['boolean'],
         ]);
 

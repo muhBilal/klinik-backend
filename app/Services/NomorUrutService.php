@@ -61,6 +61,12 @@ class NomorUrutService
         return $this->harian('bok', $this->pengaturan->get('penomoran.prefix_booking'), $tanggal);
     }
 
+    /** Nomor paket pasien (TR-02), mis. PKT202610010001. */
+    public function noPaket(CarbonInterface $tanggal): string
+    {
+        return $this->harian('pkt', $this->pengaturan->get('penomoran.prefix_paket'), $tanggal);
+    }
+
     private function harian(string $jenis, string $prefix, CarbonInterface $tanggal): string
     {
         $ymd = $tanggal->format('Ymd');

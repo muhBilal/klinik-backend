@@ -20,7 +20,7 @@ use Laravel\Sanctum\HasApiTokens;
  * `role` = kode peran (`perans.kode`). Hak akses ditentukan izin peran: `punyaIzin(Izin::X)`.
  * `cabang_id` null = boleh mengakses semua cabang.
  */
-#[Fillable(['name', 'email', 'avatar', 'theme', 'password', 'role', 'poli_id', 'cabang_id', 'sip', 'is_active'])]
+#[Fillable(['name', 'email', 'avatar', 'theme', 'password', 'role', 'poli_id', 'cabang_id', 'sip', 'sip_berlaku_sampai', 'str', 'str_berlaku_sampai', 'nik', 'is_active'])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes', 'two_factor_last_step', 'peran'])]
 class User extends Authenticatable
 {
@@ -41,6 +41,8 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'sip_berlaku_sampai' => 'date:Y-m-d',
+            'str_berlaku_sampai' => 'date:Y-m-d',
             'two_factor_secret' => 'encrypted',
             'two_factor_recovery_codes' => 'encrypted:array',
             'two_factor_confirmed_at' => 'datetime',
@@ -97,6 +99,24 @@ class User extends Authenticatable
     public function tercatatSebagaiDokter(): bool
     {
         return ! $this->peran?->akses_penuh && $this->punyaIzin(Izin::PemeriksaanDokter);
+    }
+
+    /**
+     * Punya nomor SIP yang belum kedaluwarsa (UU 17/2023). Syarat menandatangani rekam medis & addendum.
+     * Tanggal berlaku kosong = dianggap aktif (belum dicatat).
+     */
+    public function sipAktif(): bool
+    {
+        return filled($this->sip) && ($this->sip_berlaku_sampai === null || ! $this->sip_berlaku_sampai->isBefore(today()));
+    }
+
+    /** Petugas yang boleh tercatat melakukan tindakan: aktif dan memegang izin pelayanan/tindakan. */
+    public function scopePetugasMedis(Builder $query): void
+    {
+        $query->where('is_active', true)
+            ->whereHas('peran', fn ($p) => $p->where('akses_penuh', false)->whereHas('izins', fn ($q) => $q->whereIn('izin', [
+                Izin::PemeriksaanDokter->value, Izin::PemeriksaanVital->value, Izin::RmeTindakan->value,
+            ])));
     }
 
     public function aksesSemuaCabang(): bool

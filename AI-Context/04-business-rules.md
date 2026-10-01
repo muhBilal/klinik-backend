@@ -15,7 +15,7 @@
 | — | `POST /kunjungans` | `menunggu` | kunjungan.daftar | `KunjunganController::store` |
 | `menunggu` | `POST /kunjungans/{id}/batal` | `batal` | kunjungan.daftar | `KunjunganController::batal` |
 | `menunggu` | `POST /kunjungans/{id}/panggil` | `diperiksa` | pemeriksaan.panggil | `PemeriksaanService::panggil` |
-| `diperiksa` | `POST /kunjungans/{id}/selesai` | `menunggu_pembayaran` | pemeriksaan.dokter | `PemeriksaanService::selesai` |
+| `diperiksa` | `POST /kunjungans/{id}/selesai` (tutup + **tanda tangan RME**) | `menunggu_pembayaran` | pemeriksaan.dokter + SIP aktif | `PemeriksaanService::selesai` |
 | `menunggu_pembayaran` | `POST /tagihans/{id}/bayar` | `selesai` | kasir.tagihan | `TagihanService::bayar` |
 
 Semua transaksi di atas hanya bisa dilakukan pada data **cabang aktif** (data cabang lain → 404).
@@ -43,7 +43,14 @@ Status resep: `menunggu` → `diserahkan`. Status tagihan: `belum_bayar` → `lu
 - Tanpa izin **pemeriksaan.dokter** (perawat, terapis) hanya tanda vital + `subjektif` yang disimpan; field lain di payload **diabaikan** (bukan error). Mengisi `perawat_id`.
 - Pemegang **pemeriksaan.dokter** (dokter, administrator) menyimpan semua field; mengisi `dokter_id`.
 - Penggantian diagnosa/tindakan/item resep (replace-all) menghapus baris lama **per model** agar tercatat di audit log.
-- `diagnosas`, `tindakans`, `resep` bersifat **replace-all** bila key ada di payload (hapus lalu buat ulang). Key tidak dikirim = tidak diubah.
+- `diagnosas` & `resep` bersifat **replace-all** bila key ada di payload (hapus lalu buat ulang). Key tidak dikirim = tidak diubah.
+- `tindakans` di-**upsert**: baris lama dipertahankan bila cocok `tindakans[].id` atau (tanpa `id`) `tindakan_id` yang sama —
+  catatan tindakan, consent, dan koreksi BHP-nya ikut bertahan; baris yang tidak dikirim dihapus per model beserta catatannya.
+  Draft BHP dihitung ulang hanya bila `jumlah` berubah.
+- Per tindakan: `icd9cm_id` (default dari katalog) dan `petugas_id` (default dokter yang mengisi / dokter kunjungan; harus petugas
+  medis aktif di cabang kunjungan, 422 `tindakans.{i}.petugas_id`).
+- `akses_terbatas` (dokter): kunjungan berakses terbatas. Otomatis `true` bila ada diagnosa ICD-10 `sensitif` (IMS/HIV), dan tidak
+  bisa dilepas selama diagnosa itu ada.
 - Diagnosa pertama tanpa `jenis` otomatis `primer`, sisanya `sekunder`.
 - Tarif tindakan di-**snapshot** dari **harga cabang kunjungan** (harga khusus cabang, atau harga dasar) dan harga obat dari master saat disimpan.
 - Treatment yang ditandai **tidak dilayani** di cabang kunjungan → 422 `tindakans.{i}.tindakan_id` (tindakan lama tidak dihapus). Treatment nonaktif/terhapus → 422.
@@ -51,6 +58,11 @@ Status resep: `menunggu` → `diserahkan`. Status tagihan: `belum_bayar` → `lu
 
 ### Selesai pemeriksaan (`PemeriksaanService::selesai`)
 - Status harus `diperiksa` dan minimal **satu diagnosa ICD-10**.
+- Penutup harus dokter ber-**SIP aktif** (`users.sip` terisi, `sip_berlaku_sampai` kosong/≥ hari ini) → selain itu 422 `sip`
+  (termasuk administrator).
+- Treatment ber-template consent wajib punya **informed consent `disetujui`** (pengaturan `rme.wajib_informed_consent`,
+  default aktif) → 422 `informed_consent` berisi daftar tindakan yang kurang / ditolak pasien.
+- RME **ditandatangani** (`ditandatangani_at/_oleh`, `hash_ttd`) lalu terkunci; koreksi hanya lewat addendum.
 - Membuat tagihan otomatis (`TagihanService::buatDariKunjungan`):
   konsultasi (`polis.tarif_konsultasi`) + tiap tindakan (`tarif × jumlah`) + tiap item resep (`harga × jumlah`).
 
@@ -67,6 +79,43 @@ Status resep: `menunggu` → `diserahkan`. Status tagihan: `belum_bayar` → `lu
 - `hargas` & `bhps` di payload treatment bersifat replace-all bila key dikirim; disinkron per model (`TindakanService`).
 - BHP standar: jumlah > 0, maks. 3 desimal, dalam satuan stok obat. Belum memotong stok (Inventori IN-02).
 - Kategori yang masih dipakai treatment dan obat yang menjadi BHP standar treatment tidak bisa dihapus.
+
+### RME estetika (detail: [modul/F1-05-rme-estetika.md](modul/F1-05-rme-estetika.md))
+- **Informed consent**: diambil selama pemeriksaan terbuka (izin `rme.tindakan`); naskah di-render server & di-snapshot, tanda tangan
+  PNG terenkripsi; satu consent berlaku per tindakan; penarikan = `dicabut` (tidak dihapus).
+- **Catatan tindakan**: area, catatan, petugas; face chart (titik + produk & batch milik cabang kunjungan) untuk treatment `injeksi`;
+  parameter alat (kunci tertutup) + alat cabang untuk `energi`. Terkunci setelah pemeriksaan ditutup.
+- **Addendum**: hanya setelah RME ditandatangani; dokter ber-SIP aktif; wajib `alasan`; tidak bisa diubah/dihapus; tidak mengubah hash.
+- **Akses terbatas**: isi RME kunjungan terbatas hanya untuk `rme.terbatas`, tim yang tercatat menangani, atau tenaga pelayanan cabang
+  itu selama pemeriksaan terbuka. Lainnya: tanpa RME (`rme_disembunyikan`), berkas kunjungan itu disembunyikan & tautannya 403.
+
+### Foto klinis (detail: [modul/F1-06-foto-klinis.md](modul/F1-06-foto-klinis.md))
+- Unggah `foto_klinis` butuh **persetujuan foto pasien yang berlaku** (pengaturan `foto.wajib_consent`, default aktif) → 422 `consent_foto`.
+- Persetujuan foto per pasien, bertingkat (klinis ⊂ edukasi ⊂ marketing); tanda tangan baru menggantikan yang lama (`diganti`);
+  pencabutan menghentikan foto baru, foto lama tetap bagian RME. Tidak pernah dihapus.
+- Foto ber-protokol: `posisi` harus kode posisi protokol itu; `kunjungan_tindakan_id` harus tindakan kunjungan yang sama.
+- Thumbnail dibuat & dienkripsi dari browser; tautan pratinjau (`t=1` ikut ditandatangani) & tautan massal tetap tercatat audit.
+
+### Kedokteran gigi (detail: [modul/F1-07-odontogram.md](modul/F1-07-odontogram.md))
+- Odontogram = kondisi per gigi (FDI) / per permukaan milik pasien, dicatat per kunjungan; diubah hanya saat pasien `diperiksa`
+  (`pemeriksaan.dokter` atau `rme.tindakan`). Satu permukaan satu kondisi; kelompok eksklusif (keberadaan, mahkota, jembatan, protesa,
+  pulpa) saling menggantikan; gigi hilang hanya menerima pengganti gigi. Kondisi lama diakhiri, bukan ditimpa; koreksi di kunjungan
+  yang sama dihapus dan memulihkan yang digantikannya.
+- Treatment `per_gigi` wajib nomor gigi; `kondisi_gigi_hasil` otomatis mencatat kondisi di odontogram (per permukaan → wajib permukaan)
+  dan tidak bisa ditimpa manual di kunjungan yang sama. Tagihan menulis nomor gigi & permukaan per baris tindakan.
+- Odontogram masuk hash tanda tangan RME dan terkunci setelah kunjungan ditutup.
+- Rencana perawatan: draf → disetujui pasien (estimasi dikunci, ubah = revisi) → item dikerjakan via `rencana_item_id` → selesai saat
+  kunjungan ditutup → rencana selesai otomatis. Estimasi = harga cabang saat disusun; tagihan = harga saat dikerjakan.
+- Odontogram & rencana tampil untuk poli ber-`spesialisasi = gigi` (atau kunjungan yang punya data gigi).
+
+### Paket multi-sesi & promo (detail: [modul/F1-08-paket-promo.md](modul/F1-08-paket-promo.md))
+- Paket dijual lewat tagihan mandiri; **aktif saat tagihan lunas** (masa berlaku sejak lunas). Sesi dipakai dari pemeriksaan
+  (`paket_pasien_item_id`) → baris tagihan Rp 0 "paket … sesi n/N". Sisa = sesi − pemakaian di kunjungan bukan batal (kunjungan terbuka
+  ikut mengurangi). Kedaluwarsa dicek terhadap tanggal kunjungan.
+- Refund tagihan paket hanya bila belum ada sesi dipakai. Refund sisa prorata & pengalihan ke pasien lain hanya bila diizinkan pengaturan
+  `paket.*`, oleh pemegang `kasir.void`; refund tunai mengurangi kas seharusnya shift.
+- Kode promo dipasang sebelum bayar, diperiksa ulang & dikunci saat bayar, dicatat saat lunas, kuota kembali saat refund. Potongan promo
+  di luar batas diskon per peran; diskon manual + promo ≤ total; pajak dari nilai setelah keduanya.
 
 ### Farmasi (`FarmasiService`)
 - **Obat hanya diserahkan setelah tagihan lunas** (alur: poli → kasir → farmasi).

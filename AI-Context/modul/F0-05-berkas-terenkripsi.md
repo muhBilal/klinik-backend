@@ -42,6 +42,10 @@ Buka  (GET /berkas/{uuid}/unduh?expires&u&signature, tanpa token)
 - `kunjungan_id` opsional; bila diisi harus kunjungan cabang aktif, milik pasien yang sama, tidak batal.
 - Izin: daftar & tautan `rme.lihat`; unggah & hapus `berkas.kelola` (perawat, dokter, terapis bawaan).
 - Hapus = soft delete; file terenkripsi **tidak** dihapus dari disk (retensi RME). Tautan untuk berkas terhapus → 404.
+- Berkas milik kunjungan **berakses terbatas** (IMS) tidak ikut `GET /berkas` dan tautannya 403 bagi pengguna di luar tim yang
+  menangani ([F1-05](F1-05-rme-estetika.md)).
+- Informed consent digital (tanda tangan di tablet) disimpan di tabel `informed_consents`, bukan sebagai berkas; kategori berkas
+  `informed_consent` tetap untuk pindaian consent kertas.
 
 ## Frontend
 
@@ -53,8 +57,9 @@ Buka  (GET /berkas/{uuid}/unduh?expires&u&signature, tanpa token)
 
 ## Belum dikerjakan
 
-- FT-01 template sudut standar, FT-02 perbandingan before-after, FT-04 consent foto bertingkat → Fase 1 (modul Foto Klinis).
-- Kompresi/thumbnail, pemindaian malware, penyimpanan S3/MinIO terenkripsi.
+- ~~FT-01 template sudut standar, FT-02 perbandingan before-after, FT-04 consent foto bertingkat~~ → selesai di
+  [F1-06](F1-06-foto-klinis.md) (termasuk thumbnail terenkripsi yang dibuat di browser).
+- Pemindaian malware, penyimpanan S3/MinIO terenkripsi.
 - Perintah enkripsi ulang setelah rotasi `APP_KEY`.
 
 ## Test

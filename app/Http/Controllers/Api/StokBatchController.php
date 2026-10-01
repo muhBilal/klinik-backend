@@ -88,6 +88,22 @@ class StokBatchController extends Controller
         return response()->json($batch->load('obat:id,kode,nama,satuan'));
     }
 
+    /** Mutasi sebagian isi batch ke cabang lain (IN-05). */
+    public function mutasi(Request $request, StokBatch $stokBatch): JsonResponse
+    {
+        $data = $request->validate([
+            'cabang_tujuan_id' => ['required', 'integer', Rule::exists('cabangs', 'id')->whereNull('deleted_at')],
+            'jumlah' => ['required', 'numeric', 'gt:0', 'max:999999', 'decimal:0,3'],
+            'keterangan' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        $batch = $this->service->pindahCabang(
+            $stokBatch, $data['cabang_tujuan_id'], (float) $data['jumlah'], $request->user(), $data['keterangan'] ?? null,
+        );
+
+        return response()->json($batch->load(['obat:id,kode,nama,satuan', 'cabang:id,kode,nama']));
+    }
+
     /** Buang sisa batch kedaluwarsa. */
     public function buang(Request $request, StokBatch $stokBatch): JsonResponse
     {

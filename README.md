@@ -1,4 +1,4 @@
-# E-Klinik — Backend (REST API)
+# Lefaklinik — Backend (REST API)
 
 Backend sistem informasi klinik: Laravel 13 REST API, autentikasi token Sanctum, PostgreSQL 17.
 Frontend (Vue 3 SPA) ada di repo terpisah: [klinik-frontend](https://github.com/muhBilal/klinik-frontend).
@@ -10,7 +10,7 @@ Semua konfigurasi Docker ada di repo ini — tidak perlu memasang PHP/Composer/N
 Clone kedua repo ke folder induk yang sama:
 
 ```
-e-klinik/
+lefaklinik/     (folder: eklinik)
 ├── backend/    ← repo ini (klinik-backend), berisi semua file Docker
 └── frontend/   ← repo klinik-frontend
 ```

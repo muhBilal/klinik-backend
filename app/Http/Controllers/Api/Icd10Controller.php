@@ -11,18 +11,25 @@ use Illuminate\Validation\Rule;
 
 class Icd10Controller extends Controller
 {
+    /**
+     * `?huruf=J` = bab ICD-10 berdasarkan huruf awal kode; `?favorit=1` = favorit dokter yang login saja.
+     * Favorit selalu tampil paling atas (RM-02).
+     */
     public function index(Request $request): JsonResponse
     {
-        // ?huruf=J → bab ICD-10 berdasarkan huruf awal kode
         $huruf = strtoupper((string) $request->input('huruf'));
+        $userId = $request->user()->id;
 
         $icd10s = Icd10::query()
-            ->select(['id', 'kode', 'nama'])
+            ->select(['id', 'kode', 'nama', 'sensitif'])
+            ->withExists(['favorits as favorit' => fn ($q) => $q->where('user_id', $userId)])
             ->when(preg_match('/^[A-Z]$/', $huruf) === 1, fn ($q) => $q->where('kode', 'like', "{$huruf}%"))
+            ->when($request->boolean('favorit'), fn ($q) => $q->whereHas('favorits', fn ($f) => $f->where('user_id', $userId)))
             ->when($request->filled('q'), function ($query) use ($request) {
                 $q = $request->string('q')->trim();
                 $query->where(fn ($w) => $w->whereLike('kode', "{$q}%")->orWhereLike('nama', "%{$q}%"));
             })
+            ->orderByDesc('favorit')
             ->orderBy('kode');
 
         return response()->json($this->paginate($icd10s, $request));
@@ -30,7 +37,11 @@ class Icd10Controller extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        return response()->json(Icd10::create($this->validated($request)), 201);
+        $data = $this->validated($request);
+        // Kode IMS/HIV otomatis ditandai sensitif bila admin tidak memilih (DR-03).
+        $data['sensitif'] ??= Icd10::kodeSensitif($data['kode']);
+
+        return response()->json(Icd10::create($data), 201);
     }
 
     public function show(Icd10 $icd10): JsonResponse
@@ -59,6 +70,7 @@ class Icd10Controller extends Controller
         return $request->validate([
             'kode' => ['required', 'string', 'max:10', Rule::unique('icd10s')->ignore($icd10)],
             'nama' => ['required', 'string', 'max:255'],
+            'sensitif' => ['sometimes', 'nullable', 'boolean'],
         ]);
     }
 }

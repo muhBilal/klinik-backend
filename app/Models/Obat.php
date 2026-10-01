@@ -11,9 +11,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Table('obats')]
-#[Fillable(['kode', 'nama', 'satuan', 'fraksional', 'jam_pakai_setelah_buka', 'harga', 'stok_minimum', 'is_active'])]
+#[Fillable(['kode', 'nama', 'satuan', 'jenis', 'no_bpom', 'fraksional', 'jam_pakai_setelah_buka', 'harga', 'stok_minimum', 'is_active'])]
 class Obat extends Model
 {
+    /** Jenis produk (AD-06): skincare/kosmetik yang dijual wajib bernomor notifikasi BPOM. */
+    public const JENIS = ['obat', 'skincare', 'bhp', 'alkes'];
+
     use Auditable, SoftDeletes;
 
     protected function casts(): array

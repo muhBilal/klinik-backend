@@ -10,6 +10,7 @@ use App\Models\Obat;
 use App\Models\Pasien;
 use App\Models\Tindakan;
 use App\Models\User;
+use App\Services\PengaturanService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -186,7 +187,9 @@ class KatalogTreatmentTest extends TestCase
     {
         $dokterUtama = User::where('email', 'dokter@eklinik.test')->first();
         $dokterSel = User::factory()->create(['email' => 'dokter.sel@eklinik.test', 'role' => 'dokter',
-            'poli_id' => $dokterUtama->poli_id, 'cabang_id' => $this->selatan->id]);
+            'poli_id' => $dokterUtama->poli_id, 'cabang_id' => $this->selatan->id, 'sip' => '503/SIP-DU/009/2026']);
+        // Fokus test ini harga cabang; kewajiban informed consent laser diuji di RmeEstetikaTest.
+        app(PengaturanService::class)->simpan(['rme' => ['wajib_informed_consent' => false]]);
         $laser = Tindakan::where('kode', 'TRT-011')->first();
         $ipl = Tindakan::where('kode', 'TRT-012')->first();
         $laser->hargas()->create(['cabang_id' => $this->selatan->id, 'tarif' => 1000000]);
@@ -210,7 +213,8 @@ class KatalogTreatmentTest extends TestCase
             ->assertUnprocessable()->assertJsonValidationErrors('tindakans.1.tindakan_id');
         $this->putJson("/api/kunjungans/{$id}/pemeriksaan", ['diagnosas' => $diagnosa, 'tindakans' => [['tindakan_id' => $laser->id]]])
             ->assertOk()->assertJsonPath('tindakans.0.tarif', 1000000);
-        $this->postJson("/api/kunjungans/{$id}/selesai")->assertOk()->assertJsonPath('tagihan.total', 50000 + 1000000);
+        $selesai = $this->postJson("/api/kunjungans/{$id}/selesai")->assertOk();
+        $this->assertSame($selesai->json('poli.tarif_konsultasi') + 1000000, $selesai->json('tagihan.total'));
 
         // Cabang Utama: harga dasar, IPL tetap dilayani
         $id = $periksa($dokterUtama, $this->utama->id);

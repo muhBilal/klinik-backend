@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Table('tagihans')]
 #[Fillable([
-    'cabang_id', 'no_tagihan', 'kunjungan_id', 'pasien_id', 'total', 'diskon', 'pajak', 'pajak_persen',
+    'cabang_id', 'no_tagihan', 'kunjungan_id', 'pasien_id', 'total', 'diskon', 'diskon_disetujui_oleh', 'promo_id', 'diskon_promo', 'pajak', 'pajak_persen',
     'grand_total', 'status', 'keterangan', 'metode_bayar', 'dibayar', 'kembalian', 'kasir_id', 'shift_id',
     'dibayar_at', 'dibatalkan_at', 'dibatalkan_oleh', 'alasan_batal',
 ])]
@@ -28,6 +28,7 @@ class Tagihan extends Model
         return [
             'total' => 'integer',
             'diskon' => 'integer',
+            'diskon_promo' => 'integer',
             'pajak' => 'integer',
             'pajak_persen' => 'integer',
             'grand_total' => 'integer',
@@ -65,6 +66,18 @@ class Tagihan extends Model
         return $this->belongsTo(ShiftKas::class, 'shift_id')->withoutGlobalScope('cabang');
     }
 
+    /** Voucher / kode promo yang dipasang (TR-06); potongannya di `diskon_promo`. */
+    public function promo(): BelongsTo
+    {
+        return $this->belongsTo(Promo::class)->withTrashed();
+    }
+
+    /** Paket yang dijual lewat tagihan ini (TR-02); aktif saat tagihan lunas. */
+    public function paketPasiens(): HasMany
+    {
+        return $this->hasMany(PaketPasien::class);
+    }
+
     /** Pasien tagihan: langsung (tagihan mandiri) atau lewat kunjungan. */
     public function pasienId(): ?int
     {
@@ -85,6 +98,12 @@ class Tagihan extends Model
     public function kasir(): BelongsTo
     {
         return $this->belongsTo(User::class, 'kasir_id')->withTrashed();
+    }
+
+    /** Atasan yang menyetujui diskon di atas batas peran kasir (BL-02). */
+    public function penyetujuDiskon(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'diskon_disetujui_oleh')->withTrashed();
     }
 
     public function auditLabel(): ?string

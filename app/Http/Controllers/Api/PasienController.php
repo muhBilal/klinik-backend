@@ -6,8 +6,11 @@ use App\Enums\Izin;
 use App\Http\Controllers\Controller;
 use App\Models\Pasien;
 use App\Services\AuditService;
+use App\Services\PersetujuanDataService;
+use App\Services\RekamMedisService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
 class PasienController extends Controller
@@ -35,6 +38,50 @@ class PasienController extends Controller
         return response()->json($this->paginate($pasiens, $request, 15));
     }
 
+    /**
+     * Kandidat pasien ganda (PS-02): NIK sama, nomor HP sama (9 digit terakhir), atau tanggal lahir sama dengan nama mirip
+     * (kata pertama nama). `kecuali_id` = pasien yang sedang diubah.
+     */
+    public function duplikat(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'nama' => ['nullable', 'string', 'max:255'],
+            'tanggal_lahir' => ['nullable', 'date'],
+            'no_hp' => ['nullable', 'string', 'max:20'],
+            'nik' => ['nullable', 'string', 'max:16'],
+            'kecuali_id' => ['nullable', 'integer'],
+        ]);
+
+        $nik = preg_replace('/\D/', '', $data['nik'] ?? '');
+        $hp = substr((string) Pasien::normalkanHp($data['no_hp'] ?? null), -9);
+        $kataPertama = strtok(trim($data['nama'] ?? ''), ' ') ?: null;
+        $tanggal = $data['tanggal_lahir'] ?? null;
+
+        if (strlen($nik) < 16 && strlen($hp) < 9 && ! ($kataPertama && $tanggal)) {
+            return response()->json([]);
+        }
+
+        $kandidat = Pasien::query()
+            ->select(['id', 'no_rm', 'nik', 'nama', 'jenis_kelamin', 'tanggal_lahir', 'no_hp', 'alamat'])
+            ->when($data['kecuali_id'] ?? null, fn ($q, $id) => $q->whereKeyNot($id))
+            ->where(fn ($w) => $w
+                ->when(strlen($nik) === 16, fn ($q) => $q->orWhere('nik', $nik))
+                ->when(strlen($hp) === 9, fn ($q) => $q->orWhere('no_hp_digit', 'like', "%{$hp}"))
+                ->when($kataPertama && $tanggal, fn ($q) => $q->orWhere(fn ($x) => $x
+                    ->whereDate('tanggal_lahir', $tanggal)->whereLike('nama', "%{$kataPertama}%"))))
+            ->limit(5)
+            ->get();
+
+        return response()->json($kandidat->map(fn (Pasien $p) => [
+            ...$p->toArray(),
+            'alasan' => array_values(array_filter([
+                strlen($nik) === 16 && $p->nik === $nik ? 'NIK sama' : null,
+                strlen($hp) === 9 && str_ends_with((string) Pasien::normalkanHp($p->no_hp), $hp) ? 'No. HP sama' : null,
+                $tanggal && $p->tanggal_lahir?->toDateString() === Carbon::parse($tanggal)->toDateString() ? 'Nama mirip & tanggal lahir sama' : null,
+            ])),
+        ]));
+    }
+
     public function store(Request $request): JsonResponse
     {
         $pasien = Pasien::create($this->validated($request));
@@ -46,26 +93,36 @@ class PasienController extends Controller
      * `?ringkas=1` hanya identitas pasien (tanpa riwayat kunjungan), mis. untuk form pendaftaran.
      * Riwayat kunjungan mencakup semua cabang; diagnosa hanya untuk pemegang izin rme.lihat.
      */
-    public function show(Request $request, Pasien $pasien, AuditService $audit): JsonResponse
+    public function show(Request $request, Pasien $pasien, AuditService $audit, RekamMedisService $rme): JsonResponse
     {
         if (! $request->boolean('ringkas')) {
             $rekamMedis = $request->user()->punyaIzin(Izin::RmeLihat);
 
             $pasien->load(['kunjungans' => fn ($q) => $q
                 ->withoutGlobalScope('cabang')
-                ->select(['id', 'cabang_id', 'pasien_id', 'poli_id', 'dokter_id', 'tanggal', 'penjamin', 'status'])
+                ->select(['id', 'cabang_id', 'pasien_id', 'poli_id', 'dokter_id', 'tanggal', 'penjamin', 'status', 'akses_terbatas'])
                 ->with([
-                    'poli:id,nama', 'dokter:id,name', 'cabang:id,kode,nama',
+                    'poli:id,nama,spesialisasi', 'dokter:id,name', 'cabang:id,kode,nama',
                     ...($rekamMedis ? [
-                        'pemeriksaan:id,kunjungan_id',
+                        'pemeriksaan:id,kunjungan_id,dokter_id,perawat_id',
                         'pemeriksaan.diagnosas:id,pemeriksaan_id,icd10_id,jenis', 'pemeriksaan.diagnosas.icd10:id,kode,nama',
                     ] : []),
                 ])
                 ->latest('tanggal')->latest('id')
                 ->limit(50)]);
 
+            if ($rekamMedis) {
+                // Diagnosa kunjungan berakses terbatas (IMS) hanya untuk tim yang menangani (DR-03).
+                $rme->sembunyikanTerbatas($pasien->kunjungans, $request->user());
+                // Odontogram & rencana perawatan ditampilkan bila pasien punya data gigi (DG-01/02).
+                $pasien->setAttribute('data_gigi', $pasien->odontogramKondisis()->exists() || $pasien->rencanaPerawatans()->exists());
+            }
+
             $audit->catat('lihat', 'pasien', $pasien->id, ['pasien_id' => $pasien->id, 'label' => $pasien->auditLabel()]);
         }
+
+        // Status consent UU PDP (PS-04) — identitas, bukan data klinis
+        $pasien->setAttribute('persetujuan_data', app(PersetujuanDataService::class)->ringkasan($pasien));
 
         return response()->json($pasien);
     }
