@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\MetodeBayar;
 use App\Enums\StatusKunjungan;
 use App\Enums\StatusTagihan;
+use App\Models\PaketPasien;
 use App\Models\Pembayaran;
 use App\Models\ShiftKas;
 use App\Models\Tagihan;
@@ -56,11 +57,12 @@ class KasirService
             }
 
             $tunai = (int) $shift->pembayarans()->berlaku()->where('metode', MetodeBayar::Tunai)->sum('jumlah');
+            $refundTunai = $this->refundPaket($shift, MetodeBayar::Tunai);
 
             $shift->update([
                 'ditutup_at' => now(),
                 'kas_fisik' => $kasFisik,
-                'selisih' => $kasFisik - ($shift->modal_awal + $tunai),
+                'selisih' => $kasFisik - ($shift->modal_awal + $tunai - $refundTunai),
                 'catatan' => $catatan,
             ]);
 
@@ -82,20 +84,32 @@ class KasirService
 
         $refund = (int) $shift->pembayarans()->whereNotNull('dikembalikan_at')->sum('jumlah');
         $tunai = (int) ($perMetode->firstWhere('metode', MetodeBayar::Tunai->value)['total'] ?? 0);
+        // Pengembalian sisa paket (TR-02) = uang keluar di shift ini; yang tunai mengurangi kas seharusnya.
+        $refundPaket = $this->refundPaket($shift);
+        $refundPaketTunai = $this->refundPaket($shift, MetodeBayar::Tunai);
 
         return [
             'per_metode' => $perMetode,
             'total' => (int) $perMetode->sum('total'),
-            'total_refund' => $refund,
-            'kas_seharusnya' => $shift->modal_awal + $tunai,
+            'total_refund' => $refund + $refundPaket,
+            'refund_paket' => $refundPaket,
+            'kas_seharusnya' => $shift->modal_awal + $tunai - $refundPaketTunai,
         ];
     }
 
+    private function refundPaket(ShiftKas $shift, ?MetodeBayar $metode = null): int
+    {
+        return (int) PaketPasien::where('refund_shift_id', $shift->id)
+            ->when($metode, fn ($q) => $q->where('refund_metode', $metode))
+            ->sum('refund_nominal');
+    }
+
     /**
-     * Bayar tagihan, boleh beberapa metode sekaligus (BL-03).
+     * Bayar tagihan, boleh beberapa metode sekaligus (BL-03). Kode promo yang terpasang diperiksa ulang & dihitung ulang
+     * (kuota bisa habis sejak dipasang) lalu dicatat pemakaiannya (TR-06); paket yang dijual lewat tagihan ini aktif (TR-02).
      *
      * @param  list<array{metode: string, jumlah: int, referensi?: string}>  $pembayarans
-     * @param  int  $diskon  diskon nominal; dibatasi oleh batas peran (BL-02)
+     * @param  int  $diskon  diskon manual nominal; dibatasi oleh batas peran (BL-02), di luar potongan promo
      * @param  string  $kunciNominal  field tujuan pesan error nominal; klien lama memakai `dibayar`
      */
     public function bayar(Tagihan $tagihan, array $pembayarans, int $diskon, User $kasir, string $kunciNominal = 'pembayarans'): Tagihan
@@ -107,13 +121,17 @@ class KasirService
                 throw ValidationException::withMessages(['status' => 'Tagihan ini sudah dibayar atau dibatalkan.']);
             }
 
-            if ($diskon > $tagihan->total) {
-                throw ValidationException::withMessages(['diskon' => 'Diskon tidak boleh melebihi total tagihan.']);
+            $diskonPromo = $tagihan->promo_id
+                ? app(PromoService::class)->hitung($tagihan->promo()->firstOrFail(), $tagihan, kunci: true)
+                : 0;
+
+            if ($diskon + $diskonPromo > $tagihan->total) {
+                throw ValidationException::withMessages(['diskon' => 'Diskon (termasuk potongan promo) tidak boleh melebihi total tagihan.']);
             }
 
             $this->pastikanDiskonDiizinkan($tagihan, $diskon, $kasir);
 
-            $grandTotal = $this->hitungGrandTotal($tagihan->total, $diskon, $tagihan->pajak_persen);
+            $grandTotal = $this->hitungGrandTotal($tagihan->total, $diskon + $diskonPromo, $tagihan->pajak_persen);
             $baris = $this->normalkanPembayaran($pembayarans, $kunciNominal);
             $dibayar = (int) $baris->sum('jumlah');
 
@@ -132,7 +150,8 @@ class KasirService
 
             $tagihan->update([
                 'diskon' => $diskon,
-                'pajak' => $grandTotal - ($tagihan->total - $diskon),
+                'diskon_promo' => $diskonPromo,
+                'pajak' => $grandTotal - ($tagihan->total - $diskon - $diskonPromo),
                 'grand_total' => $grandTotal,
                 'metode_bayar' => $baris->count() === 1 ? $baris->first()['metode'] : null,
                 'dibayar' => $dibayar,
@@ -153,6 +172,9 @@ class KasirService
                     'dibayar_at' => now(),
                 ]);
             }
+
+            app(PromoService::class)->catatPemakaian($tagihan);
+            app(PaketService::class)->aktifkanDariTagihan($tagihan);
 
             // Kunjungan selesai hanya bila semua tagihannya sudah lunas/batal.
             if ($kunjungan = $tagihan->kunjungan) {
@@ -188,6 +210,8 @@ class KasirService
                 'alasan_batal' => $alasan,
             ]);
 
+            app(PaketService::class)->batalDariTagihan($tagihan);
+
             return $tagihan;
         });
     }
@@ -204,6 +228,10 @@ class KasirService
             if ($tagihan->status !== StatusTagihan::Lunas) {
                 throw ValidationException::withMessages(['status' => 'Hanya tagihan lunas yang bisa direfund.']);
             }
+
+            // Paket yang dijual lewat tagihan ini hanya bisa direfund penuh bila belum dipakai (TR-02); kuota promo kembali.
+            app(PaketService::class)->refundPenuhDariTagihan($tagihan, $alasan, $user);
+            app(PromoService::class)->batalkanPemakaian($tagihan);
 
             // Per model agar setiap refund tercatat di audit log.
             foreach ($tagihan->pembayarans()->berlaku()->get() as $pembayaran) {

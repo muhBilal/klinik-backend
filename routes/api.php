@@ -17,6 +17,8 @@ use App\Http\Controllers\Api\KodeFavoritController;
 use App\Http\Controllers\Api\KunjunganController;
 use App\Http\Controllers\Api\ObatController;
 use App\Http\Controllers\Api\OdontogramController;
+use App\Http\Controllers\Api\PaketController;
+use App\Http\Controllers\Api\PaketPasienController;
 use App\Http\Controllers\Api\PasienController;
 use App\Http\Controllers\Api\PemeriksaanController;
 use App\Http\Controllers\Api\PengaturanController;
@@ -24,6 +26,7 @@ use App\Http\Controllers\Api\PeranController;
 use App\Http\Controllers\Api\PersetujuanFotoController;
 use App\Http\Controllers\Api\PoliController;
 use App\Http\Controllers\Api\ProfilController;
+use App\Http\Controllers\Api\PromoController;
 use App\Http\Controllers\Api\ProtokolFotoController;
 use App\Http\Controllers\Api\RencanaPerawatanController;
 use App\Http\Controllers\Api\ResepController;
@@ -79,6 +82,7 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
         Route::get('protokol-fotos', [ProtokolFotoController::class, 'index']);
         Route::get('tindakans', [TindakanController::class, 'index']);
         Route::get('kategori-tindakans', [KategoriTindakanController::class, 'index']);
+        Route::get('pakets', [PaketController::class, 'index']);
         Route::get('obats', [ObatController::class, 'index']);
         Route::get('obats/{obat}', [ObatController::class, 'show']);
 
@@ -102,6 +106,19 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
             Route::post('persetujuan-fotos/{persetujuanFoto}/cabut', [PersetujuanFotoController::class, 'cabut']);
         });
         Route::get('persetujuan-fotos/{persetujuanFoto}', [PersetujuanFotoController::class, 'show'])->middleware('izin:pasien.kelola,rme.lihat');
+
+        // Paket multi-sesi milik pasien (TR-02): dibaca front office, kasir & tenaga tindakan; dijual kasir (tagihan mandiri);
+        // perpanjang / alihkan / refund sisa = kebijakan, butuh persetujuan manajer (kasir.void).
+        Route::middleware('izin:pasien.lihat,kasir.tagihan,rme.tindakan,pemeriksaan.dokter')->group(function () {
+            Route::get('pasiens/{pasien}/pakets', [PaketPasienController::class, 'index']);
+            Route::get('paket-pasiens/{paketPasien}', [PaketPasienController::class, 'show']);
+        });
+        Route::post('pasiens/{pasien}/pakets', [PaketPasienController::class, 'store'])->middleware('izin:kasir.tagihan');
+        Route::middleware('izin:kasir.void')->group(function () {
+            Route::post('paket-pasiens/{paketPasien}/perpanjang', [PaketPasienController::class, 'perpanjang']);
+            Route::post('paket-pasiens/{paketPasien}/alihkan', [PaketPasienController::class, 'alihkan']);
+            Route::post('paket-pasiens/{paketPasien}/refund', [PaketPasienController::class, 'refund']);
+        });
 
         // Kunjungan & antrian (cabang aktif). Detail tanpa izin rme.lihat hanya berisi data administrasi.
         Route::get('kunjungans', [KunjunganController::class, 'index']);
@@ -229,6 +246,9 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
             Route::get('tagihans/{tagihan}', [TagihanController::class, 'show']);
             Route::post('tagihans', [TagihanController::class, 'store']);
             Route::post('tagihans/{tagihan}/bayar', [TagihanController::class, 'bayar']);
+            // Voucher & kode promo (TR-06)
+            Route::post('tagihans/{tagihan}/promo', [TagihanController::class, 'pasangPromo']);
+            Route::delete('tagihans/{tagihan}/promo', [TagihanController::class, 'lepasPromo']);
 
             // Batal & refund butuh izin terpisah (persetujuan manajer) — BL-06
             Route::middleware('izin:kasir.void')->group(function () {
@@ -246,8 +266,12 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
             });
         });
 
+        // Voucher & promo (TR-06)
+        Route::apiResource('promos', PromoController::class)->middleware('izin:promo.kelola');
+
         // Master data
         Route::middleware('izin:master.kelola')->group(function () {
+            Route::apiResource('pakets', PaketController::class)->except('index');
             Route::delete('obats/{obat}', [ObatController::class, 'destroy']);
 
             Route::post('polis', [PoliController::class, 'store']);

@@ -36,6 +36,7 @@ enum Izin: string
     case KasirTagihan = 'kasir.tagihan';
     case KasirVoid = 'kasir.void';
     case KasirShift = 'kasir.shift';
+    case PromoKelola = 'promo.kelola';
     case LaporanKeuangan = 'laporan.keuangan';
 
     case MasterKelola = 'master.kelola';
@@ -68,6 +69,7 @@ enum Izin: string
             self::KasirTagihan => 'Tagihan & pembayaran',
             self::KasirVoid => 'Batalkan tagihan & refund pembayaran',
             self::KasirShift => 'Buka & tutup shift kas',
+            self::PromoKelola => 'Kelola voucher & kode promo',
             self::LaporanKeuangan => 'Lihat pendapatan & laporan keuangan',
             self::MasterKelola => 'Kelola master poli, tindakan, ICD-10, hapus obat',
             self::CabangKelola => 'Kelola cabang klinik',
@@ -86,7 +88,7 @@ enum Izin: string
             self::PemeriksaanPanggil, self::PemeriksaanVital, self::PemeriksaanDokter => 'Pelayanan',
             self::RmeLihat, self::RmeTindakan, self::RmeTerbatas, self::BerkasKelola => 'Rekam Medis',
             self::FarmasiResep, self::FarmasiObat, self::InventoriKelola => 'Farmasi',
-            self::KasirTagihan, self::KasirVoid, self::KasirShift, self::LaporanKeuangan => 'Keuangan',
+            self::KasirTagihan, self::KasirVoid, self::KasirShift, self::PromoKelola, self::LaporanKeuangan => 'Keuangan',
             default => 'Administrasi',
         };
     }

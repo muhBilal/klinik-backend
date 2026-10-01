@@ -52,6 +52,9 @@ Smoke test HTTP lewat nginx (stack dev terisolasi) lulus: pengaturan, cabang, pe
 | ES-01 / ES-02 | Selesai | face chart injeksi; parameter laser/energy device (F1-05) |
 | FT-01 / FT-02 / FT-04, RM-04 | Selesai | protokol posisi & kamera terpandu, galeri + slider before-after, consent foto bertingkat (F1-06) |
 | FT-03 | Selesai | + thumbnail terenkripsi, EXIF dibuang, kamera di dalam aplikasi (F1-06) |
+| TR-02 | Selesai | paket multi-sesi: jual via tagihan, aktif saat lunas, sisa sesi, masa berlaku, refund/alih/perpanjang sesuai kebijakan (F1-08) |
+| TR-06 | Selesai | voucher & promo: kode, periode, kuota total & per pasien, minimum, cabang, treatment/paket (F1-08) |
+| BL-01 | Selesai | + pemakaian sesi paket di tagihan kunjungan (F1-08) |
 | DG-01 | Selesai | odontogram FDI tetap + sulung, per gigi & permukaan M/O/D/B/L, aturan penggantian, riwayat per kunjungan, masuk hash RME (F1-07) |
 | DG-02 | Selesai | rencana perawatan per gigi berfase + estimasi biaya, persetujuan pasien, revisi, cetak, dikerjakan dari pemeriksaan (F1-07) |
 | DG-07 | Selesai | tindakan per gigi wajib nomor gigi, ditagih per gigi, memperbarui odontogram otomatis (F1-07) |
@@ -73,8 +76,8 @@ Urutan kerja yang disarankan (dependensi di kolom kanan):
 | 5 | Foto klinis before-after + consent foto | FT-01, FT-02, FT-04 | F0-05 | **Selesai** 1 Okt 2026 (backend + frontend) | [modul/F1-06](modul/F1-06-foto-klinis.md) |
 | 6 | Odontogram & treatment plan per gigi | DG-01, DG-02, DG-07 | 4 | **Selesai** 1 Okt 2026 (backend + frontend) | [modul/F1-07](modul/F1-07-odontogram.md) |
 | 7 | Inventori: batch/expired per gudang cabang, BHP otomatis, satuan fraksional | IN-01..03 | 1, F0-02 | **Selesai** 30 Sep 2026 | [modul/F1-04](modul/F1-04-inventori.md) |
-| 8 | Paket multi-sesi, voucher & promo | TR-02, TR-06 | 1 | Belum | |
-| 9 | Kasir: tagihan tanpa kunjungan, split payment, diskon per peran, void/refund, shift kas, pajak | BL-01..03/05/06, AD-04, 8.3 #3 #7 | — | **Selesai** 30 Sep 2026 (deposit & paket ikut #8) | [modul/F1-03](modul/F1-03-kasir.md) |
+| 8 | Paket multi-sesi, voucher & promo | TR-02, TR-06 | 1 | **Selesai** 1 Okt 2026 (backend + frontend) | [modul/F1-08](modul/F1-08-paket-promo.md) |
+| 9 | Kasir: tagihan tanpa kunjungan, split payment, diskon per peran, void/refund, shift kas, pajak | BL-01..03/05/06, AD-04, 8.3 #3 #7 | — | **Selesai** 30 Sep 2026 (paket & promo: F1-08; deposit = TR-07 Fase 3) | [modul/F1-03](modul/F1-03-kasir.md) |
 | 10 | Komisi dokter & terapis (termasuk aturan komisi per treatment dari TR-01) | KM-01, KM-03 | 1, 9 | Belum | |
 | 11 | Consent data pasien (UU PDP) & data klinis pasien terstruktur | PS-03, PS-04 | — | Belum | |
 | 12 | Integrasi SATUSEHAT (IHS pasien, Encounter, Condition, ...) | PS-05, 7.1 | 4, F0-07 | **Terblokir**: butuh Organization ID & kredensial Kemenkes | |
@@ -86,11 +89,12 @@ diisi lewat UI katalog — booking belum memaksa memilih ruang yang kompatibel. 
 Modul #3 dan #12 terblokir kredensial pihak ketiga, bukan pekerjaan kode: WhatsApp Business API dan Organization ID
 SATUSEHAT. Payment gateway (BL-08, Fase 2) juga menunggu merchant account.
 
-Test backend setelah F1-07: **99 test / 1211 assertion** lulus di SQLite **dan** PostgreSQL 17; migrate → rollback → migrate F1-05,
-F1-06 & F1-07 diuji di PostgreSQL 17 dengan data demo. Alur F1-05, F1-06 & F1-07 juga diuji E2E di browser (lihat modul masing-masing).
+Test backend setelah F1-08: **107 test / 1452 assertion** lulus di SQLite **dan** PostgreSQL 17; migrate → rollback → migrate F1-05
+s.d. F1-08 diuji di PostgreSQL 17 dengan data demo. Alur F1-05 s.d. F1-08 juga diuji E2E di browser (lihat modul masing-masing).
 
-Frontend: F1-05 punya UI lengkap. Editor pemakaian BHP (F1-04) kini tersedia di modal catatan tindakan; halaman Booking,
-Kasir (split/shift/void) dan Inventori (batch, opname) masih backend saja.
+Frontend: F1-05 s.d. F1-08 punya UI lengkap. Editor pemakaian BHP (F1-04) tersedia di modal catatan tindakan; kasir kini menangani
+tagihan tanpa kunjungan, kode promo & pajak (F1-08). Halaman Booking, Kasir split payment/shift/void, dan Inventori (batch, opname)
+masih backend saja.
 
 Gerbang PRD Fase 1: "P0 lolos UAT, go-live klinik pilot".
 
@@ -98,6 +102,7 @@ Gerbang PRD Fase 1: "P0 lolos UAT, go-live klinik pilot".
 
 | Tanggal | Perubahan |
 |---------|-----------|
+| 2026-10-01 | Fase 1 #8 selesai: F1-08 Paket multi-sesi (jual via tagihan, aktif saat lunas, sisa sesi dihitung dari tindakan kunjungan, pemakaian di pemeriksaan Rp 0, nilai per sesi untuk LP-03, refund/alih/perpanjang sesuai pengaturan) & voucher/promo (periode, kuota, minimum, cabang, treatment/paket). Kasir mendapat `pasien.lihat`; izin baru `promo.kelola`. Frontend: master Paket Treatment, Voucher & Promo, kartu paket pasien, pakai paket di pemeriksaan, kode promo & tagihan tanpa kunjungan di kasir (bug daftar kasir untuk tagihan mandiri diperbaiki) |
 | 2026-10-01 | Fase 1 #6 selesai: F1-07 Kedokteran gigi (odontogram FDI per gigi & permukaan dengan riwayat per kunjungan, aturan penggantian kondisi, rencana perawatan berfase + estimasi & persetujuan, tindakan per gigi → odontogram otomatis & tagihan per gigi, `polis.spesialisasi`). Hash RME mencakup odontogram (RME lama tetap valid). Frontend: komponen `components/gigi/*` di pemeriksaan, detail kunjungan & pasien; master Poli & Treatment |
 | 2026-10-01 | Fase 1 #5 selesai: F1-06 Foto klinis (protokol posisi, kamera terpandu di aplikasi, thumbnail terenkripsi, galeri + slider before-after, consent foto bertingkat per pasien, tautan massal bertanda tangan). Frontend: kartu Foto Klinis di pemeriksaan, detail kunjungan & pasien; master Protokol Foto |
 | 2026-09-30 | Fase 1 #4 selesai: F1-05 RME estetika (template SOAP, ICD-9-CM & favorit, informed consent + tanda tangan, catatan tindakan: face chart & parameter laser, tanda tangan RME ber-SIP + hash + addendum, akses terbatas IMS). Tindakan kunjungan kini di-upsert (bukan replace-all). Poli demo KULIT & ESTETIKA. Frontend: modul rail baru **Rekam Medis**. `BookingTest` check-in tidak lagi bergantung jam dinding |

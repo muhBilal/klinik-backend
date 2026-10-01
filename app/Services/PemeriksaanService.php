@@ -27,6 +27,7 @@ class PemeriksaanService
         private CatatanTindakanService $catatan,
         private OdontogramService $odontogram,
         private RencanaPerawatanService $rencana,
+        private PaketService $paket,
     ) {}
 
     /**
@@ -242,7 +243,14 @@ class PemeriksaanService
                 'gigi' => $item['gigi'] ?? null,
                 'permukaan' => empty($item['gigi']) ? null : $item['permukaan'],
                 'rencana_item_id' => $item['rencana_item_id'] ?? null,
+                'paket_pasien_item_id' => $item['paket_pasien_item_id'] ?? null,
             ];
+
+            // Memakai sesi paket pasien (TR-02): paket aktif, treatment sama, sisa cukup (sesi baris ini sendiri tidak dihitung).
+            if ($atribut['paket_pasien_item_id']) {
+                $this->paket->pastikanBisaDipakai((int) $atribut['paket_pasien_item_id'], (int) $item['tindakan_id'], (int) $atribut['jumlah'],
+                    $kunjungan, $baris?->id, "tindakans.{$i}.paket_pasien_item_id");
+            }
 
             if (! $baris) {
                 $baris = $kunjungan->tindakans()->create(['tindakan_id' => $item['tindakan_id'], ...$atribut]);

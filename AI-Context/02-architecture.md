@@ -15,6 +15,8 @@ app/
 │   ├── KondisiGigi.php         kode odontogram (car, cof, mis, rct, ...) + cakupan, kelompok, mengakhiri(), warna, referensi()
 │   ├── Spesialisasi.php        umum, gigi, kulit, estetika, lainnya (polis.spesialisasi)
 │   ├── StatusRencanaPerawatan.php / StatusItemRencana.php  draf, disetujui, selesai, dibatalkan / rencana, selesai, batal
+│   ├── StatusPaketPasien.php   menunggu_bayar, aktif, dibatalkan, direfund, dialihkan (+ habis/kedaluwarsa dihitung)
+│   ├── JenisPotongan.php       persen, nominal (voucher & promo)
 │   ├── StatusKunjungan.php     menunggu, diperiksa, menunggu_pembayaran, selesai, batal
 │   ├── StatusResep.php         menunggu, diserahkan, batal
 │   ├── StatusTagihan.php       belum_bayar, lunas, batal
@@ -40,8 +42,11 @@ app/
 │   ├── CatatanTindakanService.php catatan tindakan, parameter alat, titik face chart, validasi petugas medis
 │   ├── OdontogramService.php   status per pasien/kunjungan, tetapkan (aturan penggantian), hapus/akhiri/pulihkan, sinkron dari tindakan per gigi
 │   ├── RencanaPerawatanService.php rencana perawatan gigi: item per fase, estimasi, setujui/revisi/batal, selesai dari kunjungan
+│   ├── PaketService.php        paket pasien: jual, aktif saat lunas (alokasi nilai/sesi), pemakaian & sisa, perpanjang, alihkan, refund sisa
+│   ├── PromoService.php        voucher & promo: pasang/lepas di tagihan, hitung potongan (syarat & kuota), catat/batalkan pemakaian
 │   ├── TindakanService.php     simpan treatment + sinkron harga per cabang & BHP standar (per model, ter-audit)
-│   ├── TagihanService.php      buatDariKunjungan, bayar
+│   ├── TagihanService.php      buatDariKunjungan (tindakan bersesi paket Rp 0), buatMandiri (paket/produk)
+│   ├── KasirService.php        shift, bayar (split, diskon, promo, aktifkan paket), void, refund, rekap shift (+ refund paket)
 │   ├── FarmasiService.php      serahkan resep, mutasiManual stok
 │   ├── AuditService.php        penulis tunggal audit_logs (catat, catatModel)
 │   ├── PengaturanService.php   baca/simpan pengaturan klinik (cache)
@@ -60,7 +65,7 @@ database/seeders/DatabaseSeeder.php   Data master + akun demo (peran dibuat migr
 database/factories/             UserFactory, PasienFactory
 tests/Feature/                  AlurKlinikTest, FilterTest, PeranIzinTest, MultiCabangTest, AuditLogTest,
                                 KeamananTest, PengaturanTest, BerkasTest, KatalogTreatmentTest, BookingTest,
-                                KasirTest, InventoriTest, RmeEstetikaTest, FotoKlinisTest, OdontogramTest
+                                KasirTest, InventoriTest, RmeEstetikaTest, FotoKlinisTest, OdontogramTest, PaketPromoTest
 tests/Unit/TwoFactorServiceTest.php   Vektor uji RFC 6238
 ```
 

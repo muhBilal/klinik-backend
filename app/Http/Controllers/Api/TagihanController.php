@@ -6,6 +6,7 @@ use App\Enums\MetodeBayar;
 use App\Http\Controllers\Controller;
 use App\Models\Tagihan;
 use App\Services\KasirService;
+use App\Services\PromoService;
 use App\Services\TagihanService;
 use App\Support\CabangAktif;
 use Illuminate\Http\JsonResponse;
@@ -16,7 +17,9 @@ class TagihanController extends Controller
 {
     /** Relasi halaman detail / struk; juga dipakai respons bayar agar UI tidak perlu memuat ulang. */
     private const DETAIL = [
-        'items:id,tagihan_id,kategori,deskripsi,jumlah,harga,subtotal', 'kasir:id,name',
+        'items:id,tagihan_id,kategori,tindakan_id,paket_id,deskripsi,jumlah,harga,subtotal', 'kasir:id,name',
+        'promo:id,kode,nama,jenis,nilai',
+        'paketPasiens:id,no_paket,nama,status,tagihan_id,berlaku_sampai',
         'pembayarans:id,tagihan_id,metode,jumlah,referensi,dibayar_at,dikembalikan_at,alasan_refund',
         'pasien:id,no_rm,nama',
         'cabang:id,kode,nama,alamat,telepon',
@@ -27,7 +30,7 @@ class TagihanController extends Controller
     public function index(Request $request): JsonResponse
     {
         $tagihans = Tagihan::query()
-            ->select(['id', 'no_tagihan', 'kunjungan_id', 'pasien_id', 'total', 'diskon', 'pajak', 'grand_total',
+            ->select(['id', 'no_tagihan', 'kunjungan_id', 'pasien_id', 'total', 'diskon', 'diskon_promo', 'pajak', 'grand_total',
                 'status', 'metode_bayar', 'keterangan', 'created_at'])
             ->with(['kunjungan:id,pasien_id,poli_id,penjamin', 'kunjungan.pasien:id,no_rm,nama',
                 'kunjungan.poli:id,nama', 'pasien:id,no_rm,nama'])
@@ -80,12 +83,25 @@ class TagihanController extends Controller
             // Non-tunai dibayar pas; tunai memakai nominal yang diserahkan pasien.
             'jumlah' => $data['metode_bayar'] === MetodeBayar::Tunai->value
                 ? (int) ($data['dibayar'] ?? 0)
-                : $kasir->hitungGrandTotal($tagihan->total, $diskon, $tagihan->pajak_persen),
+                : $kasir->hitungGrandTotal($tagihan->total, $diskon + $tagihan->diskon_promo, $tagihan->pajak_persen),
         ]];
 
         return response()->json($kasir
             ->bayar($tagihan, $pembayarans, $diskon, $request->user(), $adaSplit ? 'pembayarans' : 'dibayar')
             ->load(self::DETAIL));
+    }
+
+    /** Pasang kode voucher / promo ke tagihan belum bayar (TR-06); potongan diperiksa ulang saat bayar. */
+    public function pasangPromo(Request $request, Tagihan $tagihan, PromoService $promo): JsonResponse
+    {
+        $data = $request->validate(['kode' => ['required', 'string', 'max:30']]);
+
+        return response()->json($promo->terapkan($tagihan, $data['kode'])->load(self::DETAIL));
+    }
+
+    public function lepasPromo(Tagihan $tagihan, PromoService $promo): JsonResponse
+    {
+        return response()->json($promo->lepas($tagihan)->load(self::DETAIL));
     }
 
     /** Batalkan tagihan yang belum dibayar (BL-06, temuan 8.3 #7). */
@@ -105,7 +121,8 @@ class TagihanController extends Controller
     }
 
     /**
-     * Tagihan tanpa kunjungan: penjualan produk OTC, paket, deposit (FR-04, TR-02, 8.3 #3).
+     * Tagihan tanpa kunjungan: penjualan produk OTC, deposit (FR-04, 8.3 #3). Paket multi-sesi dijual lewat
+     * `POST /pasiens/{id}/pakets` agar paketnya tercatat & aktif saat lunas (TR-02).
      */
     public function store(Request $request, TagihanService $service, CabangAktif $cabang): JsonResponse
     {

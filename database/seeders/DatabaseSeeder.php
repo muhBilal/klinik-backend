@@ -9,8 +9,10 @@ use App\Models\Icd9cm;
 use App\Models\JadwalPraktik;
 use App\Models\KategoriTindakan;
 use App\Models\Obat;
+use App\Models\Paket;
 use App\Models\Pasien;
 use App\Models\Poli;
+use App\Models\Promo;
 use App\Models\ProtokolFoto;
 use App\Models\SumberDaya;
 use App\Models\TemplateConsent;
@@ -119,6 +121,24 @@ class DatabaseSeeder extends Seeder
                 }
             }
         }
+
+        // Paket multi-sesi (TR-02) & voucher/promo (TR-06) contoh
+        $idTindakan = Tindakan::pluck('id', 'kode');
+        foreach ([
+            ['PKT-LSR6', 'Laser toning 6x', 6000000, 180, ['TRT-011' => 6]],
+            ['PKT-GLOW', 'Glowing facial 4x + peeling 2x', 2000000, 120, ['TRT-021' => 4, 'TRT-022' => 2]],
+            ['PKT-SCL2', 'Scaling 2x setahun', 450000, 365, ['TND-103' => 2]],
+        ] as [$kode, $nama, $harga, $hari, $isi]) {
+            $paket = Paket::create(['kode' => $kode, 'nama' => $nama, 'harga' => $harga, 'masa_berlaku_hari' => $hari]);
+            foreach ($isi as $kodeTindakan => $sesi) {
+                $paket->items()->create(['tindakan_id' => $idTindakan[$kodeTindakan], 'jumlah_sesi' => $sesi]);
+            }
+        }
+        Promo::create(['kode' => 'WELCOME10', 'nama' => 'Diskon 10% pasien baru', 'jenis' => 'persen', 'nilai' => 10,
+            'maks_potongan' => 100000, 'min_transaksi' => 200000, 'kuota_per_pasien' => 1, 'mulai' => today(), 'berakhir' => today()->addMonths(3)]);
+        Promo::create(['kode' => 'LASER200', 'nama' => 'Potongan Rp200rb treatment & paket laser', 'jenis' => 'nominal', 'nilai' => 200000,
+            'kuota' => 50, 'mulai' => today(), 'tindakan_ids' => [$idTindakan['TRT-011']],
+            'paket_ids' => [Paket::where('kode', 'PKT-LSR6')->value('id')]]);
 
         // Template SOAP per spesialisasi & treatment (RM-01, DR-03)
         $icd10 = Icd10::pluck('id', 'kode');

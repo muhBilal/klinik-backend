@@ -46,6 +46,8 @@ class PemeriksaanController extends Controller
             'tindakans.*.gigi' => ['nullable', 'integer', fn ($attr, $nilai, $gagal) => Gigi::valid($nilai) || $gagal('Nomor gigi harus notasi FDI: 11–48 (tetap) atau 51–85 (sulung).')],
             'tindakans.*.permukaan' => ['nullable', 'string', 'max:5', fn ($attr, $nilai, $gagal) => Gigi::permukaanValid($nilai) || $gagal('Permukaan hanya huruf M, O, D, B, L tanpa pengulangan.')],
             'tindakans.*.rencana_item_id' => ['nullable', 'integer', 'distinct'],
+            // Sesi paket pasien yang dipakai (TR-02) → ditagih Rp 0
+            'tindakans.*.paket_pasien_item_id' => ['nullable', 'integer'],
 
             'resep' => ['sometimes', 'array'],
             'resep.*.obat_id' => ['required', 'distinct', Rule::exists('obats', 'id')->where('is_active', true)->whereNull('deleted_at')],

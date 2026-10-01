@@ -82,6 +82,12 @@ class Pasien extends Model
         return $this->hasMany(RencanaPerawatan::class);
     }
 
+    /** Paket multi-sesi yang dibeli pasien (TR-02). */
+    public function paketPasiens(): HasMany
+    {
+        return $this->hasMany(PaketPasien::class);
+    }
+
     public function auditLabel(): ?string
     {
         return "{$this->no_rm} · {$this->nama}";

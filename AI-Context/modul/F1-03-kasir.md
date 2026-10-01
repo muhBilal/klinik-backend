@@ -72,6 +72,14 @@ POST /api/shift-kas/{id}/tutup         kas_fisik, catatan?
 
 Respons shift menyertakan `rekap`: `per_metode[]`, `total`, `total_refund`, `kas_seharusnya`.
 
+## Paket & promo (F1-08)
+
+- `bayar()` menghitung ulang potongan kode promo terpasang (dikunci, kuota bisa habis → 422 `kode`), menyimpan `diskon_promo`, mencatat
+  pemakaian promo, dan mengaktifkan paket yang dijual lewat tagihan itu. Batas diskon per peran hanya untuk diskon manual.
+- `batal()` → paket `menunggu_bayar` jadi `dibatalkan`. `refund()` → ditolak bila paket tagihan itu sudah dipakai; kuota promo kembali.
+- Rekap shift: `refund_paket` (refund sisa paket di shift ini), `total_refund` termasuk refund paket, `kas_seharusnya` & `selisih`
+  dikurangi refund paket tunai.
+
 ## Kompatibilitas
 
 API bayar lama (`metode_bayar` + `dibayar`) sengaja dipertahankan supaya frontend tidak perlu diubah serentak.

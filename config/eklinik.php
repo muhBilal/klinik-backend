@@ -26,6 +26,7 @@ return [
         'penomoran.prefix_resep' => ['default' => 'RSP', 'rules' => ['required', 'regex:/^[A-Z]{2,5}$/'], 'publik' => false],
         'penomoran.prefix_tagihan' => ['default' => 'INV', 'rules' => ['required', 'regex:/^[A-Z]{2,5}$/'], 'publik' => false],
         'penomoran.prefix_booking' => ['default' => 'BOK', 'rules' => ['required', 'regex:/^[A-Z]{2,5}$/'], 'publik' => false],
+        'penomoran.prefix_paket' => ['default' => 'PKT', 'rules' => ['required', 'regex:/^[A-Z]{2,5}$/'], 'publik' => false],
 
         // Pajak layanan (persen) yang ditambahkan ke tagihan baru. Tarif di-snapshot per tagihan.
         'keuangan.pajak_persen' => ['default' => 0, 'rules' => ['required', 'integer', 'between:0,100'], 'publik' => false],
@@ -35,6 +36,13 @@ return [
         // Stok BHP kurang saat pemeriksaan ditutup: true = tolak, false = tetap lanjut dan pemakaian
         // ditandai belum dipotong untuk diselesaikan lewat stok opname (IN-02).
         'inventori.blokir_bhp_stok_kurang' => ['default' => false, 'rules' => ['boolean'], 'publik' => false],
+
+        // Kebijakan paket multi-sesi (TR-02; pertanyaan terbuka PRD → diatur tiap klinik). Paket yang belum dipakai selalu bisa
+        // direfund penuh lewat refund tagihan (BL-06). Sisa paket yang sudah dipakai: refund prorata hanya bila diizinkan,
+        // dipotong `potongan_refund_persen`. Pengalihan sisa sesi ke pasien lain hanya bila diizinkan.
+        'paket.boleh_transfer' => ['default' => false, 'rules' => ['boolean'], 'publik' => false],
+        'paket.refund_sisa' => ['default' => false, 'rules' => ['boolean'], 'publik' => false],
+        'paket.potongan_refund_persen' => ['default' => 0, 'rules' => ['required', 'integer', 'between:0,100'], 'publik' => false],
 
         // Treatment ber-template consent wajib punya informed consent yang disetujui sebelum pemeriksaan ditutup (RM-03).
         'rme.wajib_informed_consent' => ['default' => true, 'rules' => ['boolean'], 'publik' => false],

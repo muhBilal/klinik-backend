@@ -84,14 +84,15 @@ Payload `PUT /pemeriksaan` (semua opsional; tanpa `pemeriksaan.dokter` hanya vit
   "diagnosas": [{ "icd10_id": 5, "jenis": "primer" }],
   "akses_terbatas": false,
   "tindakans": [{ "id": 12, "tindakan_id": 1, "jumlah": 1, "keterangan": null, "petugas_id": 9, "icd9cm_id": 58,
-                  "gigi": 16, "permukaan": "MO", "rencana_item_id": null }],
+                  "gigi": 16, "permukaan": "MO", "rencana_item_id": null, "paket_pasien_item_id": null }],
   "resep": [{ "obat_id": 1, "jumlah": 10, "aturan_pakai": "3 x 1 sesudah makan" }],
   "catatan_resep": "..."
 }
 ```
 Respons: kunjungan lengkap (`loadDetail`). `tindakans[].id` = id baris tindakan kunjungan yang sudah ada (upsert); tanpa `id`
 baris dicocokkan lewat `tindakan_id` + `gigi`. `gigi` (FDI) wajib untuk treatment `per_gigi`; `permukaan` wajib bila kondisi hasilnya
-per permukaan; `rencana_item_id` = item rencana perawatan gigi yang dikerjakan (gigi/permukaan diambil dari item bila kosong).
+per permukaan; `rencana_item_id` = item rencana perawatan gigi yang dikerjakan (gigi/permukaan diambil dari item bila kosong);
+`paket_pasien_item_id` = sesi paket pasien yang dipakai (ditagih Rp 0; 422 bila paket tidak aktif/kedaluwarsa/sisa kurang).
 
 ## RME estetika
 Detail & payload: [modul/F1-05](modul/F1-05-rme-estetika.md)
@@ -130,6 +131,20 @@ menyetujui foto. `GET /berkas` + filter `protokol_foto_id`, `posisi`, `tahap` da
 | POST | `/persetujuan-fotos/{uuid}/cabut` | pasien.kelola, rme.tindakan | `{ alasan* }` |
 
 Bentuk berkas: `{ uuid, cabang_id, pasien_id, kunjungan_id, kategori, keterangan, nama_file, mime, ukuran, diunggah_oleh, pengunggah: {id, name}, created_at }` (tanpa `id`, `path`, `checksum`).
+
+## Paket multi-sesi & voucher/promo
+Detail & aturan: [modul/F1-08](modul/F1-08-paket-promo.md)
+
+| Method | Path | Izin | Keterangan |
+|--------|------|------|------------|
+| GET | `/pakets` | login | **array**; `aktif=1`; + `items.tindakan`, `nilai_normal`, `terjual_count` |
+| POST / GET / PUT / DELETE | `/pakets`, `/{id}` | master.kelola | `{ kode*, nama*, harga*, masa_berlaku_hari, lintas_cabang, is_active, items*[]{tindakan_id*, jumlah_sesi*} }` |
+| GET | `/pasiens/{id}/pakets` | pasien.lihat, kasir.tagihan, rme.tindakan, pemeriksaan.dokter | **array**; `aktif=1`; + sisa per item, `status_efektif` |
+| POST | `/pasiens/{id}/pakets` | kasir.tagihan | `{ paket_id*, catatan }` → paket `menunggu_bayar` + `tagihan_id` |
+| GET | `/paket-pasiens/{id}` | sama dengan daftar | + `pemakaian[]`, `refund_sisa` |
+| POST | `/paket-pasiens/{id}/perpanjang` · `/alihkan` · `/refund` | kasir.void | `{berlaku_sampai*, alasan*}` · `{pasien_id*, alasan*}` · `{metode* tunai/transfer, referensi, alasan*}` |
+| apiResource | `/promos` | promo.kelola | paginated; + `dipakai`, nama `tindakans`/`pakets`/`cabangs` |
+| POST / DELETE | `/tagihans/{id}/promo` | kasir.tagihan | `{ kode* }` → tagihan detail; DELETE = lepas |
 
 ## Kedokteran gigi: odontogram & rencana perawatan
 Detail & aturan: [modul/F1-07](modul/F1-07-odontogram.md)

@@ -108,6 +108,15 @@ Status resep: `menunggu` → `diserahkan`. Status tagihan: `belum_bayar` → `lu
   kunjungan ditutup → rencana selesai otomatis. Estimasi = harga cabang saat disusun; tagihan = harga saat dikerjakan.
 - Odontogram & rencana tampil untuk poli ber-`spesialisasi = gigi` (atau kunjungan yang punya data gigi).
 
+### Paket multi-sesi & promo (detail: [modul/F1-08-paket-promo.md](modul/F1-08-paket-promo.md))
+- Paket dijual lewat tagihan mandiri; **aktif saat tagihan lunas** (masa berlaku sejak lunas). Sesi dipakai dari pemeriksaan
+  (`paket_pasien_item_id`) → baris tagihan Rp 0 "paket … sesi n/N". Sisa = sesi − pemakaian di kunjungan bukan batal (kunjungan terbuka
+  ikut mengurangi). Kedaluwarsa dicek terhadap tanggal kunjungan.
+- Refund tagihan paket hanya bila belum ada sesi dipakai. Refund sisa prorata & pengalihan ke pasien lain hanya bila diizinkan pengaturan
+  `paket.*`, oleh pemegang `kasir.void`; refund tunai mengurangi kas seharusnya shift.
+- Kode promo dipasang sebelum bayar, diperiksa ulang & dikunci saat bayar, dicatat saat lunas, kuota kembali saat refund. Potongan promo
+  di luar batas diskon per peran; diskon manual + promo ≤ total; pajak dari nilai setelah keduanya.
+
 ### Farmasi (`FarmasiService`)
 - **Obat hanya diserahkan setelah tagihan lunas** (alur: poli → kasir → farmasi).
 - Stok setiap item divalidasi (dengan lock) sebelum dikurangi; bila kurang → 422 menyebut obat yang kurang.
