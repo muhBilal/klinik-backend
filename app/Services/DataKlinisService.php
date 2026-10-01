@@ -19,6 +19,17 @@ class DataKlinisService
     private const PROFIL = ['fitzpatrick', 'status_kehamilan', 'riwayat_obat', 'riwayat_penyakit'];
 
     /** Bentuk respons API: `{ klinis: {...}|null, alergis: [...] }`. */
+    /**
+     * Obat yang tercatat sebagai alergi pasien (bertaut ke master obat): [obat_id => zat]. Dasar konfirmasi dokter saat meresepkan
+     * obat / komponen racikan yang dialergikan (PS-03, FR-02).
+     *
+     * @return array<int, string>
+     */
+    public function obatAlergi(int $pasienId): array
+    {
+        return PasienAlergi::where('pasien_id', $pasienId)->whereNotNull('obat_id')->pluck('zat', 'obat_id')->all();
+    }
+
     public function data(Pasien $pasien): array
     {
         return [

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\Role;
 use App\Enums\StatusAppointment;
 use App\Models\Appointment;
+use App\Models\Cabang;
 use App\Models\Pasien;
 use App\Models\Poli;
 use App\Models\SumberDaya;
@@ -251,5 +252,75 @@ class BookingTest extends TestCase
         $this->postJson('/api/jadwals', [
             'user_id' => $terapis->id, 'hari' => 1, 'jam_mulai' => '17:00', 'jam_selesai' => '19:00',
         ])->assertCreated();
+    }
+
+    public function test_treatment_dengan_ruang_wajib_harus_memilih_ruang_yang_cocok(): void
+    {
+        $admin = User::where('role', Role::Admin->value)->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $tindakan = $this->tindakan();
+        $ruangs = SumberDaya::withoutGlobalScopes()->where('tipe', 'ruang')->orderBy('id')->get();
+        [$cocok, $lain] = [$ruangs[0], $ruangs[1]];
+        $cabangId = $cocok->cabang_id;
+
+        // Atur ruang wajib lewat katalog treatment
+        $this->withHeaders(['X-Cabang-Id' => $cabangId])
+            ->putJson("/api/tindakans/{$tindakan->id}", [
+                'kode' => $tindakan->kode, 'nama' => $tindakan->nama, 'durasi_menit' => $tindakan->durasi_menit,
+                'tarif' => $tindakan->tarif, 'sumber_daya_ids' => [$cocok->id],
+            ])->assertOk()
+            ->assertJsonPath('sumber_dayas.0.id', $cocok->id);
+
+        $this->getJson('/api/appointments-kebutuhan?'.http_build_query(['tindakan_ids' => [$tindakan->id]]))
+            ->assertOk()
+            ->assertJsonPath('0.tipe', 'ruang')
+            ->assertJsonPath('0.pilihan.0.id', $cocok->id);
+
+        $dasar = [
+            'pasien_id' => Pasien::value('id'),
+            'petugas_id' => $this->dokter()->id,
+            'mulai_at' => $this->seninDepan(),
+            'tindakan_ids' => [$tindakan->id],
+        ];
+
+        $this->postJson('/api/appointments', $dasar)->assertStatus(422)->assertJsonValidationErrors('sumber_daya_ids');
+        $this->postJson('/api/appointments', [...$dasar, 'sumber_daya_ids' => [$lain->id]])
+            ->assertStatus(422)->assertJsonValidationErrors('sumber_daya_ids');
+        $this->postJson('/api/appointments', [...$dasar, 'sumber_daya_ids' => [$cocok->id]])->assertCreated();
+
+        // Ruang wajib dinonaktifkan → treatment tidak bisa dibooking di cabang itu
+        $cocok->update(['is_active' => false]);
+        $this->postJson('/api/appointments', [...$dasar, 'mulai_at' => $this->seninDepan('14:00'), 'sumber_daya_ids' => []])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('sumber_daya_ids');
+    }
+
+    public function test_staf_cabang_tidak_menghapus_ruang_wajib_cabang_lain(): void
+    {
+        $admin = User::where('role', Role::Admin->value)->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $tindakan = $this->tindakan();
+        $utama = SumberDaya::withoutGlobalScopes()->orderBy('id')->firstOrFail();
+        $cabangLain = Cabang::create(['kode' => 'CB2', 'nama' => 'Cabang Dua', 'is_active' => true]);
+        $ruangLain = SumberDaya::withoutGlobalScopes()->create([
+            'cabang_id' => $cabangLain->id, 'kode' => 'R-X', 'nama' => 'Ruang X', 'tipe' => 'ruang', 'is_active' => true,
+        ]);
+        $tindakan->sumberDayas()->sync([$utama->id, $ruangLain->id]);
+
+        // Admin memilih cabang utama: hanya ruang cabang utama yang terlihat & diganti
+        $this->withHeaders(['X-Cabang-Id' => $utama->cabang_id])
+            ->putJson("/api/tindakans/{$tindakan->id}", [
+                'kode' => $tindakan->kode, 'nama' => $tindakan->nama, 'durasi_menit' => $tindakan->durasi_menit,
+                'tarif' => $tindakan->tarif, 'sumber_daya_ids' => [],
+            ])->assertOk();
+
+        $this->assertSame([$ruangLain->id], $tindakan->sumberDayas()->pluck('sumber_dayas.id')->all());
+
+        $this->putJson("/api/tindakans/{$tindakan->id}", [
+            'kode' => $tindakan->kode, 'nama' => $tindakan->nama, 'durasi_menit' => $tindakan->durasi_menit,
+            'tarif' => $tindakan->tarif, 'sumber_daya_ids' => [$ruangLain->id],
+        ])->assertStatus(422)->assertJsonValidationErrors('sumber_daya_ids');
     }
 }

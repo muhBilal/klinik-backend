@@ -27,7 +27,8 @@ class CatatanTindakanController extends Controller
         $kunjungan = Kunjungan::withoutGlobalScope('cabang')->findOrFail($kunjunganTindakan->kunjungan_id);
         abort_unless($rekamMedis->bolehLihat($request->user(), $kunjungan), 403, 'Rekam medis kunjungan ini berakses terbatas.');
 
-        $kunjunganTindakan->load(['tindakan:id,nama,jenis_catatan', 'petugas:id,name', 'catatan' => fn ($q) => $q->with(CatatanTindakanService::RELASI)]);
+        $kunjunganTindakan->load(['tindakan:id,nama,jenis_catatan', 'petugas:id,name',
+            'catatan' => fn ($q) => $q->with(CatatanTindakanService::RELASI)]);
 
         return response()->json([
             'kunjungan_tindakan' => $kunjunganTindakan->only(['id', 'kunjungan_id', 'tindakan_id', 'jumlah', 'petugas_id']) + [

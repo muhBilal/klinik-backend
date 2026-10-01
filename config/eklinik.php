@@ -33,6 +33,12 @@ return [
         // Batas diskon maksimum per peran, {kode_peran: persen}. Peran tanpa entri = tidak dibatasi,
         // sehingga klinik yang belum mengatur batas tetap berjalan seperti sebelumnya (BL-02 bersifat opt-in).
         'keuangan.batas_diskon_persen' => ['default' => [], 'rules' => ['present', 'array'], 'item_rules' => ['integer', 'between:0,100'], 'publik' => false],
+        // Kasir wajib membuka shift kas sebelum menerima pembayaran (BL-05). Default tidak, agar klinik lama tetap berjalan.
+        'keuangan.wajib_shift' => ['default' => false, 'rules' => ['boolean'], 'publik' => false],
+        // Biaya jasa peracikan per racikan (FR-01), ditambahkan ke harga komponen.
+        'farmasi.biaya_racik' => ['default' => 0, 'rules' => ['required', 'integer', 'min:0', 'max:10000000'], 'publik' => false],
+        // Peringatan SIP/STR kedaluwarsa (AD-05): sekian hari sebelum tanggal berakhir.
+        'regulasi.peringatan_izin_hari' => ['default' => 60, 'rules' => ['required', 'integer', 'between:7,365'], 'publik' => false],
         // Stok BHP kurang saat pemeriksaan ditutup: true = tolak, false = tetap lanjut dan pemakaian
         // ditandai belum dipotong untuk diselesaikan lewat stok opname (IN-02).
         'inventori.blokir_bhp_stok_kurang' => ['default' => false, 'rules' => ['boolean'], 'publik' => false],
@@ -64,6 +70,17 @@ return [
             'publik' => false,
         ],
 
+        // WhatsApp (BK-06, CR-01): jenis pesan otomatis & nama template yang disetujui Meta.
+        // Parameter template pengingat: {{1}} nama pasien, {{2}} hari & jam, {{3}} treatment, {{4}} cabang; tombol cepat: Konfirmasi, Ubah jadwal.
+        // Parameter template tindak lanjut: {{1}} nama pasien, {{2}} treatment, {{3}} hari ke-, {{4}} nama klinik.
+        'wa.reminder_h1' => ['default' => true, 'rules' => ['boolean'], 'publik' => false],
+        'wa.jam_reminder_h1' => ['default' => '09:00', 'rules' => ['required', 'date_format:H:i'], 'publik' => false],
+        'wa.reminder_2jam' => ['default' => true, 'rules' => ['boolean'], 'publik' => false],
+        'wa.followup_h1' => ['default' => true, 'rules' => ['boolean'], 'publik' => false],
+        'wa.followup_h7' => ['default' => false, 'rules' => ['boolean'], 'publik' => false],
+        'wa.template_reminder' => ['default' => 'pengingat_booking', 'rules' => ['required', 'string', 'max:100', 'regex:/^[a-z0-9_]+$/'], 'publik' => false],
+        'wa.template_followup' => ['default' => 'tindak_lanjut_perawatan', 'rules' => ['required', 'string', 'max:100', 'regex:/^[a-z0-9_]+$/'], 'publik' => false],
+
         // Data pribadi (PS-04, UU No. 27/2022 PDP): opsi wajib persetujuan pemrosesan sebelum kunjungan didaftarkan / check-in.
         // Naskah wajib ditinjau penasihat hukum klinik. Placeholder: {nama_pasien} {no_rm} {klinik} {tanggal}; marketing + {kanal}.
         'pdp.wajib_persetujuan' => ['default' => false, 'rules' => ['boolean'], 'publik' => false],
@@ -92,6 +109,11 @@ return [
             'rules' => ['required', 'string', 'max:10000'],
             'publik' => false,
         ],
+
+        // Kop & kaki dokumen cetak (AD-04): consent, persetujuan, rencana perawatan, resume/surat (Fase 2).
+        'dokumen.kop_tambahan' => ['default' => null, 'rules' => ['nullable', 'string', 'max:255'], 'publik' => true],
+        'dokumen.penanggung_jawab' => ['default' => null, 'rules' => ['nullable', 'string', 'max:150'], 'publik' => true],
+        'dokumen.kaki' => ['default' => null, 'rules' => ['nullable', 'string', 'max:255'], 'publik' => true],
 
         // Jam operasional klinik (AD-04); dipakai sebagai batas wajar jadwal praktik & booking.
         'klinik.jam_buka' => ['default' => '08:00', 'rules' => ['required', 'date_format:H:i'], 'publik' => true],

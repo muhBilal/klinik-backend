@@ -39,7 +39,7 @@ class TindakanController extends Controller
             ->select(['id', 'kode', 'nama', 'kategori_id', 'icd9cm_id', 'template_consent_id', 'jenis_catatan', 'protokol_foto_id', 'per_gigi', 'kondisi_gigi_hasil', 'durasi_menit', 'buffer_menit', 'tarif', 'is_active'])
             ->denganHargaCabang($cabangId)
             ->with(['kategori:id,nama', 'icd9cm:id,kode,nama'])
-            ->withCount(['hargas', 'bhps'])
+            ->withCount(['hargas', 'bhps', 'sumberDayas'])
             ->when($request->boolean('komisi') && $this->bolehKomisi($request), fn ($q) => $q->with('komisis:id,tindakan_id,peran,jenis,nilai'))
             ->when($request->boolean('aktif'), fn ($q) => $q->where('is_active', true)->tersediaDi($cabangId))
             ->when($request->filled('kategori_id'), fn ($q) => $q->where('kategori_id', $request->integer('kategori_id')))
@@ -97,6 +97,8 @@ class TindakanController extends Controller
                 ->whereHas('cabang')->with('cabang:id,kode,nama,is_active'),
             'bhps' => fn ($q) => $q->select(['id', 'tindakan_id', 'obat_id', 'jumlah'])
                 ->with('obat:id,kode,nama,satuan,is_active'),
+            'sumberDayas' => fn ($q) => $q->select(['sumber_dayas.id', 'sumber_dayas.cabang_id', 'kode', 'nama', 'tipe', 'is_active'])
+                ->with('cabang:id,kode,nama'),
         ]);
     }
 
@@ -134,6 +136,9 @@ class TindakanController extends Controller
             'komisis.*.peran' => ['required', 'distinct', Rule::enum(PeranKomisi::class)->only(PeranKomisi::perTreatment())],
             'komisis.*.jenis' => ['required', Rule::enum(JenisKomisi::class)],
             'komisis.*.nilai' => ['required', 'numeric', 'min:0', 'max:100000000', 'decimal:0,2'],
+            // Ruang/alat yang wajib dipakai saat booking (BK-08); hanya ruang/alat cabang yang terlihat pengguna yang diganti.
+            'sumber_daya_ids' => ['sometimes', 'array', 'max:50'],
+            'sumber_daya_ids.*' => ['integer', 'distinct', Rule::exists('sumber_dayas', 'id')->whereNull('deleted_at')],
         ]);
 
         foreach ($data['komisis'] ?? [] as $i => $komisi) {

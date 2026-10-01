@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\BagianAddendum;
 use App\Http\Controllers\Controller;
 use App\Models\Kunjungan;
+use App\Models\ResepItem;
 use App\Services\PemeriksaanService;
 use App\Services\RekamMedisService;
 use App\Support\Gigi;
@@ -54,10 +55,21 @@ class PemeriksaanController extends Controller
             'tindakans.*.paket_pasien_item_id' => ['nullable', 'integer'],
 
             'resep' => ['sometimes', 'array'],
-            'resep.*.obat_id' => ['required', 'distinct', Rule::exists('obats', 'id')->where('is_active', true)->whereNull('deleted_at')],
+            // Obat jadi: obat_id. Racikan (FR-01): racikan=true, nama, bentuk, komponen[] per satu racikan; jumlah = banyaknya racikan.
+            'resep.*.racikan' => ['boolean'],
+            'resep.*.obat_id' => ['nullable', 'distinct', Rule::exists('obats', 'id')->where('is_active', true)->whereNull('deleted_at')],
             'resep.*.jumlah' => ['required', 'integer', 'min:1', 'max:1000'],
             'resep.*.aturan_pakai' => ['required', 'string', 'max:255'],
+            'resep.*.nama_racikan' => ['nullable', 'string', 'max:150'],
+            'resep.*.bentuk' => ['nullable', Rule::in(ResepItem::BENTUK)],
+            'resep.*.jumlah_racikan' => ['nullable', 'numeric', 'min:0', 'max:100000'],
+            'resep.*.satuan_racikan' => ['nullable', 'string', 'max:20'],
+            'resep.*.komponen' => ['nullable', 'array', 'max:10'],
+            'resep.*.komponen.*.obat_id' => ['required', Rule::exists('obats', 'id')->where('is_active', true)->whereNull('deleted_at')],
+            'resep.*.komponen.*.jumlah' => ['required', 'numeric', 'gt:0', 'max:99999', 'decimal:0,3'],
             'catatan_resep' => ['nullable', 'string', 'max:1000'],
+            // Dokter sudah membaca peringatan alergi dan tetap meresepkan (FR-02)
+            'abaikan_alergi' => ['boolean'],
         ], [
             'tekanan_darah.regex' => 'Format tekanan darah harus sistolik/diastolik, contoh 120/80.',
         ]);

@@ -134,6 +134,54 @@ class KasirTest extends TestCase
         ])->assertOk()->assertJsonPath('grand_total', 90000);
     }
 
+    public function test_diskon_di_atas_batas_boleh_dengan_persetujuan_atasan(): void
+    {
+        Sanctum::actingAs($this->admin());
+        $this->putJson('/api/pengaturan', ['keuangan' => ['batas_diskon_persen' => ['kasir' => 10, 'manajer' => 30]]])->assertOk();
+
+        Sanctum::actingAs($this->kasir());
+        $tagihan = $this->buatTagihan(100000);
+        $url = "/api/tagihans/{$tagihan['id']}/bayar";
+        $bayar = fn (int $diskon, ?array $persetujuan = null) => $this->postJson($url, array_filter([
+            'pembayarans' => [['metode' => 'tunai', 'jumlah' => 100000 - $diskon]], 'diskon' => $diskon, 'persetujuan' => $persetujuan,
+        ]));
+
+        // Tanpa persetujuan: ditolak dengan penanda perlu_persetujuan (dipakai UI untuk menampilkan form atasan)
+        $bayar(20000)->assertStatus(422)->assertJsonValidationErrors(['diskon', 'perlu_persetujuan']);
+
+        // Password salah, kasir sendiri, dan pengguna tanpa izin kasir.diskon ditolak
+        $bayar(20000, ['email' => 'manajer@eklinik.test', 'password' => 'salah'])->assertStatus(422)->assertJsonValidationErrors('persetujuan');
+        $bayar(20000, ['email' => 'kasir@eklinik.test', 'password' => 'password'])->assertStatus(422)->assertJsonValidationErrors('persetujuan');
+        $bayar(20000, ['email' => 'perawat@eklinik.test', 'password' => 'password'])->assertStatus(422)->assertJsonValidationErrors('persetujuan');
+
+        // Melebihi batas manajer sendiri (30%)
+        $bayar(40000, ['email' => 'manajer@eklinik.test', 'password' => 'password'])->assertStatus(422)->assertJsonValidationErrors('persetujuan');
+
+        $manajer = User::where('email', 'manajer@eklinik.test')->firstOrFail();
+        $bayar(20000, ['email' => 'manajer@eklinik.test', 'password' => 'password'])
+            ->assertOk()
+            ->assertJsonPath('grand_total', 80000)
+            ->assertJsonPath('diskon_disetujui_oleh', $manajer->id)
+            ->assertJsonPath('penyetuju_diskon.name', $manajer->name);
+
+        $this->assertDatabaseHas('audit_logs', ['aksi' => 'setujui_diskon', 'tipe' => 'tagihan', 'subjek_id' => $tagihan['id']]);
+    }
+
+    public function test_wajib_shift_menolak_pembayaran_tanpa_shift_terbuka(): void
+    {
+        Sanctum::actingAs($this->admin());
+        $this->putJson('/api/pengaturan', ['keuangan' => ['wajib_shift' => true]])->assertOk();
+
+        Sanctum::actingAs($this->kasir());
+        $tagihan = $this->buatTagihan(50000);
+        $body = ['pembayarans' => [['metode' => 'tunai', 'jumlah' => 50000]]];
+
+        $this->postJson("/api/tagihans/{$tagihan['id']}/bayar", $body)->assertStatus(422)->assertJsonValidationErrors('shift');
+
+        $this->postJson('/api/shift-kas', ['modal_awal' => 0])->assertCreated();
+        $this->postJson("/api/tagihans/{$tagihan['id']}/bayar", $body)->assertOk();
+    }
+
     public function test_admin_tidak_dibatasi_diskon(): void
     {
         Sanctum::actingAs($this->admin());
@@ -150,6 +198,8 @@ class KasirTest extends TestCase
     public function test_shift_kas_merekap_per_metode_dan_menghitung_selisih(): void
     {
         Sanctum::actingAs($this->kasir());
+
+        $this->assertSame('null', $this->getJson('/api/shift-kas/aktif')->assertOk()->getContent());
 
         $shift = $this->postJson('/api/shift-kas', ['modal_awal' => 200000])->assertCreated()->json();
 
@@ -170,7 +220,30 @@ class KasirTest extends TestCase
         $this->postJson("/api/shift-kas/{$shift['id']}/tutup", ['kas_fisik' => 265000])
             ->assertOk()->assertJsonPath('selisih', -5000);
 
-        $this->getJson('/api/shift-kas/aktif')->assertOk()->assertExactJson([]);
+        $this->assertSame('null', $this->getJson('/api/shift-kas/aktif')->assertOk()->getContent());
+    }
+
+    public function test_kembalian_tunai_tidak_ikut_rekap_kas(): void
+    {
+        Sanctum::actingAs($this->kasir());
+        $this->postJson('/api/shift-kas', ['modal_awal' => 100000])->assertCreated();
+
+        // Tagihan 80.000: QRIS 30.000 + tunai diserahkan 100.000 → kembalian 50.000
+        $tagihan = $this->buatTagihan(80000);
+        $res = $this->postJson("/api/tagihans/{$tagihan['id']}/bayar", [
+            'pembayarans' => [['metode' => 'qris', 'jumlah' => 30000], ['metode' => 'tunai', 'jumlah' => 100000]],
+        ])->assertOk()
+            ->assertJsonPath('dibayar', 130000)
+            ->assertJsonPath('kembalian', 50000);
+
+        // Baris tunai mencatat uang yang diserahkan; kembalian dikurangkan di rekap shift (F1-03)
+        $tunai = collect($res->json('pembayarans'))->firstWhere('metode', 'tunai');
+        $this->assertSame(100000, $tunai['jumlah']);
+
+        // Kas seharusnya = modal + tunai bersih (bukan uang yang diserahkan)
+        $this->getJson('/api/shift-kas/aktif')->assertOk()
+            ->assertJsonPath('rekap.total', 80000)
+            ->assertJsonPath('rekap.kas_seharusnya', 150000);
     }
 
     public function test_void_tagihan_belum_bayar_butuh_izin_khusus(): void

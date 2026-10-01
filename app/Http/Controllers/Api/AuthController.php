@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -96,6 +97,47 @@ class AuthController extends Controller
     public function me(Request $request): JsonResponse
     {
         return response()->json($this->userPayload($request->user()));
+    }
+
+    /**
+     * Ubah profil sendiri. Role, poli, cabang & status aktif sengaja tidak dapat diubah di sini
+     * (hanya lewat menu admin) agar pengguna tidak bisa menaikkan hak aksesnya sendiri.
+     *
+     * Ganti password TIDAK di sini: `PUT /me/password` (ProfilController) yang mencabut sesi di
+     * perangkat lain dan mencatat audit. Satu jalur saja agar keduanya tidak berbeda perilaku.
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user)],
+            'sip' => ['nullable', 'string', 'max:50'],
+            // Foto profil: data URI PNG/JPEG/WebP hasil perkecilan di browser (maks. ~200 KB setelah base64)
+            'avatar' => ['nullable', 'string', 'max:262144', 'regex:/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]+$/'],
+        ]);
+
+        $user->update($data);
+
+        return response()->json($this->userPayload($user));
+    }
+
+    /**
+     * Simpan preferensi tema tampilan milik pengguna sendiri.
+     * Rentang nilai disamakan dengan `sanitize()` di frontend src/lib/theme.js.
+     */
+    public function updateTheme(Request $request): JsonResponse
+    {
+        $theme = $request->validate([
+            'hue' => ['required', 'numeric', 'min:0', 'max:360'],
+            'chroma' => ['required', 'numeric', 'min:0', 'max:1.4'],
+            'depth' => ['required', 'numeric', 'min:0.38', 'max:0.68'],
+        ]);
+
+        $request->user()->update(['theme' => $theme]);
+
+        return response()->json($theme);
     }
 
     public function logout(Request $request): JsonResponse

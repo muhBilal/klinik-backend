@@ -19,7 +19,7 @@ class UserController extends Controller
     public function index(Request $request): JsonResponse
     {
         $users = $this->filterAktif(User::query(), $request)
-            ->select(['id', 'name', 'email', 'role', 'poli_id', 'cabang_id', 'sip', 'sip_berlaku_sampai', 'is_active', 'two_factor_confirmed_at'])
+            ->select(['id', 'name', 'email', 'role', 'poli_id', 'cabang_id', 'sip', 'sip_berlaku_sampai', 'str', 'str_berlaku_sampai', 'nik', 'ihs_id', 'is_active', 'two_factor_confirmed_at'])
             ->with(self::RELASI)
             ->when($request->filled('role'), fn ($q) => $q->where('role', $request->input('role')))
             ->when($request->filled('poli_id'), fn ($q) => $q->where('poli_id', $request->integer('poli_id')))
@@ -122,6 +122,11 @@ class UserController extends Controller
             'cabang_id' => ['nullable', Rule::exists('cabangs', 'id')->whereNull('deleted_at')],
             'sip' => ['nullable', 'string', 'max:50'],
             'sip_berlaku_sampai' => ['nullable', 'date'],
+            // STR (AD-05; UU 17/2023: berlaku seumur hidup → kosongkan tanggal)
+            'str' => ['nullable', 'string', 'max:50'],
+            // NIK tenaga medis → IHS Practitioner SATUSEHAT (SS-02)
+            'nik' => ['nullable', 'digits:16', Rule::unique('users')->ignore($user)],
+            'str_berlaku_sampai' => ['nullable', 'date'],
             'is_active' => ['boolean'],
         ], [
             'poli_id.required' => 'Poli wajib diisi untuk peran yang bertugas sebagai dokter.',

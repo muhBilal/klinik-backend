@@ -12,8 +12,10 @@ Baca berurutan sebelum mengubah kode.
 | [05-api-reference.md](05-api-reference.md) | Daftar endpoint, izin yang dibutuhkan, payload |
 | [06-conventions.md](06-conventions.md) | Konvensi kode, cara menambah fitur, testing, jebakan umum |
 | [07-roadmap-progress.md](07-roadmap-progress.md) | Status pengerjaan PRD per fase & ID kebutuhan, rencana berikutnya |
+| [07-roadmap-modul.md](07-roadmap-modul.md) | Gap analysis modul & roadmap agar fleksibel untuk semua jenis klinik |
 | [modul/](modul/) | Dokumentasi per fitur/modul (satu file per fitur, lihat daftar di bawah) |
-| [PRD — Sistem Manajemen Klinik Estetika (eKlinik).md](PRD%20—%20Sistem%20Manajemen%20Klinik%20Estetika%20(eKlinik).md) | PRD produk (sumber kebutuhan & ID seperti `AD-01`) |
+| [PRD-v2/](PRD-v2/PRD%20v2%20—%20Sistem%20Manajemen%20Klinik%20Estetika%20(Lefaklinik).md) | **PRD v2 (acuan terbaru)**: status per ID, kebutuhan baru, kriteria penerimaan P0 tersisa, roadmap |
+| [PRD — Sistem Manajemen Klinik Estetika (eKlinik).md](PRD%20—%20Sistem%20Manajemen%20Klinik%20Estetika%20(eKlinik).md) | PRD v1 (arsip; sumber kebutuhan & ID seperti `AD-01`) |
 
 ### Dokumentasi per fitur (`modul/`)
 
@@ -36,6 +38,13 @@ Baca berurutan sebelum mengubah kode.
 | [F1-10-data-klinis-pdp.md](modul/F1-10-data-klinis-pdp.md) | Data klinis pasien terstruktur (alergi bertaut obat, Fitzpatrick, hamil/menyusui, riwayat obat & penyakit) terpisah dari identitas + peringatan di pemeriksaan/farmasi; persetujuan UU PDP: pemrosesan & opt-in marketing terpisah, bertanda tangan, bisa dicabut, opsi wajib sebelum pendaftaran | PS-03, PS-04 |
 | [F1-09-komisi.md](modul/F1-09-komisi.md) | Komisi & jasa medis: komisi per treatment × peran (dokter, terapis, asisten) di master treatment, jasa konsultasi = treatment poli, persen/nominal, rekap per periode dari tagihan lunas, setujui & kunci, penyesuaian, slip sendiri | KM-01, KM-03 |
 | [F1-08-paket-promo.md](modul/F1-08-paket-promo.md) | Paket multi-sesi (jual → aktif saat lunas, sisa sesi, pakai di pemeriksaan Rp 0, refund/alih/perpanjang sesuai kebijakan) & voucher/promo (periode, kuota, minimum, cabang, treatment/paket) | TR-02, TR-06, BL-01 |
+| [V2-04-komisi.md](modul/V2-04-komisi.md) | Komisi & jasa medis: aturan per treatment/kategori/peran, kejadian bayar/refund, rekap & slip, kunci periode; petugas tambahan per tindakan | KM-01, KM-03, AN-03, TR-01 |
+| [V2-05-profil-klinis-pdp.md](modul/V2-05-profil-klinis-pdp.md) | Profil klinis & alergi terstruktur + peringatan, peringatan alergi di resep, consent UU PDP pemrosesan & marketing, deteksi pasien ganda | PS-02/03/04, FR-02 |
+| [V2-06-laporan.md](modul/V2-06-laporan.md) | Laporan penjualan (treatment/kategori/dokter/metode/cabang), paket & kewajiban sisa sesi, dashboard no-show/top treatment/per cabang, ekspor CSV; perbaikan kembalian tunai | LP-01/02/03, AD-01, LP-06 |
+| [V2-07-racikan-regulasi.md](modul/V2-07-racikan-regulasi.md) | Resep racikan, STR/SIP + peringatan & blokir booking, jenis produk + nomor BPOM, impor master CSV, kop dokumen | FR-01, AD-04/05/06/10 |
+| [V2-08-satusehat.md](modul/V2-08-satusehat.md) | SATUSEHAT: OAuth2, IHS pasien/praktisi via NIK, Bundle FHIR (Encounter, Condition, Observation, Procedure, MedicationRequest), antrean + retry + kirim ulang | SS-01..05, PS-05 |
+| [V2-09-whatsapp.md](modul/V2-09-whatsapp.md) | WhatsApp: reminder H-1 & 2 jam, follow-up H+1/H+7, driver log/Cloud API, webhook status & tombol konfirmasi/ubah jadwal | BK-06, CR-01 |
+| [V2-10-operasional.md](modul/V2-10-operasional.md) | Backup & restore teruji, uji beban pencarian 100 ribu pasien, observabilitas scheduler/antrean/job gagal, tinjauan keamanan | 7.2 |
 | [F1-07-odontogram.md](modul/F1-07-odontogram.md) | Odontogram FDI per gigi & permukaan (riwayat per kunjungan), rencana perawatan berfase + estimasi, tindakan per gigi → odontogram & tagihan, spesialisasi poli | DG-01/02/07, bagian 6 |
 
 ## Ringkasan 30 detik

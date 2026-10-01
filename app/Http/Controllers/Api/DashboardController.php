@@ -17,6 +17,8 @@ use App\Models\Pasien;
 use App\Models\Poli;
 use App\Models\Resep;
 use App\Models\Tagihan;
+use App\Models\User;
+use App\Services\PengaturanService;
 use App\Support\CabangAktif;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -78,7 +80,42 @@ class DashboardController extends Controller
                 ? (int) Tagihan::where('status', StatusTagihan::Lunas)->whereDate('dibayar_at', $today)->sum('grand_total')
                 : null,
             'obat_stok_menipis' => Obat::where('is_active', true)->stokMenipis()->orderBy('stok')->limit(10)->get(['id', 'nama', 'satuan', 'stok']),
+            // AD-05: SIP/STR yang akan/sudah kedaluwarsa — pengelola pengguna melihat semua, petugas melihat miliknya
+            'izin_praktik' => $this->izinPraktik($request->user()),
         ]);
+    }
+
+    /**
+     * SIP/STR berakhir dalam `regulasi.peringatan_izin_hari` hari (atau sudah lewat), dan dokter tanpa SIP.
+     *
+     * @return list<array{user_id: int, nama: string, dokumen: string, nomor: ?string, berlaku_sampai: ?string, sisa_hari: ?int}>
+     */
+    private function izinPraktik(User $user): array
+    {
+        $hari = (int) app(PengaturanService::class)->get('regulasi.peringatan_izin_hari');
+        $batas = today()->addDays($hari);
+
+        $users = $user->punyaIzin(Izin::PenggunaKelola)
+            ? User::petugasMedis()->get(['id', 'name', 'role', 'sip', 'sip_berlaku_sampai', 'str', 'str_berlaku_sampai'])
+            : collect([$user]);
+
+        $hasil = [];
+        foreach ($users as $u) {
+            foreach (['sip' => 'SIP', 'str' => 'STR'] as $kolom => $label) {
+                $sampai = $u->{"{$kolom}_berlaku_sampai"};
+                $tanpaSip = $kolom === 'sip' && blank($u->sip) && $u->tercatatSebagaiDokter();
+
+                if ($tanpaSip || ($sampai && $sampai->lte($batas))) {
+                    $hasil[] = [
+                        'user_id' => $u->id, 'nama' => $u->name, 'dokumen' => $label, 'nomor' => $u->{$kolom},
+                        'berlaku_sampai' => $sampai?->toDateString(),
+                        'sisa_hari' => $sampai ? (int) today()->diffInDays($sampai, false) : null,
+                    ];
+                }
+            }
+        }
+
+        return collect($hasil)->sortBy(fn ($r) => $r['sisa_hari'] ?? -99999)->values()->all();
     }
 
     /** Kunjungan, no-show & omzet hari ini per cabang (hanya saat melihat semua cabang). */

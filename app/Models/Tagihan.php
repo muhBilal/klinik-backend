@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Table('tagihans')]
 #[Fillable([
-    'cabang_id', 'no_tagihan', 'kunjungan_id', 'pasien_id', 'total', 'diskon', 'promo_id', 'diskon_promo', 'pajak', 'pajak_persen',
+    'cabang_id', 'no_tagihan', 'kunjungan_id', 'pasien_id', 'total', 'diskon', 'diskon_disetujui_oleh', 'promo_id', 'diskon_promo', 'pajak', 'pajak_persen',
     'grand_total', 'status', 'keterangan', 'metode_bayar', 'dibayar', 'kembalian', 'kasir_id', 'shift_id',
     'dibayar_at', 'dibatalkan_at', 'dibatalkan_oleh', 'alasan_batal',
 ])]
@@ -98,6 +98,12 @@ class Tagihan extends Model
     public function kasir(): BelongsTo
     {
         return $this->belongsTo(User::class, 'kasir_id')->withTrashed();
+    }
+
+    /** Atasan yang menyetujui diskon di atas batas peran kasir (BL-02). */
+    public function penyetujuDiskon(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'diskon_disetujui_oleh')->withTrashed();
     }
 
     public function auditLabel(): ?string

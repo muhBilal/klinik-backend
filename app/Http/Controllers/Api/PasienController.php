@@ -13,6 +13,7 @@ use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
 /**
@@ -46,6 +47,50 @@ class PasienController extends Controller
             ->latest('id');
 
         return response()->json($this->paginate($pasiens, $request, 15));
+    }
+
+    /**
+     * Kandidat pasien ganda (PS-02): NIK sama, nomor HP sama (9 digit terakhir), atau tanggal lahir sama dengan nama mirip
+     * (kata pertama nama). `kecuali_id` = pasien yang sedang diubah.
+     */
+    public function duplikat(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'nama' => ['nullable', 'string', 'max:255'],
+            'tanggal_lahir' => ['nullable', 'date'],
+            'no_hp' => ['nullable', 'string', 'max:20'],
+            'nik' => ['nullable', 'string', 'max:16'],
+            'kecuali_id' => ['nullable', 'integer'],
+        ]);
+
+        $nik = preg_replace('/\D/', '', $data['nik'] ?? '');
+        $hp = substr((string) Pasien::normalkanHp($data['no_hp'] ?? null), -9);
+        $kataPertama = strtok(trim($data['nama'] ?? ''), ' ') ?: null;
+        $tanggal = $data['tanggal_lahir'] ?? null;
+
+        if (strlen($nik) < 16 && strlen($hp) < 9 && ! ($kataPertama && $tanggal)) {
+            return response()->json([]);
+        }
+
+        $kandidat = Pasien::query()
+            ->select(['id', 'no_rm', 'nik', 'nama', 'jenis_kelamin', 'tanggal_lahir', 'no_hp', 'alamat'])
+            ->when($data['kecuali_id'] ?? null, fn ($q, $id) => $q->whereKeyNot($id))
+            ->where(fn ($w) => $w
+                ->when(strlen($nik) === 16, fn ($q) => $q->orWhere('nik', $nik))
+                ->when(strlen($hp) === 9, fn ($q) => $q->orWhere('no_hp_digit', 'like', "%{$hp}"))
+                ->when($kataPertama && $tanggal, fn ($q) => $q->orWhere(fn ($x) => $x
+                    ->whereDate('tanggal_lahir', $tanggal)->whereLike('nama', "%{$kataPertama}%"))))
+            ->limit(5)
+            ->get();
+
+        return response()->json($kandidat->map(fn (Pasien $p) => [
+            ...$p->toArray(),
+            'alasan' => array_values(array_filter([
+                strlen($nik) === 16 && $p->nik === $nik ? 'NIK sama' : null,
+                strlen($hp) === 9 && str_ends_with((string) Pasien::normalkanHp($p->no_hp), $hp) ? 'No. HP sama' : null,
+                $tanggal && $p->tanggal_lahir?->toDateString() === Carbon::parse($tanggal)->toDateString() ? 'Nama mirip & tanggal lahir sama' : null,
+            ])),
+        ]));
     }
 
     public function store(Request $request): JsonResponse

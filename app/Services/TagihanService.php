@@ -96,7 +96,7 @@ class TagihanService
      */
     private function barisKunjungan(Kunjungan $kunjungan, Collection $pesanan): array
     {
-        $kunjungan->loadMissing(['poli', 'tindakans.tindakan', 'tindakans.paketItem.paketPasien:id,no_paket', 'resep.items.obat']);
+        $kunjungan->loadMissing(['poli', 'tindakans.tindakan', 'tindakans.paketItem.paketPasien:id,no_paket', 'resep.items.obat', 'resep.items.komponens']);
 
         // Jasa konsultasi = treatment yang dipilih di master poli (harga cabang & komisi dokter ikut katalog). Bila dokter sudah
         // mencatat treatment itu sebagai tindakan (mis. konsultasi ×2), tidak ditagih dua kali.
@@ -127,7 +127,7 @@ class TagihanService
         foreach ($kunjungan->resep?->items ?? [] as $item) {
             $items[] = [
                 'kategori' => 'obat',
-                'deskripsi' => "{$item->obat->nama} ({$item->obat->satuan})",
+                'deskripsi' => Str::limit($item->label(), 250, ''),
                 'jumlah' => $item->jumlah,
                 'harga' => $item->harga,
             ];

@@ -2,13 +2,17 @@
 
 namespace App\Models;
 
+use App\Enums\JenisPersetujuanData;
+use App\Enums\StatusPersetujuanData;
 use App\Enums\StatusPersetujuanFoto;
 use App\Models\Concerns\Auditable;
 use App\Services\NomorUrutService;
 use Database\Factories\PasienFactory;
 use Illuminate\Database\Eloquent\Attributes\Appends;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Attributes\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -22,6 +26,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 #[Table('pasiens')]
 #[Appends(['umur'])]
+#[Hidden(['no_hp_digit'])]
 #[Fillable([
     'nik', 'no_bpjs', 'nama', 'jenis_kelamin', 'tempat_lahir', 'tanggal_lahir',
     'golongan_darah', 'alamat', 'no_hp', 'pekerjaan',
@@ -36,6 +41,24 @@ class Pasien extends Model
         static::creating(function (Pasien $pasien) {
             $pasien->no_rm ??= app(NomorUrutService::class)->noRekamMedis();
         });
+
+        static::saving(function (Pasien $pasien) {
+            if ($pasien->isDirty('no_hp')) {
+                $pasien->no_hp_digit = static::normalkanHp($pasien->no_hp);
+            }
+        });
+    }
+
+    /** "+62 812-3456-7890" → "081234567890"; null bila kosong (PS-02). */
+    public static function normalkanHp(?string $hp): ?string
+    {
+        $digit = preg_replace('/\D/', '', (string) $hp);
+
+        if ($digit === '') {
+            return null;
+        }
+
+        return str_starts_with($digit, '62') ? '0'.substr($digit, 2) : $digit;
     }
 
     protected function casts(): array
@@ -64,6 +87,17 @@ class Pasien extends Model
         return $this->hasOne(PersetujuanFoto::class)
             ->where('persetujuan_fotos.status', StatusPersetujuanFoto::Berlaku->value)
             ->orderByDesc('persetujuan_fotos.id');
+    }
+
+    /**
+     * Pasien yang opt-in marketing (dasar broadcast CR-03): punya persetujuan `marketing` yang berlaku, opsional untuk saluran tertentu
+     * (`whatsapp`/`sms`/`email`/`telepon`, kolom `kanal`). Menolak promosi = tidak ada persetujuan marketing berlaku (F1-10).
+     */
+    public function scopeOptInMarketing(Builder $query, ?string $kanal = null): void
+    {
+        $query->whereHas('persetujuanDatas', fn ($q) => $q->where('jenis', JenisPersetujuanData::Marketing->value)
+            ->where('status', StatusPersetujuanData::Berlaku->value)
+            ->when($kanal, fn ($w) => $w->whereJsonContains('kanal', $kanal)));
     }
 
     /** Kunjungan di cabang aktif. Lintas cabang: `kunjungans()->withoutGlobalScope('cabang')`. */
@@ -105,6 +139,12 @@ class Pasien extends Model
     public function persetujuanDatas(): HasMany
     {
         return $this->hasMany(PersetujuanData::class);
+    }
+
+    /** Kolom turunan tidak perlu tercatat sebagai perubahan tersendiri. */
+    public function auditAbaikan(): array
+    {
+        return ['no_hp_digit'];
     }
 
     public function auditLabel(): ?string

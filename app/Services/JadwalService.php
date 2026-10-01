@@ -69,9 +69,10 @@ class JadwalService
      * Slot yang sudah lewat tidak ditawarkan.
      *
      * @param  list<int>  $sumberDayaIds  ruang/alat yang ikut dipakai; slot dibuang bila salah satunya terpakai
+     * @param  int|null  $kecuali  booking yang diabaikan saat cek bentrok (reschedule booking itu sendiri)
      * @return list<array{mulai: string, selesai: string}>
      */
-    public function slotTersedia(int $cabangId, int $userId, CarbonInterface $tanggal, int $menit, array $sumberDayaIds = []): array
+    public function slotTersedia(int $cabangId, int $userId, CarbonInterface $tanggal, int $menit, array $sumberDayaIds = [], ?int $kecuali = null): array
     {
         if ($menit < 1) {
             return [];
@@ -88,7 +89,7 @@ class JadwalService
                     continue;
                 }
 
-                if ($this->bentrok($cabangId, $userId, $sumberDayaIds, $mulai, $selesai) === null) {
+                if ($this->bentrok($cabangId, $userId, $sumberDayaIds, $mulai, $selesai, $kecuali) === null) {
                     $slot[] = ['mulai' => $mulai->toDateTimeString(), 'selesai' => $selesai->toDateTimeString()];
                 }
             }

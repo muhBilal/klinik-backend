@@ -6,6 +6,9 @@ use App\Enums\Izin;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\PengaturanService;
+use App\Services\WhatsApp\CloudGateway;
+use App\Services\WhatsApp\LogGateway;
+use App\Services\WhatsApp\WhatsAppGateway;
 use App\Support\CabangAktif;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -19,6 +22,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        // Gateway WhatsApp sesuai driver (BK-06, CR-01): log (dev) atau WhatsApp Cloud API
+        $this->app->bind(WhatsAppGateway::class, fn () => config('services.whatsapp.driver') === 'cloud'
+            ? new CloudGateway
+            : new LogGateway);
+
         // State per request (cabang aktif, cache pengaturan & audit)
         $this->app->scoped(CabangAktif::class);
         $this->app->scoped(PengaturanService::class);

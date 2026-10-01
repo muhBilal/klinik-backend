@@ -9,6 +9,7 @@ use App\Models\Obat;
 use App\Models\Pasien;
 use App\Models\Poli;
 use App\Models\StokBatch;
+use App\Models\StokMutasi;
 use App\Models\Tindakan;
 use App\Models\User;
 use App\Services\InventoriService;
@@ -97,6 +98,37 @@ class InventoriTest extends TestCase
 
         $this->assertNotContains($basi->id, array_column($terpakai, 'batch_id'));
         $this->assertSame(100.0, $basi->refresh()->jumlah);
+    }
+
+    public function test_mutasi_antar_cabang_memindahkan_isi_batch_dengan_jejak_kartu_stok(): void
+    {
+        Sanctum::actingAs(User::where('role', Role::Admin->value)->firstOrFail());
+        $cabangBaru = $this->postJson('/api/cabangs', ['kode' => 'CAB2', 'nama' => 'Cabang Dua', 'is_active' => true])->assertCreated()->json('id');
+
+        $apoteker = $this->apoteker();
+        Sanctum::actingAs($apoteker);
+        $obat = $this->obat('OBT-022');
+        $batch = StokBatch::where('obat_id', $obat->id)->where('cabang_id', $apoteker->cabang_id)->where('jumlah', '>', 2)->orderBy('id')->firstOrFail();
+        $awal = (float) $batch->jumlah;
+        $totalAwal = (float) $obat->stok;
+
+        $res = $this->postJson("/api/stok-batches/{$batch->id}/mutasi", ['cabang_tujuan_id' => $cabangBaru, 'jumlah' => 2, 'keterangan' => 'Kebutuhan promo'])
+            ->assertOk();
+        $this->assertEquals($awal - 2, $res->json('jumlah'));
+
+        $tujuan = StokBatch::withoutGlobalScopes()->where('obat_id', $obat->id)->where('cabang_id', $cabangBaru)->firstOrFail();
+        $this->assertSame(2.0, (float) $tujuan->jumlah);
+        $this->assertSame($batch->no_batch, $tujuan->no_batch);
+        $this->assertSame($batch->kedaluwarsa?->toDateString(), $tujuan->kedaluwarsa?->toDateString());
+        // Total lintas cabang tidak berubah; dua baris kartu stok dengan referensi sama
+        $this->assertSame($totalAwal, (float) $obat->refresh()->stok);
+        $ref = StokMutasi::withoutGlobalScopes()->where('batch_id', $tujuan->id)->value('referensi');
+        $this->assertNotNull($ref);
+        $this->assertSame(2, StokMutasi::withoutGlobalScopes()->where('referensi', $ref)->count());
+
+        // Melebihi isi batch, cabang sendiri, dan obat non-fraksional desimal ditolak
+        $this->postJson("/api/stok-batches/{$batch->id}/mutasi", ['cabang_tujuan_id' => $cabangBaru, 'jumlah' => 99999])->assertStatus(422)->assertJsonValidationErrors('jumlah');
+        $this->postJson("/api/stok-batches/{$batch->id}/mutasi", ['cabang_tujuan_id' => $apoteker->cabang_id, 'jumlah' => 1])->assertStatus(422)->assertJsonValidationErrors('cabang_tujuan_id');
     }
 
     public function test_stok_terpisah_per_cabang(): void
