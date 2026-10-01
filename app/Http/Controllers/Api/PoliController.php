@@ -21,7 +21,7 @@ class PoliController extends Controller
             ->when(
                 $request->boolean('aktif'),
                 fn ($q) => $q->select(['id', 'kode', 'nama', 'spesialisasi'])->where('is_active', true),
-                fn ($q) => $q->withCount('dokters'),
+                fn ($q) => $q->withCount('dokters')->with('tindakanKonsultasi:id,kode,nama'),
             )
             ->when($request->filled('q'), function ($query) use ($request) {
                 $q = $request->string('q')->trim();
@@ -67,6 +67,8 @@ class PoliController extends Controller
             // Modul spesialisasi di pemeriksaan (PRD bagian 6), mis. odontogram untuk poli gigi
             'spesialisasi' => ['nullable', Rule::enum(Spesialisasi::class)],
             'tarif_konsultasi' => ['required', 'integer', 'min:0'],
+            // AD-01: tautkan konsultasi ke treatment agar tarifnya ikut harga per cabang
+            'tindakan_konsultasi_id' => ['nullable', 'integer', Rule::exists('tindakans', 'id')->whereNull('deleted_at')],
             'is_active' => ['boolean'],
         ]);
 

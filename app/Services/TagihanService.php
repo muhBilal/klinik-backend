@@ -26,11 +26,13 @@ class TagihanService
     {
         $kunjungan->loadMissing(['poli', 'tindakans.tindakan', 'tindakans.paketItem.paketPasien:id,no_paket', 'resep.items.obat', 'resep.items.komponens']);
 
+        // Tarif konsultasi per cabang (AD-01): pakai treatment konsultasi yang ditautkan bila ada, jika tidak pakai tarif flat poli.
+        $jasa = $kunjungan->poli->jasaKonsultasi($kunjungan->cabang_id);
         $items = [[
             'kategori' => 'konsultasi',
             'deskripsi' => 'Konsultasi '.$kunjungan->poli->nama,
             'jumlah' => 1,
-            'harga' => $kunjungan->poli->tarif_konsultasi,
+            'harga' => $jasa ? (int) $jasa->tarif_cabang : (int) $kunjungan->poli->tarif_konsultasi,
         ]];
 
         foreach ($kunjungan->tindakans as $tindakan) {
