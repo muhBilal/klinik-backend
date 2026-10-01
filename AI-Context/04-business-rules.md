@@ -89,6 +89,25 @@ Status resep: `menunggu` → `diserahkan`. Status tagihan: `belum_bayar` → `lu
 - **Akses terbatas**: isi RME kunjungan terbatas hanya untuk `rme.terbatas`, tim yang tercatat menangani, atau tenaga pelayanan cabang
   itu selama pemeriksaan terbuka. Lainnya: tanpa RME (`rme_disembunyikan`), berkas kunjungan itu disembunyikan & tautannya 403.
 
+### Foto klinis (detail: [modul/F1-06-foto-klinis.md](modul/F1-06-foto-klinis.md))
+- Unggah `foto_klinis` butuh **persetujuan foto pasien yang berlaku** (pengaturan `foto.wajib_consent`, default aktif) → 422 `consent_foto`.
+- Persetujuan foto per pasien, bertingkat (klinis ⊂ edukasi ⊂ marketing); tanda tangan baru menggantikan yang lama (`diganti`);
+  pencabutan menghentikan foto baru, foto lama tetap bagian RME. Tidak pernah dihapus.
+- Foto ber-protokol: `posisi` harus kode posisi protokol itu; `kunjungan_tindakan_id` harus tindakan kunjungan yang sama.
+- Thumbnail dibuat & dienkripsi dari browser; tautan pratinjau (`t=1` ikut ditandatangani) & tautan massal tetap tercatat audit.
+
+### Kedokteran gigi (detail: [modul/F1-07-odontogram.md](modul/F1-07-odontogram.md))
+- Odontogram = kondisi per gigi (FDI) / per permukaan milik pasien, dicatat per kunjungan; diubah hanya saat pasien `diperiksa`
+  (`pemeriksaan.dokter` atau `rme.tindakan`). Satu permukaan satu kondisi; kelompok eksklusif (keberadaan, mahkota, jembatan, protesa,
+  pulpa) saling menggantikan; gigi hilang hanya menerima pengganti gigi. Kondisi lama diakhiri, bukan ditimpa; koreksi di kunjungan
+  yang sama dihapus dan memulihkan yang digantikannya.
+- Treatment `per_gigi` wajib nomor gigi; `kondisi_gigi_hasil` otomatis mencatat kondisi di odontogram (per permukaan → wajib permukaan)
+  dan tidak bisa ditimpa manual di kunjungan yang sama. Tagihan menulis nomor gigi & permukaan per baris tindakan.
+- Odontogram masuk hash tanda tangan RME dan terkunci setelah kunjungan ditutup.
+- Rencana perawatan: draf → disetujui pasien (estimasi dikunci, ubah = revisi) → item dikerjakan via `rencana_item_id` → selesai saat
+  kunjungan ditutup → rencana selesai otomatis. Estimasi = harga cabang saat disusun; tagihan = harga saat dikerjakan.
+- Odontogram & rencana tampil untuk poli ber-`spesialisasi = gigi` (atau kunjungan yang punya data gigi).
+
 ### Farmasi (`FarmasiService`)
 - **Obat hanya diserahkan setelah tagihan lunas** (alur: poli → kasir → farmasi).
 - Stok setiap item divalidasi (dengan lock) sebelum dikurangi; bila kurang → 422 menyebut obat yang kurang.

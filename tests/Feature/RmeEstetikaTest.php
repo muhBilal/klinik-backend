@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use LogicException;
+use Tests\Concerns\BuatBerkasUji;
 use Tests\TestCase;
 
 /**
@@ -34,10 +35,7 @@ use Tests\TestCase;
  */
 class RmeEstetikaTest extends TestCase
 {
-    use RefreshDatabase;
-
-    /** JPEG 1x1 piksel (GD tidak terpasang di image Docker). */
-    private const JPEG = '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
+    use BuatBerkasUji, RefreshDatabase;
 
     protected function setUp(): void
     {
@@ -82,19 +80,6 @@ class RmeEstetikaTest extends TestCase
     private function tanpaWajibConsent(): void
     {
         app(PengaturanService::class)->simpan(['rme' => ['wajib_informed_consent' => false]]);
-    }
-
-    /** Gambar PNG sah (grayscale 16x16 acak) sebagai data URL, pengganti coretan tanda tangan dari canvas. */
-    private function ttd(): string
-    {
-        $raw = '';
-        for ($y = 0; $y < 16; $y++) {
-            $raw .= "\0".random_bytes(16);
-        }
-        $chunk = fn (string $tipe, string $data) => pack('N', strlen($data)).$tipe.$data.pack('N', crc32($tipe.$data));
-        $png = "\x89PNG\r\n\x1a\n".$chunk('IHDR', pack('NNCCCCC', 16, 16, 8, 0, 0, 0, 0)).$chunk('IDAT', gzcompress($raw)).$chunk('IEND', '');
-
-        return 'data:image/png;base64,'.base64_encode($png);
     }
 
     public function test_template_soap_per_poli_dan_treatment(): void
@@ -419,8 +404,9 @@ class RmeEstetikaTest extends TestCase
         $this->putJson($url, ['akses_terbatas' => false])->assertOk()->assertJsonPath('akses_terbatas', true);
 
         $uuid = $this->post('/api/berkas', [
-            'file' => UploadedFile::fake()->createWithContent('lesi.jpg', base64_decode(self::JPEG)),
-            'kategori' => 'foto_klinis', 'pasien_id' => $pasien->id, 'kunjungan_id' => $id,
+            'file' => UploadedFile::fake()->createWithContent('lesi.jpg', self::jpeg()),
+            // Bukan foto_klinis: foto butuh consent foto (diuji di FotoKlinisTest)
+            'kategori' => 'hasil_penunjang', 'pasien_id' => $pasien->id, 'kunjungan_id' => $id,
         ], ['Accept' => 'application/json'])->assertCreated()->json('uuid');
         $this->postJson("/api/kunjungans/{$id}/selesai")->assertOk();
 

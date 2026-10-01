@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Kunjungan;
 use App\Services\PemeriksaanService;
 use App\Services\RekamMedisService;
+use App\Support\Gigi;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -41,6 +42,10 @@ class PemeriksaanController extends Controller
             'tindakans.*.keterangan' => ['nullable', 'string', 'max:255'],
             'tindakans.*.petugas_id' => ['nullable', 'integer'],
             'tindakans.*.icd9cm_id' => ['nullable', Rule::exists('icd9cms', 'id')],
+            // Tindakan per gigi (DG-07) & item rencana perawatan yang dikerjakan (DG-02)
+            'tindakans.*.gigi' => ['nullable', 'integer', fn ($attr, $nilai, $gagal) => Gigi::valid($nilai) || $gagal('Nomor gigi harus notasi FDI: 11–48 (tetap) atau 51–85 (sulung).')],
+            'tindakans.*.permukaan' => ['nullable', 'string', 'max:5', fn ($attr, $nilai, $gagal) => Gigi::permukaanValid($nilai) || $gagal('Permukaan hanya huruf M, O, D, B, L tanpa pengulangan.')],
+            'tindakans.*.rencana_item_id' => ['nullable', 'integer', 'distinct'],
 
             'resep' => ['sometimes', 'array'],
             'resep.*.obat_id' => ['required', 'distinct', Rule::exists('obats', 'id')->where('is_active', true)->whereNull('deleted_at')],

@@ -124,6 +124,7 @@ class RekamMedisService
             'pemeriksaan.diagnosas.icd10:id,kode',
             'tindakans.catatan.titiks',
             'informedConsents:id,kunjungan_id,uuid,status,checksum',
+            'odontogramDicatat', 'odontogramDiakhiri',
         ])->findOrFail($kunjungan->id);
 
         $p = $kunjungan->pemeriksaan;
@@ -142,9 +143,20 @@ class RekamMedisService
                         $x->jumlah === null ? null : round($x->jumlah, 3), $x->satuan, $x->kedalaman, $x->alat, $x->catatan,
                     ])->all(),
                 ] : null,
+                // Ditambahkan hanya bila ada agar hash RME lama (sebelum F1-07) tetap cocok.
+                ...($t->gigi ? [[$t->gigi, $t->permukaan]] : []),
             ])->values()->all(),
             'consent' => $kunjungan->informedConsents->map(fn ($c) => [$c->uuid, $c->status->value, $c->checksum])->all(),
         ];
+
+        // Odontogram (DG-01): kondisi yang dicatat & diakhiri di kunjungan ini. Kolom pengakhiran kondisi yang dicatat di sini
+        // tidak ikut, karena boleh diisi kunjungan berikutnya.
+        if ($kunjungan->odontogramDicatat->isNotEmpty() || $kunjungan->odontogramDiakhiri->isNotEmpty()) {
+            $isi['odontogram'] = [
+                $kunjungan->odontogramDicatat->map(fn ($o) => [$o->id, $o->gigi, $o->permukaan, $o->kondisi->value, $o->keterangan, $o->kunjungan_tindakan_id])->all(),
+                $kunjungan->odontogramDiakhiri->map(fn ($o) => [$o->id, $o->berakhir_karena_id])->all(),
+            ];
+        }
 
         return hash('sha256', json_encode($isi, JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION));
     }

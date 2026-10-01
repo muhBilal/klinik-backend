@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\KategoriBerkas;
+use App\Enums\TahapFoto;
 use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -13,14 +14,15 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * Berkas klinis terenkripsi. Tidak dibatasi cabang (riwayat pasien lintas cabang), `cabang_id` hanya informasi.
- * Isi file hanya lewat BerkasService; `path` & `checksum` tidak pernah dikirim ke klien.
+ * Isi file hanya lewat BerkasService; `path`, `thumbnail_path` & `checksum` tidak pernah dikirim ke klien.
+ * Foto klinis (F1-06) punya metadata protokol, posisi, tahap (sebelum/sesudah/kontrol) dan tindakan kunjungan.
  */
 #[Table('berkas')]
 #[Fillable([
-    'uuid', 'cabang_id', 'pasien_id', 'kunjungan_id', 'kategori', 'keterangan',
-    'nama_file', 'mime', 'ukuran', 'path', 'checksum', 'diunggah_oleh',
+    'uuid', 'cabang_id', 'pasien_id', 'kunjungan_id', 'kunjungan_tindakan_id', 'kategori', 'protokol_foto_id', 'posisi', 'tahap',
+    'keterangan', 'nama_file', 'mime', 'ukuran', 'diambil_at', 'lebar', 'tinggi', 'path', 'thumbnail_path', 'checksum', 'diunggah_oleh',
 ])]
-#[Hidden(['id', 'path', 'checksum'])]
+#[Hidden(['id', 'path', 'thumbnail_path', 'checksum'])]
 class Berkas extends Model
 {
     use Auditable, SoftDeletes;
@@ -35,6 +37,10 @@ class Berkas extends Model
         return [
             'kategori' => KategoriBerkas::class,
             'ukuran' => 'integer',
+            'tahap' => TahapFoto::class,
+            'diambil_at' => 'datetime',
+            'lebar' => 'integer',
+            'tinggi' => 'integer',
         ];
     }
 
@@ -46,6 +52,21 @@ class Berkas extends Model
     public function kunjungan(): BelongsTo
     {
         return $this->belongsTo(Kunjungan::class)->withoutGlobalScope('cabang');
+    }
+
+    public function protokol(): BelongsTo
+    {
+        return $this->belongsTo(ProtokolFoto::class, 'protokol_foto_id')->withTrashed();
+    }
+
+    public function kunjunganTindakan(): BelongsTo
+    {
+        return $this->belongsTo(KunjunganTindakan::class);
+    }
+
+    public function punyaThumbnail(): bool
+    {
+        return filled($this->thumbnail_path);
     }
 
     public function pengunggah(): BelongsTo
@@ -65,6 +86,6 @@ class Berkas extends Model
 
     public function auditAbaikan(): array
     {
-        return ['path', 'checksum'];
+        return ['path', 'thumbnail_path', 'checksum'];
     }
 }

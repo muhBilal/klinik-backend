@@ -11,6 +11,7 @@ use App\Models\KategoriTindakan;
 use App\Models\Obat;
 use App\Models\Pasien;
 use App\Models\Poli;
+use App\Models\ProtokolFoto;
 use App\Models\SumberDaya;
 use App\Models\TemplateConsent;
 use App\Models\TemplateSoap;
@@ -37,10 +38,10 @@ class DatabaseSeeder extends Seeder
 
         $polis = collect([
             ['kode' => 'UMUM', 'nama' => 'Poli Umum', 'tarif_konsultasi' => 50000],
-            ['kode' => 'GIGI', 'nama' => 'Poli Gigi', 'tarif_konsultasi' => 75000],
+            ['kode' => 'GIGI', 'nama' => 'Poli Gigi', 'spesialisasi' => 'gigi', 'tarif_konsultasi' => 75000],
             ['kode' => 'KIA', 'nama' => 'Poli KIA', 'tarif_konsultasi' => 60000],
-            ['kode' => 'KULIT', 'nama' => 'Poli Kulit & Kelamin', 'tarif_konsultasi' => 150000],
-            ['kode' => 'ESTETIKA', 'nama' => 'Poli Estetika', 'tarif_konsultasi' => 100000],
+            ['kode' => 'KULIT', 'nama' => 'Poli Kulit & Kelamin', 'spesialisasi' => 'kulit', 'tarif_konsultasi' => 150000],
+            ['kode' => 'ESTETIKA', 'nama' => 'Poli Estetika', 'spesialisasi' => 'estetika', 'tarif_konsultasi' => 100000],
         ])->map(fn ($p) => Poli::create($p))->keyBy('kode');
 
         // Semua akun demo memakai password: password. Administrator lintas cabang (cabang_id null), staf di cabang utama.
@@ -88,6 +89,19 @@ class DatabaseSeeder extends Seeder
         // plus kode ICD-9-CM default, bentuk catatan tindakan, dan template consent (RM-02, RM-03, RM-05).
         $icd9cm = Icd9cm::pluck('id', 'kode');
         $rme = $this->rmeTindakan();
+        // Protokol foto dibuat migration (data referensi); dipasang ke treatment yang lazim didokumentasikan before-after.
+        $protokol = ProtokolFoto::pluck('id', 'nama');
+        $protokolTindakan = [
+            'TRT-001' => 'Wajah dinamis (injeksi)', 'TRT-002' => 'Wajah standar', 'TRT-011' => 'Wajah standar',
+            'TRT-012' => 'Wajah standar', 'TRT-021' => 'Wajah standar', 'TRT-022' => 'Wajah standar',
+            'TND-101' => 'Gigi intraoral', 'TND-102' => 'Gigi intraoral', 'TND-103' => 'Gigi intraoral',
+            'TND-105' => 'Gigi intraoral', 'TND-106' => 'Gigi intraoral',
+        ];
+        // Tindakan per gigi (DG-07) + kondisi odontogram setelah dikerjakan (DG-01); null = per gigi tanpa kondisi otomatis.
+        $tindakanGigi = [
+            'TND-101' => 'cof', 'TND-102' => 'mis', 'TND-104' => 'gif', 'TND-105' => 'rct', 'TND-106' => 'poc',
+            'TND-107' => 'mis', 'TND-108' => 'fis',
+        ];
 
         foreach ($this->tindakan() as $kategori => $tindakans) {
             $kategoriId = KategoriTindakan::create(['nama' => $kategori])->id;
@@ -96,7 +110,9 @@ class DatabaseSeeder extends Seeder
                 [$kodeIcd9, $jenisCatatan, $consent] = $rme[$kode] ?? [null, 'umum', null];
                 $tindakan = Tindakan::create(['kode' => $kode, 'nama' => $nama, 'tarif' => $tarif, 'kategori_id' => $kategoriId,
                     'durasi_menit' => $durasi, 'buffer_menit' => $buffer, 'icd9cm_id' => $kodeIcd9 ? $icd9cm[$kodeIcd9] : null,
-                    'jenis_catatan' => $jenisCatatan, 'template_consent_id' => $consent ? $consents[$consent]->id : null]);
+                    'jenis_catatan' => $jenisCatatan, 'template_consent_id' => $consent ? $consents[$consent]->id : null,
+                    'protokol_foto_id' => isset($protokolTindakan[$kode]) ? $protokol[$protokolTindakan[$kode]] : null,
+                    'per_gigi' => array_key_exists($kode, $tindakanGigi), 'kondisi_gigi_hasil' => $tindakanGigi[$kode] ?? null]);
 
                 foreach ($bhp as $kodeObat => $jumlah) {
                     $tindakan->bhps()->create(['obat_id' => $obats[$kodeObat]->id, 'jumlah' => $jumlah]);
@@ -218,6 +234,11 @@ class DatabaseSeeder extends Seeder
             'TND-101' => ['23.2', 'umum', null],
             'TND-102' => ['23.09', 'umum', 'gigi'],
             'TND-103' => ['96.54', 'umum', null],
+            'TND-104' => ['23.2', 'umum', null],
+            'TND-105' => ['23.71', 'umum', 'gigi'],
+            'TND-106' => ['23.41', 'umum', 'gigi'],
+            'TND-107' => ['23.01', 'umum', 'gigi'],
+            'TND-108' => ['23.49', 'umum', null],
             'TND-201' => ['88.78', 'umum', null],
             'TND-202' => ['99.24', 'umum', null],
             'TRT-001' => ['99.29', 'injeksi', 'injeksi'],
@@ -249,6 +270,11 @@ class DatabaseSeeder extends Seeder
                 ['TND-101', 'Tambal gigi komposit', 200000, 45, 15, []],
                 ['TND-102', 'Cabut gigi permanen', 150000, 30, 15, []],
                 ['TND-103', 'Scaling', 250000, 45, 15, []],
+                ['TND-104', 'Tambal gigi GIC', 150000, 30, 10, []],
+                ['TND-105', 'Perawatan saluran akar (per kunjungan)', 600000, 60, 15, []],
+                ['TND-106', 'Mahkota porselen (crown)', 2500000, 60, 15, []],
+                ['TND-107', 'Cabut gigi sulung', 100000, 20, 10, []],
+                ['TND-108', 'Fissure sealant', 175000, 20, 10, []],
             ],
             'Kesehatan Ibu & Anak' => [
                 ['TND-201', 'USG kehamilan', 150000, 20, 5, []],

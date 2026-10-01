@@ -30,7 +30,9 @@ Baca berurutan sebelum mengubah kode.
 | [F1-02-booking-jadwal.md](modul/F1-02-booking-jadwal.md) | Booking multi-resource, slot, jadwal praktik & cuti, check-in | BK-01..03, AN-01, 8.3 #4 |
 | [F1-03-kasir.md](modul/F1-03-kasir.md) | Split payment, shift kas, batas diskon, void & refund, pajak, tagihan mandiri | BL-02/03/05/06, FR-04, AD-04, 8.3 #3 #7 |
 | [F1-04-inventori.md](modul/F1-04-inventori.md) | Batch & kedaluwarsa FEFO per cabang, potong BHP otomatis, satuan fraksional | IN-01..03, AD-01 |
+| [F1-06-foto-klinis.md](modul/F1-06-foto-klinis.md) | Foto klinis before-after: protokol posisi, kamera terpandu, thumbnail terenkripsi, galeri & slider, consent foto bertingkat | FT-01/02/04, RM-04 |
 | [F1-05-rme-estetika.md](modul/F1-05-rme-estetika.md) | Template SOAP, ICD-9-CM & favorit, informed consent + tanda tangan, face chart & parameter laser, tanda tangan RME + addendum, akses terbatas IMS | RM-01/02/03/05/07, DR-03, ES-01/02 |
+| [F1-07-odontogram.md](modul/F1-07-odontogram.md) | Odontogram FDI per gigi & permukaan (riwayat per kunjungan), rencana perawatan berfase + estimasi, tindakan per gigi → odontogram & tagihan, spesialisasi poli | DG-01/02/07, bagian 6 |
 
 ## Ringkasan 30 detik
 

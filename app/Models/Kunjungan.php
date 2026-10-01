@@ -100,6 +100,18 @@ class Kunjungan extends Model
         return $this->hasMany(InformedConsent::class)->orderBy('id');
     }
 
+    /** Kondisi odontogram yang dicatat pada kunjungan ini (DG-01). */
+    public function odontogramDicatat(): HasMany
+    {
+        return $this->hasMany(OdontogramKondisi::class)->orderBy('id');
+    }
+
+    /** Kondisi odontogram kunjungan sebelumnya yang diakhiri pada kunjungan ini. */
+    public function odontogramDiakhiri(): HasMany
+    {
+        return $this->hasMany(OdontogramKondisi::class, 'berakhir_kunjungan_id')->orderBy('id');
+    }
+
     /** Pemeriksaan masih terbuka (belum ditutup & ditandatangani). */
     public function terbuka(): bool
     {
@@ -125,8 +137,8 @@ class Kunjungan extends Model
             'pemeriksaan.diagnosas.icd10:id,kode,nama,sensitif',
             'pemeriksaan.addendums:id,pemeriksaan_id,user_id,bagian,isi,alasan,created_at',
             'pemeriksaan.addendums.user:id,name',
-            'tindakans:id,kunjungan_id,tindakan_id,jumlah,tarif,petugas_id,icd9cm_id,keterangan',
-            'tindakans.tindakan:id,nama,jenis_catatan,template_consent_id',
+            'tindakans:id,kunjungan_id,tindakan_id,jumlah,tarif,petugas_id,icd9cm_id,gigi,permukaan,rencana_item_id,keterangan',
+            'tindakans.tindakan:id,nama,jenis_catatan,template_consent_id,protokol_foto_id,per_gigi,kondisi_gigi_hasil',
             'tindakans.petugas:id,name',
             'tindakans.icd9cm:id,kode,nama',
             'tindakans.catatan:id,kunjungan_tindakan_id,jenis,area,catatan,parameter,sumber_daya_id',
@@ -137,11 +149,13 @@ class Kunjungan extends Model
             'informedConsents:id,uuid,kunjungan_id,kunjungan_tindakan_id,template_consent_id,judul,tindakan_nama,status,penandatangan_nama,hubungan,ditandatangani_at,dicabut_at,alasan_cabut',
             'resep:id,kunjungan_id,no_resep,status,catatan',
             'resep.items:id,resep_id,obat_id,jumlah,aturan_pakai,harga',
+            'odontogramDicatat:id,kunjungan_id,kunjungan_tindakan_id,gigi,permukaan,kondisi,keterangan',
+            'odontogramDiakhiri:id,kunjungan_id,berakhir_kunjungan_id,berakhir_karena_id,gigi,permukaan,kondisi',
         ];
     }
 
     /** Nama relasi rekam medis (tanpa sub-relasi), untuk dilepas dari kunjungan berakses terbatas. */
-    public const RELASI_RME = ['pemeriksaan', 'tindakans', 'informedConsents', 'resep'];
+    public const RELASI_RME = ['pemeriksaan', 'tindakans', 'informedConsents', 'resep', 'odontogramDicatat', 'odontogramDiakhiri'];
 
     /**
      * Relasi untuk halaman detail kunjungan / pemeriksaan. `$rekamMedis = false` untuk pengguna tanpa izin
@@ -151,7 +165,7 @@ class Kunjungan extends Model
     {
         return $this->load([
             'pasien:id,no_rm,nama,jenis_kelamin,tanggal_lahir,golongan_darah,alergi',
-            'poli:id,kode,nama,tarif_konsultasi',
+            'poli:id,kode,nama,spesialisasi,tarif_konsultasi',
             'dokter:id,name,sip',
             'cabang:id,kode,nama',
             ...($rekamMedis ? [...self::relasiRekamMedis(), 'resep.items.obat:id,nama,satuan,stok'] : []),

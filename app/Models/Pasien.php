@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\StatusPersetujuanFoto;
 use App\Models\Concerns\Auditable;
 use App\Services\NomorUrutService;
 use Database\Factories\PasienFactory;
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -55,10 +57,29 @@ class Pasien extends Model
         });
     }
 
+    /** Persetujuan foto klinis yang sedang berlaku (FT-04); null = belum/tidak menyetujui. */
+    public function persetujuanFotoAktif(): HasOne
+    {
+        return $this->hasOne(PersetujuanFoto::class)
+            ->where('persetujuan_fotos.status', StatusPersetujuanFoto::Berlaku->value)
+            ->orderByDesc('persetujuan_fotos.id');
+    }
+
     /** Kunjungan di cabang aktif. Lintas cabang: `kunjungans()->withoutGlobalScope('cabang')`. */
     public function kunjungans(): HasMany
     {
         return $this->hasMany(Kunjungan::class);
+    }
+
+    /** Seluruh riwayat kondisi odontogram (lintas cabang, termasuk yang sudah diakhiri). */
+    public function odontogramKondisis(): HasMany
+    {
+        return $this->hasMany(OdontogramKondisi::class);
+    }
+
+    public function rencanaPerawatans(): HasMany
+    {
+        return $this->hasMany(RencanaPerawatan::class);
     }
 
     public function auditLabel(): ?string

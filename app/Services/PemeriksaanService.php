@@ -11,6 +11,7 @@ use App\Models\Obat;
 use App\Models\Pemeriksaan;
 use App\Models\Tindakan;
 use App\Models\User;
+use App\Support\Gigi;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -24,6 +25,8 @@ class PemeriksaanService
         private RekamMedisService $rekamMedis,
         private InformedConsentService $consent,
         private CatatanTindakanService $catatan,
+        private OdontogramService $odontogram,
+        private RencanaPerawatanService $rencana,
     ) {}
 
     /**
@@ -104,11 +107,17 @@ class PemeriksaanService
         $this->consent->pastikanLengkap($kunjungan);
 
         return DB::transaction(function () use ($kunjungan, $user) {
+            // Odontogram turunan tindakan per gigi dipastikan final sebelum RME dikunci (tindakan bisa disimpan sebelum pasien dipanggil).
+            $this->odontogram->sinkronDariTindakan($kunjungan, $user);
+
             $kunjungan->update([
                 'status' => StatusKunjungan::MenungguPembayaran,
                 'selesai_at' => now(),
                 'dokter_id' => $kunjungan->dokter_id ?? $user->id,
             ]);
+
+            // Item rencana perawatan gigi yang dikerjakan di kunjungan ini menjadi selesai (DG-02).
+            $this->rencana->selesaikanDariKunjungan($kunjungan);
 
             // BHP dipotong sebelum tagihan dibuat: bila stok kurang, pemeriksaan tidak ikut tertutup.
             $this->bhp->potongStok($kunjungan, $user);
@@ -152,13 +161,14 @@ class PemeriksaanService
 
     /**
      * Upsert tindakan kunjungan. Baris lama dipertahankan (beserta catatan tindakan, consent & koreksi BHP-nya) bila
-     * cocok `id`-nya, atau — untuk klien tanpa `id` — tindakan yang sama. Baris yang tidak dikirim dihapus per model.
-     * Tarif di-snapshot dari harga cabang kunjungan (harga dasar bila cabang tidak punya harga khusus).
+     * cocok `id`-nya, atau — untuk klien tanpa `id` — tindakan yang sama pada gigi yang sama. Baris yang tidak dikirim
+     * dihapus per model. Tarif di-snapshot dari harga cabang kunjungan (harga dasar bila cabang tidak punya harga khusus).
+     * Tindakan per gigi (DG-07) wajib nomor gigi dan memperbarui odontogram bila katalog mengisi kondisi hasilnya.
      */
     private function syncTindakan(Kunjungan $kunjungan, array $tindakans, User $user): void
     {
         $master = Tindakan::whereIn('id', Arr::pluck($tindakans, 'tindakan_id'))
-            ->select(['id', 'nama', 'tarif', 'icd9cm_id'])
+            ->select(['id', 'nama', 'tarif', 'icd9cm_id', 'per_gigi', 'kondisi_gigi_hasil'])
             ->denganHargaCabang($kunjungan->cabang_id)
             ->get()
             ->keyBy('id');
@@ -168,6 +178,26 @@ class PemeriksaanService
                 throw ValidationException::withMessages([
                     "tindakans.{$index}.tindakan_id" => "{$master[$item['tindakan_id']]->nama} tidak dilayani di cabang ini.",
                 ]);
+            }
+        }
+
+        // Item rencana perawatan yang dikerjakan: gigi & permukaan mengikuti rencana bila tidak diisi (DG-02).
+        foreach ($tindakans as $index => $item) {
+            if (! empty($item['rencana_item_id'])) {
+                $rencanaItem = $this->rencana->pastikanBisaDikerjakan((int) $item['rencana_item_id'], $kunjungan, $item['id'] ?? null, "tindakans.{$index}.rencana_item_id");
+                if (empty($item['gigi']) && $rencanaItem->gigi) {
+                    $tindakans[$index]['gigi'] = $rencanaItem->gigi;
+                    $tindakans[$index]['permukaan'] ??= $rencanaItem->permukaan;
+                }
+            }
+            $tindakans[$index]['permukaan'] = Gigi::normalPermukaan($tindakans[$index]['permukaan'] ?? null);
+
+            $tindakan = $master[$item['tindakan_id']];
+            if ($tindakan->per_gigi && empty($tindakans[$index]['gigi'])) {
+                throw ValidationException::withMessages(["tindakans.{$index}.gigi" => "Pilih nomor gigi untuk {$tindakan->nama}."]);
+            }
+            if ($tindakan->kondisi_gigi_hasil?->cakupan() === 'permukaan' && ! empty($tindakans[$index]['gigi']) && ! $tindakans[$index]['permukaan']) {
+                throw ValidationException::withMessages(["tindakans.{$index}.permukaan" => "Pilih permukaan gigi {$tindakans[$index]['gigi']} untuk {$tindakan->nama}."]);
             }
         }
 
@@ -186,7 +216,8 @@ class PemeriksaanService
             }
         }
         foreach ($tindakans as $i => $item) {
-            if (! isset($pasangan[$i]) && ($baris = $sisa->first(fn ($t) => (int) $t->tindakan_id === (int) $item['tindakan_id']))) {
+            $cocok = fn ($t) => (int) $t->tindakan_id === (int) $item['tindakan_id'] && (int) $t->gigi === (int) ($item['gigi'] ?? 0);
+            if (! isset($pasangan[$i]) && ($baris = $sisa->first($cocok))) {
                 $pasangan[$i] = $sisa->pull($baris->id);
             }
         }
@@ -197,6 +228,8 @@ class PemeriksaanService
         // Petugas default: dokter yang mengisi, atau dokter kunjungan (dasar komisi; bisa diubah per tindakan).
         $petugasDefault = $user->tercatatSebagaiDokter() ? $user->id : $kunjungan->dokter_id;
 
+        $indeks = [];
+
         foreach ($tindakans as $i => $item) {
             $baris = $pasangan[$i] ?? null;
             $tindakan = $master[$item['tindakan_id']];
@@ -206,15 +239,21 @@ class PemeriksaanService
                 'keterangan' => $item['keterangan'] ?? null,
                 'petugas_id' => array_key_exists('petugas_id', $item) ? $item['petugas_id'] : ($baris ? $baris->petugas_id : $petugasDefault),
                 'icd9cm_id' => array_key_exists('icd9cm_id', $item) ? $item['icd9cm_id'] : ($baris ? $baris->icd9cm_id : $tindakan->icd9cm_id),
+                'gigi' => $item['gigi'] ?? null,
+                'permukaan' => empty($item['gigi']) ? null : $item['permukaan'],
+                'rencana_item_id' => $item['rencana_item_id'] ?? null,
             ];
 
             if (! $baris) {
                 $baris = $kunjungan->tindakans()->create(['tindakan_id' => $item['tindakan_id'], ...$atribut]);
+                $indeks[$baris->id] = $i;
                 // Draft pemakaian BHP dari standar katalog; boleh dikoreksi petugas sebelum pemeriksaan ditutup (IN-02).
                 $this->bhp->siapkanDariStandar($baris);
 
                 continue;
             }
+
+            $indeks[$baris->id] = $i;
 
             $jumlahBerubah = $baris->jumlah !== (int) $atribut['jumlah'];
             $baris->update($atribut);
@@ -225,11 +264,15 @@ class PemeriksaanService
                 $this->bhp->siapkanDariStandar($baris);
             }
         }
+
+        // Tindakan per gigi dengan kondisi hasil (mis. tambal → komposit) memperbarui odontogram (DG-01/07).
+        $this->odontogram->sinkronDariTindakan($kunjungan, $user, $indeks);
     }
 
-    /** Tindakan dihapus dari pemeriksaan beserta catatan & draft BHP-nya; consent tetap tersimpan (lepas tautan). */
+    /** Tindakan dihapus dari pemeriksaan beserta catatan, draft BHP & kondisi odontogram turunannya; consent tetap tersimpan (lepas tautan). */
     private function hapusTindakan(KunjunganTindakan $baris): void
     {
+        $this->odontogram->hapusTurunan($baris);
         if ($catatan = $baris->catatan) {
             $catatan->titiks()->get()->each->delete();
             $catatan->delete();

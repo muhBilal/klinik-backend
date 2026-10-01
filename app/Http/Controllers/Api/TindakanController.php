@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\JenisCatatanTindakan;
+use App\Enums\KondisiGigi;
 use App\Http\Controllers\Controller;
 use App\Models\KunjunganTindakan;
 use App\Models\Tindakan;
@@ -28,7 +29,7 @@ class TindakanController extends Controller
         $cabangId = $request->integer('cabang_id') ?: $cabangAktif->id();
 
         $tindakans = $this->filterAktif(Tindakan::query(), $request)
-            ->select(['id', 'kode', 'nama', 'kategori_id', 'icd9cm_id', 'template_consent_id', 'jenis_catatan', 'durasi_menit', 'buffer_menit', 'tarif', 'is_active'])
+            ->select(['id', 'kode', 'nama', 'kategori_id', 'icd9cm_id', 'template_consent_id', 'jenis_catatan', 'protokol_foto_id', 'per_gigi', 'kondisi_gigi_hasil', 'durasi_menit', 'buffer_menit', 'tarif', 'is_active'])
             ->denganHargaCabang($cabangId)
             ->with(['kategori:id,nama', 'icd9cm:id,kode,nama'])
             ->withCount(['hargas', 'bhps'])
@@ -74,6 +75,7 @@ class TindakanController extends Controller
             'kategori:id,nama',
             'icd9cm:id,kode,nama',
             'templateConsent:id,nama',
+            'protokolFoto:id,nama',
             // Harga cabang yang sudah dihapus tidak ditampilkan (whereHas mengikuti soft delete cabang).
             'hargas' => fn ($q) => $q->select(['id', 'tindakan_id', 'cabang_id', 'tarif', 'tersedia'])
                 ->whereHas('cabang')->with('cabang:id,kode,nama,is_active'),
@@ -91,6 +93,10 @@ class TindakanController extends Controller
             'icd9cm_id' => ['nullable', Rule::exists('icd9cms', 'id')],
             'template_consent_id' => ['nullable', Rule::exists('template_consents', 'id')->whereNull('deleted_at')],
             'jenis_catatan' => ['nullable', Rule::enum(JenisCatatanTindakan::class)],
+            'protokol_foto_id' => ['nullable', Rule::exists('protokol_fotos', 'id')->whereNull('deleted_at')],
+            // Tindakan gigi (DG-01/07): wajib nomor gigi saat dikerjakan; kondisi odontogram setelah tindakan
+            'per_gigi' => ['boolean'],
+            'kondisi_gigi_hasil' => ['nullable', Rule::enum(KondisiGigi::class)],
             'durasi_menit' => ['required', 'integer', 'between:1,720'],
             'buffer_menit' => ['nullable', 'integer', 'between:0,240'],
             'tarif' => ['required', 'integer', 'min:0'],
@@ -105,6 +111,11 @@ class TindakanController extends Controller
             'bhps.*.obat_id' => ['required', 'distinct', Rule::exists('obats', 'id')->whereNull('deleted_at')],
             'bhps.*.jumlah' => ['required', 'numeric', 'gt:0', 'max:99999', 'decimal:0,3'],
         ]);
+
+        // Kondisi hasil hanya bermakna untuk tindakan per gigi → otomatis per gigi.
+        if (! empty($data['kondisi_gigi_hasil'])) {
+            $data['per_gigi'] = true;
+        }
 
         return ['buffer_menit' => $data['buffer_menit'] ?? 0, 'jenis_catatan' => $data['jenis_catatan'] ?? JenisCatatanTindakan::Umum->value] + $data;
     }

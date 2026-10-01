@@ -57,8 +57,9 @@ Buka  (GET /berkas/{uuid}/unduh?expires&u&signature, tanpa token)
 
 ## Belum dikerjakan
 
-- FT-01 template sudut standar, FT-02 perbandingan before-after, FT-04 consent foto bertingkat → Fase 1 (modul Foto Klinis).
-- Kompresi/thumbnail, pemindaian malware, penyimpanan S3/MinIO terenkripsi.
+- ~~FT-01 template sudut standar, FT-02 perbandingan before-after, FT-04 consent foto bertingkat~~ → selesai di
+  [F1-06](F1-06-foto-klinis.md) (termasuk thumbnail terenkripsi yang dibuat di browser).
+- Pemindaian malware, penyimpanan S3/MinIO terenkripsi.
 - Perintah enkripsi ulang setelah rotasi `APP_KEY`.
 
 ## Test

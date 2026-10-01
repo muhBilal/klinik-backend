@@ -50,6 +50,12 @@ Smoke test HTTP lewat nginx (stack dev terisolasi) lulus: pengaturan, cabang, pe
 | RM-07 | Selesai | tanda tangan dokter ber-SIP aktif saat tutup + hash keutuhan, kunci model, addendum append-only (F1-05) |
 | DR-03 | Selesai | template akne, melasma, dermatitis, jamur, IMS; kunjungan IMS/HIV berakses terbatas (F1-05) |
 | ES-01 / ES-02 | Selesai | face chart injeksi; parameter laser/energy device (F1-05) |
+| FT-01 / FT-02 / FT-04, RM-04 | Selesai | protokol posisi & kamera terpandu, galeri + slider before-after, consent foto bertingkat (F1-06) |
+| FT-03 | Selesai | + thumbnail terenkripsi, EXIF dibuang, kamera di dalam aplikasi (F1-06) |
+| DG-01 | Selesai | odontogram FDI tetap + sulung, per gigi & permukaan M/O/D/B/L, aturan penggantian, riwayat per kunjungan, masuk hash RME (F1-07) |
+| DG-02 | Selesai | rencana perawatan per gigi berfase + estimasi biaya, persetujuan pasien, revisi, cetak, dikerjakan dari pemeriksaan (F1-07) |
+| DG-07 | Selesai | tindakan per gigi wajib nomor gigi, ditagih per gigi, memperbarui odontogram otomatis (F1-07) |
+| Bagian 6 (modul per spesialisasi) | Parsial | `polis.spesialisasi` menampilkan odontogram hanya untuk poli gigi (F1-07); face chart per jenis catatan treatment (F1-05); pengaturan per cabang belum |
 | AN-03 | Parsial | petugas pelaksana per tindakan (dasar komisi) (F1-05); tindakan oleh beberapa petugas per baris belum |
 | 7.1 SIP | Parsial | `sip_berlaku_sampai`, hanya SIP aktif yang menandatangani RME (F1-05); peringatan sebelum kedaluwarsa & STR belum |
 | Lainnya | lihat PRD bagian 8.2 | belum berubah |
@@ -64,8 +70,8 @@ Urutan kerja yang disarankan (dependensi di kolom kanan):
 | 2 | Jadwal praktik & booking multi-resource (entitas `appointment` → kunjungan saat check-in) | BK-01..03, AN-01, 8.3 #4 | 1 | **Selesai** 30 Sep 2026 | [modul/F1-02](modul/F1-02-booking-jadwal.md) |
 | 3 | Reminder WhatsApp (job + scheduler) | BK-06, CR-01 | 2, F0-07 | **Terblokir**: butuh kredensial WhatsApp Business API | |
 | 4 | RME estetika: template SOAP, ICD-9-CM, informed consent + tanda tangan, catatan tindakan (dosis, batch, parameter alat), addendum | RM-01/02/03/05/07, DR-03, ES-01/02 | F0-03, F0-05 | **Selesai** 30 Sep 2026 (backend + frontend) | [modul/F1-05](modul/F1-05-rme-estetika.md) |
-| 5 | Foto klinis before-after + consent foto | FT-01, FT-02, FT-04 | F0-05 | Belum | |
-| 6 | Odontogram & treatment plan per gigi | DG-01, DG-02, DG-07 | 4 | Belum | |
+| 5 | Foto klinis before-after + consent foto | FT-01, FT-02, FT-04 | F0-05 | **Selesai** 1 Okt 2026 (backend + frontend) | [modul/F1-06](modul/F1-06-foto-klinis.md) |
+| 6 | Odontogram & treatment plan per gigi | DG-01, DG-02, DG-07 | 4 | **Selesai** 1 Okt 2026 (backend + frontend) | [modul/F1-07](modul/F1-07-odontogram.md) |
 | 7 | Inventori: batch/expired per gudang cabang, BHP otomatis, satuan fraksional | IN-01..03 | 1, F0-02 | **Selesai** 30 Sep 2026 | [modul/F1-04](modul/F1-04-inventori.md) |
 | 8 | Paket multi-sesi, voucher & promo | TR-02, TR-06 | 1 | Belum | |
 | 9 | Kasir: tagihan tanpa kunjungan, split payment, diskon per peran, void/refund, shift kas, pajak | BL-01..03/05/06, AD-04, 8.3 #3 #7 | — | **Selesai** 30 Sep 2026 (deposit & paket ikut #8) | [modul/F1-03](modul/F1-03-kasir.md) |
@@ -80,8 +86,8 @@ diisi lewat UI katalog — booking belum memaksa memilih ruang yang kompatibel. 
 Modul #3 dan #12 terblokir kredensial pihak ketiga, bukan pekerjaan kode: WhatsApp Business API dan Organization ID
 SATUSEHAT. Payment gateway (BL-08, Fase 2) juga menunggu merchant account.
 
-Test backend setelah F1-05: **87 test / 877 assertion** lulus di SQLite **dan** PostgreSQL 17; migrate → rollback → migrate F1-05
-diuji di PostgreSQL 17 dengan data demo. Alur RME F1-05 juga diuji E2E di browser (lihat modul F1-05).
+Test backend setelah F1-07: **99 test / 1211 assertion** lulus di SQLite **dan** PostgreSQL 17; migrate → rollback → migrate F1-05,
+F1-06 & F1-07 diuji di PostgreSQL 17 dengan data demo. Alur F1-05, F1-06 & F1-07 juga diuji E2E di browser (lihat modul masing-masing).
 
 Frontend: F1-05 punya UI lengkap. Editor pemakaian BHP (F1-04) kini tersedia di modal catatan tindakan; halaman Booking,
 Kasir (split/shift/void) dan Inventori (batch, opname) masih backend saja.
@@ -92,6 +98,8 @@ Gerbang PRD Fase 1: "P0 lolos UAT, go-live klinik pilot".
 
 | Tanggal | Perubahan |
 |---------|-----------|
+| 2026-10-01 | Fase 1 #6 selesai: F1-07 Kedokteran gigi (odontogram FDI per gigi & permukaan dengan riwayat per kunjungan, aturan penggantian kondisi, rencana perawatan berfase + estimasi & persetujuan, tindakan per gigi → odontogram otomatis & tagihan per gigi, `polis.spesialisasi`). Hash RME mencakup odontogram (RME lama tetap valid). Frontend: komponen `components/gigi/*` di pemeriksaan, detail kunjungan & pasien; master Poli & Treatment |
+| 2026-10-01 | Fase 1 #5 selesai: F1-06 Foto klinis (protokol posisi, kamera terpandu di aplikasi, thumbnail terenkripsi, galeri + slider before-after, consent foto bertingkat per pasien, tautan massal bertanda tangan). Frontend: kartu Foto Klinis di pemeriksaan, detail kunjungan & pasien; master Protokol Foto |
 | 2026-09-30 | Fase 1 #4 selesai: F1-05 RME estetika (template SOAP, ICD-9-CM & favorit, informed consent + tanda tangan, catatan tindakan: face chart & parameter laser, tanda tangan RME ber-SIP + hash + addendum, akses terbatas IMS). Tindakan kunjungan kini di-upsert (bukan replace-all). Poli demo KULIT & ESTETIKA. Frontend: modul rail baru **Rekam Medis**. `BookingTest` check-in tidak lagi bergantung jam dinding |
 | 2026-09-30 | Fase 1 #7 selesai: F1-04 Inventori (batch & kedaluwarsa FEFO per cabang, potong BHP otomatis dua tahap dengan koreksi pemakaian, satuan fraksional & pelacakan vial terbuka, stok opname, alert kedaluwarsa). `obats.stok` kini desimal dan menjadi ringkasan `stok_batches` |
 | 2026-09-30 | Fase 1 #9 selesai: F1-03 Kasir (split payment, shift kas, batas diskon per peran, void & refund, pajak, tagihan tanpa kunjungan). Menutup temuan 8.3 #3 & #7: unique `kunjungan_id` pada tagihan & resep dilepas |

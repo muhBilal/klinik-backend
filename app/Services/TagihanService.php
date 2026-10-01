@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Enums\StatusTagihan;
 use App\Models\Kunjungan;
 use App\Models\Tagihan;
+use App\Support\Gigi;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class TagihanService
 {
@@ -29,9 +31,11 @@ class TagihanService
         ]];
 
         foreach ($kunjungan->tindakans as $tindakan) {
+            // Tindakan per gigi ditagih per gigi, mis. "Tambal gigi komposit — gigi 16 (MO)" (DG-07).
+            $gigi = Gigi::format($tindakan->gigi, $tindakan->permukaan);
             $items[] = [
                 'kategori' => 'tindakan',
-                'deskripsi' => $tindakan->tindakan->nama,
+                'deskripsi' => $gigi ? Str::limit($tindakan->tindakan->nama, 225, '')." — {$gigi}" : $tindakan->tindakan->nama,
                 'jumlah' => $tindakan->jumlah,
                 'harga' => $tindakan->tarif,
             ];

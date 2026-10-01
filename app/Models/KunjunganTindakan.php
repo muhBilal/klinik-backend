@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Table('kunjungan_tindakans')]
-#[Fillable(['kunjungan_id', 'tindakan_id', 'jumlah', 'tarif', 'petugas_id', 'icd9cm_id', 'keterangan'])]
+#[Fillable(['kunjungan_id', 'tindakan_id', 'jumlah', 'tarif', 'petugas_id', 'icd9cm_id', 'gigi', 'permukaan', 'rencana_item_id', 'keterangan'])]
 class KunjunganTindakan extends Model
 {
     use Auditable;
@@ -22,7 +22,20 @@ class KunjunganTindakan extends Model
         return [
             'jumlah' => 'integer',
             'tarif' => 'integer',
+            'gigi' => 'integer',
         ];
+    }
+
+    /** Item rencana perawatan gigi yang dikerjakan tindakan ini (DG-02). */
+    public function rencanaItem(): BelongsTo
+    {
+        return $this->belongsTo(RencanaPerawatanItem::class, 'rencana_item_id');
+    }
+
+    /** Kondisi odontogram hasil otomatis tindakan per gigi (DG-01/07). */
+    public function kondisiGigi(): HasMany
+    {
+        return $this->hasMany(OdontogramKondisi::class);
     }
 
     public function tindakan(): BelongsTo

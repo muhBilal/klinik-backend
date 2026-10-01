@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Spesialisasi;
 use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Table;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Table('polis')]
-#[Fillable(['kode', 'nama', 'tarif_konsultasi', 'is_active'])]
+#[Fillable(['kode', 'nama', 'spesialisasi', 'tarif_konsultasi', 'is_active'])]
 class Poli extends Model
 {
     use Auditable, SoftDeletes;
@@ -20,6 +21,8 @@ class Poli extends Model
         return [
             'tarif_konsultasi' => 'integer',
             'is_active' => 'boolean',
+            // Modul spesialisasi di pemeriksaan (PRD bagian 6), mis. odontogram untuk poli gigi
+            'spesialisasi' => Spesialisasi::class,
         ];
     }
 

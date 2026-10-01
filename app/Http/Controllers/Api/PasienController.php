@@ -56,7 +56,7 @@ class PasienController extends Controller
                 ->withoutGlobalScope('cabang')
                 ->select(['id', 'cabang_id', 'pasien_id', 'poli_id', 'dokter_id', 'tanggal', 'penjamin', 'status', 'akses_terbatas'])
                 ->with([
-                    'poli:id,nama', 'dokter:id,name', 'cabang:id,kode,nama',
+                    'poli:id,nama,spesialisasi', 'dokter:id,name', 'cabang:id,kode,nama',
                     ...($rekamMedis ? [
                         'pemeriksaan:id,kunjungan_id,dokter_id,perawat_id',
                         'pemeriksaan.diagnosas:id,pemeriksaan_id,icd10_id,jenis', 'pemeriksaan.diagnosas.icd10:id,kode,nama',
@@ -68,6 +68,8 @@ class PasienController extends Controller
             if ($rekamMedis) {
                 // Diagnosa kunjungan berakses terbatas (IMS) hanya untuk tim yang menangani (DR-03).
                 $rme->sembunyikanTerbatas($pasien->kunjungans, $request->user());
+                // Odontogram & rencana perawatan ditampilkan bila pasien punya data gigi (DG-01/02).
+                $pasien->setAttribute('data_gigi', $pasien->odontogramKondisis()->exists() || $pasien->rencanaPerawatans()->exists());
             }
 
             $audit->catat('lihat', 'pasien', $pasien->id, ['pasien_id' => $pasien->id, 'label' => $pasien->auditLabel()]);

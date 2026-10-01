@@ -39,6 +39,21 @@ return [
         // Treatment ber-template consent wajib punya informed consent yang disetujui sebelum pemeriksaan ditutup (RM-03).
         'rme.wajib_informed_consent' => ['default' => true, 'rules' => ['boolean'], 'publik' => false],
 
+        // Foto klinis (FT-04): unggah foto klinis butuh persetujuan foto pasien yang berlaku; naskahnya bisa diubah klinik.
+        // Placeholder: {nama_pasien} {no_rm} {klinik} {tanggal} {tingkat} {pilihan} (daftar tingkat dengan tanda [x]).
+        'foto.wajib_consent' => ['default' => true, 'rules' => ['boolean'], 'publik' => false],
+        'foto.naskah_consent' => [
+            'default' => 'Saya, penanda tangan di bawah ini, atas nama pasien {nama_pasien} (No. RM {no_rm}), menyetujui {klinik} '
+                ."mengambil foto klinis wajah/bagian tubuh yang dirawat untuk dokumentasi rekam medis dan evaluasi hasil perawatan.\n\n"
+                .'Foto disimpan terenkripsi, hanya dapat dibuka tenaga kesehatan yang berwenang, setiap aksesnya tercatat, dan foto '
+                ."tidak disimpan di perangkat pribadi staf.\n\nPenggunaan foto yang saya izinkan:\n{pilihan}\n\n"
+                .'Saya dapat mengubah atau mencabut persetujuan ini kapan saja. Pencabutan tidak menghapus foto yang sudah menjadi '
+                .'bagian rekam medis, tetapi foto tidak lagi dipakai di luar keperluan klinis dan foto baru tidak akan diambil.'
+                ."\n\n{tanggal}",
+            'rules' => ['required', 'string', 'max:10000'],
+            'publik' => false,
+        ],
+
         // Jam operasional klinik (AD-04); dipakai sebagai batas wajar jadwal praktik & booking.
         'klinik.jam_buka' => ['default' => '08:00', 'rules' => ['required', 'date_format:H:i'], 'publik' => true],
         'klinik.jam_tutup' => ['default' => '21:00', 'rules' => ['required', 'date_format:H:i'], 'publik' => true],

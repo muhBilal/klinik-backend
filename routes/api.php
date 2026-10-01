@@ -16,12 +16,16 @@ use App\Http\Controllers\Api\KategoriTindakanController;
 use App\Http\Controllers\Api\KodeFavoritController;
 use App\Http\Controllers\Api\KunjunganController;
 use App\Http\Controllers\Api\ObatController;
+use App\Http\Controllers\Api\OdontogramController;
 use App\Http\Controllers\Api\PasienController;
 use App\Http\Controllers\Api\PemeriksaanController;
 use App\Http\Controllers\Api\PengaturanController;
 use App\Http\Controllers\Api\PeranController;
+use App\Http\Controllers\Api\PersetujuanFotoController;
 use App\Http\Controllers\Api\PoliController;
 use App\Http\Controllers\Api\ProfilController;
+use App\Http\Controllers\Api\ProtokolFotoController;
+use App\Http\Controllers\Api\RencanaPerawatanController;
 use App\Http\Controllers\Api\ResepController;
 use App\Http\Controllers\Api\ShiftKasController;
 use App\Http\Controllers\Api\StokBatchController;
@@ -72,6 +76,7 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
         Route::get('icd10s', [Icd10Controller::class, 'index']);
         Route::get('icd9cms', [Icd9cmController::class, 'index']);
         Route::get('template-soaps', [TemplateSoapController::class, 'index']);
+        Route::get('protokol-fotos', [ProtokolFotoController::class, 'index']);
         Route::get('tindakans', [TindakanController::class, 'index']);
         Route::get('kategori-tindakans', [KategoriTindakanController::class, 'index']);
         Route::get('obats', [ObatController::class, 'index']);
@@ -88,6 +93,15 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
             Route::put('pasiens/{pasien}', [PasienController::class, 'update']);
         });
         Route::delete('pasiens/{pasien}', [PasienController::class, 'destroy'])->middleware('izin:pasien.hapus');
+
+        // Consent foto klinis bertingkat (FT-04): front office atau tenaga tindakan yang mengambil tanda tangan pasien
+        Route::get('pasiens/{pasien}/persetujuan-foto', [PersetujuanFotoController::class, 'index'])->middleware('izin:pasien.lihat');
+        Route::middleware('izin:pasien.kelola,rme.tindakan')->group(function () {
+            Route::get('pasiens/{pasien}/persetujuan-foto/pratinjau', [PersetujuanFotoController::class, 'pratinjau']);
+            Route::post('pasiens/{pasien}/persetujuan-foto', [PersetujuanFotoController::class, 'store']);
+            Route::post('persetujuan-fotos/{persetujuanFoto}/cabut', [PersetujuanFotoController::class, 'cabut']);
+        });
+        Route::get('persetujuan-fotos/{persetujuanFoto}', [PersetujuanFotoController::class, 'show'])->middleware('izin:pasien.kelola,rme.lihat');
 
         // Kunjungan & antrian (cabang aktif). Detail tanpa izin rme.lihat hanya berisi data administrasi.
         Route::get('kunjungans', [KunjunganController::class, 'index']);
@@ -151,10 +165,32 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
         });
         Route::get('template-consents', [TemplateConsentController::class, 'index'])->middleware('izin:rme.tindakan,master.kelola');
 
+        // Kedokteran gigi: odontogram FDI (DG-01) & rencana perawatan per gigi (DG-02). Tindakan per gigi masuk tagihan (DG-07).
+        Route::get('odontogram/referensi', [OdontogramController::class, 'referensi']);
+        Route::middleware('izin:rme.lihat')->group(function () {
+            Route::get('pasiens/{pasien}/odontogram', [OdontogramController::class, 'show']);
+            Route::get('pasiens/{pasien}/rencana-perawatans', [RencanaPerawatanController::class, 'index']);
+            Route::get('rencana-perawatans/{rencana}', [RencanaPerawatanController::class, 'show']);
+        });
+        Route::middleware('izin:pemeriksaan.dokter,rme.tindakan')->group(function () {
+            Route::post('kunjungans/{kunjungan}/odontogram', [OdontogramController::class, 'store']);
+            Route::delete('kunjungans/{kunjungan}/odontogram/{kondisi}', [OdontogramController::class, 'destroy']);
+            Route::post('kunjungans/{kunjungan}/odontogram/{kondisi}/akhiri', [OdontogramController::class, 'akhiri']);
+            Route::post('kunjungans/{kunjungan}/odontogram/{kondisi}/pulihkan', [OdontogramController::class, 'pulihkan']);
+            Route::post('rencana-perawatans/{rencana}/setujui', [RencanaPerawatanController::class, 'setujui']);
+        });
+        Route::middleware('izin:pemeriksaan.dokter')->group(function () {
+            Route::post('pasiens/{pasien}/rencana-perawatans', [RencanaPerawatanController::class, 'store']);
+            Route::put('rencana-perawatans/{rencana}', [RencanaPerawatanController::class, 'update']);
+            Route::post('rencana-perawatans/{rencana}/revisi', [RencanaPerawatanController::class, 'revisi']);
+            Route::post('rencana-perawatans/{rencana}/batal', [RencanaPerawatanController::class, 'batal']);
+        });
+
         // Lampiran klinis terenkripsi
         Route::middleware('izin:rme.lihat')->group(function () {
             Route::get('berkas', [BerkasController::class, 'index']);
             Route::get('berkas/{berkas}/tautan', [BerkasController::class, 'tautan']);
+            Route::post('berkas/tautan', [BerkasController::class, 'tautanBanyak']);
         });
         Route::middleware('izin:berkas.kelola')->group(function () {
             Route::post('berkas', [BerkasController::class, 'store']);
@@ -233,6 +269,9 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
             Route::get('template-consents/{templateConsent}', [TemplateConsentController::class, 'show']);
             Route::put('template-consents/{templateConsent}', [TemplateConsentController::class, 'update']);
             Route::delete('template-consents/{templateConsent}', [TemplateConsentController::class, 'destroy']);
+            Route::post('protokol-fotos', [ProtokolFotoController::class, 'store']);
+            Route::put('protokol-fotos/{protokolFoto}', [ProtokolFotoController::class, 'update']);
+            Route::delete('protokol-fotos/{protokolFoto}', [ProtokolFotoController::class, 'destroy']);
         });
 
         // Administrasi

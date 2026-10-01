@@ -6,7 +6,8 @@ E-Klinik adalah sistem informasi klinik rawat jalan yang sedang dikembangkan men
 (dermatologi, estetika medis, gigi) sesuai PRD di folder ini. Fitur saat ini: pendaftaran pasien & antrian poli, booking,
 rekam medis estetika (tanda vital, SOAP dengan template, diagnosa ICD-10, tindakan ICD-9-CM + petugas, catatan tindakan: face
 chart injeksi & parameter laser, informed consent bertanda tangan, tanda tangan RME + addendum, akses terbatas kasus IMS,
-lampiran klinis terenkripsi), katalog treatment (kategori, durasi, harga per cabang, BHP standar, consent wajib), resep
+lampiran klinis terenkripsi, foto klinis before-after), kedokteran gigi (odontogram FDI, rencana perawatan berfase, tindakan &
+tagihan per gigi), katalog treatment (kategori, durasi, harga per cabang, BHP standar, consent wajib), resep
 elektronik, farmasi & inventori batch FEFO, kasir (split payment, shift, void/refund), multi-cabang, peran & izin dinamis,
 audit log, 2FA, dan pengaturan klinik. Status per fase: [07-roadmap-progress.md](07-roadmap-progress.md).
 

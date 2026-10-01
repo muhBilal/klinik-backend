@@ -12,6 +12,9 @@ app/
 │   ├── StatusConsent.php       disetujui, ditolak, dicabut
 │   ├── HubunganPenandatangan.php pasien, orang_tua, suami_istri, anak, saudara, wali
 │   ├── BagianAddendum.php      subjektif, objektif, asesmen, plan, diagnosa, tindakan, resep, lainnya
+│   ├── KondisiGigi.php         kode odontogram (car, cof, mis, rct, ...) + cakupan, kelompok, mengakhiri(), warna, referensi()
+│   ├── Spesialisasi.php        umum, gigi, kulit, estetika, lainnya (polis.spesialisasi)
+│   ├── StatusRencanaPerawatan.php / StatusItemRencana.php  draf, disetujui, selesai, dibatalkan / rencana, selesai, batal
 │   ├── StatusKunjungan.php     menunggu, diperiksa, menunggu_pembayaran, selesai, batal
 │   ├── StatusResep.php         menunggu, diserahkan, batal
 │   ├── StatusTagihan.php       belum_bayar, lunas, batal
@@ -35,6 +38,8 @@ app/
 │   ├── RekamMedisService.php   akses terbatas (bolehLihat, sembunyikanTerbatas), tanda tangan RME + hash, verifikasi, addendum
 │   ├── InformedConsentService.php render naskah, simpan (snapshot + checksum), cabut, pastikanLengkap sebelum tutup
 │   ├── CatatanTindakanService.php catatan tindakan, parameter alat, titik face chart, validasi petugas medis
+│   ├── OdontogramService.php   status per pasien/kunjungan, tetapkan (aturan penggantian), hapus/akhiri/pulihkan, sinkron dari tindakan per gigi
+│   ├── RencanaPerawatanService.php rencana perawatan gigi: item per fase, estimasi, setujui/revisi/batal, selesai dari kunjungan
 │   ├── TindakanService.php     simpan treatment + sinkron harga per cabang & BHP standar (per model, ter-audit)
 │   ├── TagihanService.php      buatDariKunjungan, bayar
 │   ├── FarmasiService.php      serahkan resep, mutasiManual stok
@@ -42,7 +47,8 @@ app/
 │   ├── PengaturanService.php   baca/simpan pengaturan klinik (cache)
 │   ├── TwoFactorService.php    TOTP RFC 6238, kode pemulihan
 │   └── BerkasService.php       simpan/baca berkas terenkripsi, tautan bertanda tangan
-└── Support/CabangAktif.php     Cabang aktif request ini (scoped singleton)
+├── Support/CabangAktif.php     Cabang aktif request ini (scoped singleton)
+└── Support/Gigi.php            Nomor gigi FDI (valid, sulung, anterior, rahang), permukaan M/O/D/B/L (normalisasi, label), format tagihan
 config/eklinik.php              Definisi pengaturan klinik (default + aturan validasi), konfigurasi berkas & 2FA
 bootstrap/app.php               Routing api/web, alias middleware, render JSON untuk api/*
 routes/api.php                  Semua endpoint + grouping izin
@@ -54,7 +60,7 @@ database/seeders/DatabaseSeeder.php   Data master + akun demo (peran dibuat migr
 database/factories/             UserFactory, PasienFactory
 tests/Feature/                  AlurKlinikTest, FilterTest, PeranIzinTest, MultiCabangTest, AuditLogTest,
                                 KeamananTest, PengaturanTest, BerkasTest, KatalogTreatmentTest, BookingTest,
-                                KasirTest, InventoriTest, RmeEstetikaTest
+                                KasirTest, InventoriTest, RmeEstetikaTest, FotoKlinisTest, OdontogramTest
 tests/Unit/TwoFactorServiceTest.php   Vektor uji RFC 6238
 ```
 
