@@ -38,7 +38,7 @@ return [
             'report' => false,
         ],
 
-        // E-Klinik: berkas klinis terenkripsi (BerkasService). Di luar root disk `local` yang bisa disajikan,
+        // Lefaklinik: berkas klinis terenkripsi (BerkasService). Di luar root disk `local` yang bisa disajikan,
         // dan di Docker dipasang sebagai volume agar tidak hilang saat image dibangun ulang.
         'berkas' => [
             'driver' => 'local',

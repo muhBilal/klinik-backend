@@ -127,7 +127,8 @@ class AlurKlinikTest extends TestCase
             ->assertJsonPath('status', 'menunggu_pembayaran')
             ->json();
 
-        $total = 50000 + $gds->tarif + 10 * $paracetamol->harga;
+        // Tarif konsultasi dari poli kunjungan (data demo bisa berubah), bukan angka tetap.
+        $total = $kunjungan['poli']['tarif_konsultasi'] + $gds->tarif + 10 * $paracetamol->harga;
         $this->assertSame($total, $kunjungan['tagihan']['total']);
         $this->assertArrayNotHasKey('items', $kunjungan['tagihan'], 'Detail kunjungan tidak perlu rincian tagihan.');
 
@@ -149,11 +150,12 @@ class AlurKlinikTest extends TestCase
         $tagihanId = $kunjungan['tagihan']['id'];
         $this->postJson("/api/tagihans/{$tagihanId}/bayar", ['metode_bayar' => 'tunai', 'dibayar' => 1000])
             ->assertUnprocessable()->assertJsonValidationErrors('dibayar');
-        $this->postJson("/api/tagihans/{$tagihanId}/bayar", ['metode_bayar' => 'tunai', 'dibayar' => 100000, 'diskon' => 5000])
+        $uang = (int) ceil($total / 50000) * 50000;
+        $this->postJson("/api/tagihans/{$tagihanId}/bayar", ['metode_bayar' => 'tunai', 'dibayar' => $uang, 'diskon' => 5000])
             ->assertOk()
             ->assertJsonPath('status', 'lunas')
             ->assertJsonPath('grand_total', $total - 5000)
-            ->assertJsonPath('kembalian', 100000 - ($total - 5000))
+            ->assertJsonPath('kembalian', $uang - ($total - 5000))
             ->assertJsonPath('kunjungan.status', 'selesai')
             ->assertJsonPath('kunjungan.pasien.no_rm', $pasien->no_rm)
             ->assertJsonCount(3, 'items');

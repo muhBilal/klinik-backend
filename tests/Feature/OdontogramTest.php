@@ -101,10 +101,10 @@ class OdontogramTest extends TestCase
         $this->assertSame('cof', $tambal['kondisi_gigi_hasil']);
 
         $this->as('admin@eklinik.test');
-        $poli = Poli::where('kode', 'UMUM')->firstOrFail();
-        $this->putJson("/api/polis/{$poli->id}", ['kode' => 'UMUM', 'nama' => $poli->nama, 'tarif_konsultasi' => 50000, 'spesialisasi' => 'lain-lain'])
+        $poli = Poli::where('kode', 'ESTETIKA')->firstOrFail();
+        $this->putJson("/api/polis/{$poli->id}", ['kode' => 'ESTETIKA', 'nama' => $poli->nama, 'tarif_konsultasi' => 50000, 'spesialisasi' => 'lain-lain'])
             ->assertUnprocessable()->assertJsonValidationErrors('spesialisasi');
-        $this->putJson("/api/polis/{$poli->id}", ['kode' => 'UMUM', 'nama' => $poli->nama, 'tarif_konsultasi' => 50000, 'spesialisasi' => null])
+        $this->putJson("/api/polis/{$poli->id}", ['kode' => 'ESTETIKA', 'nama' => $poli->nama, 'tarif_konsultasi' => 50000, 'spesialisasi' => null])
             ->assertOk()->assertJsonPath('spesialisasi', 'umum');
 
         // Kondisi hasil → otomatis per gigi

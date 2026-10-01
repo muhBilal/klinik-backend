@@ -38,12 +38,11 @@ class DatabaseSeeder extends Seeder
         $cabang = Cabang::create(['kode' => 'UTAMA', 'nama' => 'Klinik Utama', 'alamat' => 'Jl. Kesehatan No. 1', 'telepon' => '021-5550001',
             'jam_buka' => '08:00', 'jam_tutup' => '21:00']);
 
+        // Poli sesuai cakupan PRD (klinik estetika & spesialis): estetika medis, kulit & kelamin, gigi (bagian 6).
         $polis = collect([
-            ['kode' => 'UMUM', 'nama' => 'Poli Umum', 'tarif_konsultasi' => 50000],
-            ['kode' => 'GIGI', 'nama' => 'Poli Gigi', 'spesialisasi' => 'gigi', 'tarif_konsultasi' => 75000],
-            ['kode' => 'KIA', 'nama' => 'Poli KIA', 'tarif_konsultasi' => 60000],
+            ['kode' => 'ESTETIKA', 'nama' => 'Poli Estetika Medis', 'spesialisasi' => 'estetika', 'tarif_konsultasi' => 100000],
             ['kode' => 'KULIT', 'nama' => 'Poli Kulit & Kelamin', 'spesialisasi' => 'kulit', 'tarif_konsultasi' => 150000],
-            ['kode' => 'ESTETIKA', 'nama' => 'Poli Estetika', 'spesialisasi' => 'estetika', 'tarif_konsultasi' => 100000],
+            ['kode' => 'GIGI', 'nama' => 'Poli Gigi & Estetika Gigi', 'spesialisasi' => 'gigi', 'tarif_konsultasi' => 75000],
         ])->map(fn ($p) => Poli::create($p))->keyBy('kode');
 
         // Semua akun demo memakai password: password. Administrator lintas cabang (cabang_id null), staf di cabang utama.
@@ -51,9 +50,9 @@ class DatabaseSeeder extends Seeder
             ['name' => 'Administrator', 'email' => 'admin@eklinik.test', 'role' => Role::Admin->value, 'cabang_id' => null],
             ['name' => 'Siti Pendaftaran', 'email' => 'pendaftaran@eklinik.test', 'role' => Role::Pendaftaran->value],
             ['name' => 'Ns. Rina Perawat', 'email' => 'perawat@eklinik.test', 'role' => Role::Perawat->value],
-            ['name' => 'dr. Andi Wijaya', 'email' => 'dokter@eklinik.test', 'role' => Role::Dokter->value, 'poli_id' => $polis['UMUM']->id, 'sip' => '503/SIP-DU/001/2026'],
+            ['name' => 'dr. Andi Wijaya', 'email' => 'dokter@eklinik.test', 'role' => Role::Dokter->value, 'poli_id' => $polis['ESTETIKA']->id, 'sip' => '503/SIP-DU/001/2026'],
             ['name' => 'drg. Maya Sari', 'email' => 'dokter.gigi@eklinik.test', 'role' => Role::Dokter->value, 'poli_id' => $polis['GIGI']->id, 'sip' => '503/SIP-DG/002/2026'],
-            ['name' => 'dr. Lestari, Sp.OG', 'email' => 'dokter.kia@eklinik.test', 'role' => Role::Dokter->value, 'poli_id' => $polis['KIA']->id, 'sip' => '503/SIP-DS/003/2026'],
+            ['name' => 'dr. Lestari Wulandari, Sp.D.V.E', 'email' => 'dokter.kulit@eklinik.test', 'role' => Role::Dokter->value, 'poli_id' => $polis['KULIT']->id, 'sip' => '503/SIP-DS/003/2026'],
             ['name' => 'Budi Apoteker, S.Farm', 'email' => 'apoteker@eklinik.test', 'role' => Role::Apoteker->value],
             ['name' => 'Dewi Kasir', 'email' => 'kasir@eklinik.test', 'role' => Role::Kasir->value],
             // Peran non-sistem bawaan (dapat diubah di menu Peran & Izin)
@@ -259,8 +258,6 @@ class DatabaseSeeder extends Seeder
             'TND-106' => ['23.41', 'umum', 'gigi'],
             'TND-107' => ['23.01', 'umum', 'gigi'],
             'TND-108' => ['23.49', 'umum', null],
-            'TND-201' => ['88.78', 'umum', null],
-            'TND-202' => ['99.24', 'umum', null],
             'TRT-001' => ['99.29', 'injeksi', 'injeksi'],
             'TRT-002' => ['86.02', 'injeksi', 'injeksi'],
             'TRT-011' => ['86.3', 'energi', 'energi'],
@@ -295,10 +292,6 @@ class DatabaseSeeder extends Seeder
                 ['TND-106', 'Mahkota porselen (crown)', 2500000, 60, 15, []],
                 ['TND-107', 'Cabut gigi sulung', 100000, 20, 10, []],
                 ['TND-108', 'Fissure sealant', 175000, 20, 10, []],
-            ],
-            'Kesehatan Ibu & Anak' => [
-                ['TND-201', 'USG kehamilan', 150000, 20, 5, []],
-                ['TND-202', 'Pemasangan KB suntik', 35000, 10, 0, ['OBT-024' => 1]],
             ],
             'Injeksi Estetika' => [
                 ['TRT-001', 'Botulinum toxin dahi & glabella', 3500000, 30, 10, ['OBT-021' => 0.3, 'OBT-024' => 2]],

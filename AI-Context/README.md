@@ -1,4 +1,4 @@
-# AI-Context — Backend E-Klinik
+# AI-Context — Backend Lefaklinik
 
 Konteks untuk AI assistant (dan developer baru) yang akan bekerja di `backend/`.
 Baca berurutan sebelum mengubah kode.

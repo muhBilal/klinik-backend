@@ -1,4 +1,4 @@
-# Menjalankan seluruh E-Klinik (backend + frontend) dengan satu perintah dari folder backend/:
+# Menjalankan seluruh Lefaklinik (backend + frontend) dengan satu perintah dari folder backend/:
 #   docker compose up -d --build
 #
 # app = Nginx + PHP-FPM (API Laravel) + queue worker + scheduler + hasil build frontend Vue  -> http://localhost:8000
@@ -19,7 +19,7 @@ services:
     ports:
       - "${APP_PORT:-8000}:80"
     environment:
-      APP_NAME: E-Klinik
+      APP_NAME: Lefaklinik
       APP_ENV: production
       APP_DEBUG: "false"
       APP_KEY: ${APP_KEY}

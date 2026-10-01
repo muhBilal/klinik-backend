@@ -165,7 +165,7 @@ class InventoriTest extends TestCase
         Sanctum::actingAs(User::where('role', Role::Pendaftaran->value)->firstOrFail());
         $id = $this->postJson('/api/kunjungans', [
             'pasien_id' => Pasien::value('id'),
-            'poli_id' => Poli::where('kode', 'UMUM')->value('id'),
+            'poli_id' => Poli::where('kode', 'ESTETIKA')->value('id'),
             'penjamin' => 'umum',
         ])->assertCreated()->json('id');
 
@@ -200,7 +200,7 @@ class InventoriTest extends TestCase
         Sanctum::actingAs(User::where('role', Role::Pendaftaran->value)->firstOrFail());
         $id = $this->postJson('/api/kunjungans', [
             'pasien_id' => Pasien::value('id'),
-            'poli_id' => Poli::where('kode', 'UMUM')->value('id'),
+            'poli_id' => Poli::where('kode', 'ESTETIKA')->value('id'),
             'penjamin' => 'umum',
         ])->assertCreated()->json('id');
 

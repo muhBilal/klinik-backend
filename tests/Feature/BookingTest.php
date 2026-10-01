@@ -105,7 +105,7 @@ class BookingTest extends TestCase
 
         $payload = [
             'pasien_id' => $pasiens[0],
-            'poli_id' => Poli::where('kode', 'UMUM')->value('id'),
+            'poli_id' => Poli::where('kode', 'ESTETIKA')->value('id'),
             'petugas_id' => $dokter->id,
             'mulai_at' => $mulai,
             'tindakan_ids' => [$this->tindakan()->id],
@@ -167,7 +167,7 @@ class BookingTest extends TestCase
 
         $id = $this->postJson('/api/appointments', [
             'pasien_id' => Pasien::value('id'),
-            'poli_id' => Poli::where('kode', 'UMUM')->value('id'),
+            'poli_id' => Poli::where('kode', 'ESTETIKA')->value('id'),
             'petugas_id' => $this->dokter()->id,
             'mulai_at' => $mulai->toDateTimeString(),
             'tindakan_ids' => [$tindakan->id],
@@ -199,7 +199,7 @@ class BookingTest extends TestCase
 
         $payload = [
             'pasien_id' => Pasien::value('id'),
-            'poli_id' => Poli::where('kode', 'UMUM')->value('id'),
+            'poli_id' => Poli::where('kode', 'ESTETIKA')->value('id'),
             'petugas_id' => $this->dokter()->id,
             'mulai_at' => $this->seninDepan('11:00'),
             'tindakan_ids' => [$this->tindakan()->id],

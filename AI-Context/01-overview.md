@@ -2,7 +2,7 @@
 
 ## Tentang aplikasi
 
-E-Klinik adalah sistem informasi klinik rawat jalan yang sedang dikembangkan menjadi sistem manajemen **klinik estetika**
+**Lefaklinik** (sebelumnya bernama E-Klinik) adalah sistem informasi klinik rawat jalan yang sedang dikembangkan menjadi sistem manajemen **klinik estetika**
 (dermatologi, estetika medis, gigi) sesuai PRD di folder ini. Fitur saat ini: pendaftaran pasien & antrian poli, booking,
 rekam medis estetika (tanda vital, SOAP dengan template, diagnosa ICD-10, tindakan ICD-9-CM + petugas, catatan tindakan: face
 chart injeksi & parameter laser, informed consent bertanda tangan, tanda tangan RME + addendum, akses terbatas kasus IMS,
@@ -34,7 +34,7 @@ Frontend ada di repo terpisah `klinik-frontend`, tetapi **semua file Docker ada 
 Kedua repo di-clone sejajar dalam satu folder induk; folder induk hanya berisi `backend/` dan `frontend/`.
 
 ```
-e-klinik/
+lefaklinik/   (folder: eklinik)
 ├── backend/                        ← repo ini
 │   ├── docker-compose.yml          STACK LENGKAP: app (nginx+php-fpm+queue+scheduler+build frontend, port 8000) + db, volume `berkas`
 │   ├── docker-compose.dev.yml      STACK DEV API: app (php-fpm, kode di-mount) + nginx + db (+ queue, scheduler: profile `worker`)
@@ -118,11 +118,13 @@ $DC exec app php artisan route:list --path=api
 
 ## Akun demo (seeder)
 
-Password semua `password`: `admin@` (lintas cabang), `pendaftaran@`, `perawat@`, `dokter@` (Poli Umum), `dokter.gigi@`,
-`dokter.kia@`, `apoteker@`, `kasir@`, `terapis@`, `manajer@` — domain `eklinik.test`. Semua staf di cabang `UTAMA`.
+Password semua `password`: `admin@` (lintas cabang), `pendaftaran@`, `perawat@`, `dokter@` (dr. Andi, Poli Estetika Medis),
+`dokter.kulit@` (dr. Lestari, Sp.D.V.E, Poli Kulit & Kelamin), `dokter.gigi@` (drg. Maya, Poli Gigi), `apoteker@`, `kasir@`,
+`terapis@`, `manajer@` — domain `eklinik.test` (peran marketing tidak punya akun demo). Semua staf di cabang `UTAMA`.
 
-Seeder juga membuat 1 cabang (UTAMA "Klinik Utama"), 5 poli (UMUM, GIGI, KIA, KULIT, ESTETIKA), 54 kode ICD-10 (termasuk kulit,
-estetika, dan 9 kode IMS/HIV sensitif), 7 kategori treatment, 19 treatment/tindakan (6 treatment estetika dengan BHP standar,
-kode ICD-9-CM default, bentuk catatan & consent wajib), 10 template SOAP, 5 naskah informed consent, 24 obat & bahan (dengan
+Seeder juga membuat 1 cabang (UTAMA "Klinik Utama"), **3 poli sesuai cakupan PRD** (ESTETIKA "Poli Estetika Medis", KULIT "Poli Kulit &
+Kelamin", GIGI "Poli Gigi & Estetika Gigi", masing-masing dengan `spesialisasi`; Poli Umum & KIA dihapus dari data demo sejak 1 Okt 2026),
+54 kode ICD-10 (termasuk kulit, estetika, dan 9 kode IMS/HIV sensitif), 6 kategori treatment, 22 treatment/tindakan (treatment estetika
+dengan BHP standar, tindakan gigi per gigi, kode ICD-9-CM default, bentuk catatan & consent wajib), 3 paket & 2 kode promo, 10 template SOAP, 5 naskah informed consent, 24 obat & bahan (dengan
 stok awal tercatat di kartu stok), dan 25 pasien acak. Peran (9 peran bawaan) dan 62 kode ICD-9-CM dibuat oleh migration,
 bukan seeder.

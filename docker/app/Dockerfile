@@ -1,4 +1,4 @@
-# Image tunggal E-Klinik: Nginx + PHP-FPM (API Laravel) + build Vue, dijalankan oleh supervisor.
+# Image tunggal Lefaklinik: Nginx + PHP-FPM (API Laravel) + build Vue, dijalankan oleh supervisor.
 # Build context = folder induk (berisi backend/ dan frontend/), diatur di backend/docker-compose.yml.
 
 # ---------- 1. Build frontend ----------
