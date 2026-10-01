@@ -37,6 +37,8 @@ enum Izin: string
     case KasirVoid = 'kasir.void';
     case KasirShift = 'kasir.shift';
     case PromoKelola = 'promo.kelola';
+    case KomisiKelola = 'komisi.kelola';
+    case KomisiSetujui = 'komisi.setujui';
     case LaporanKeuangan = 'laporan.keuangan';
 
     case MasterKelola = 'master.kelola';
@@ -70,6 +72,8 @@ enum Izin: string
             self::KasirVoid => 'Batalkan tagihan & refund pembayaran',
             self::KasirShift => 'Buka & tutup shift kas',
             self::PromoKelola => 'Kelola voucher & kode promo',
+            self::KomisiKelola => 'Atur komisi per treatment (di master treatment), hitung rekap & penyesuaian komisi',
+            self::KomisiSetujui => 'Setujui & kunci rekap komisi',
             self::LaporanKeuangan => 'Lihat pendapatan & laporan keuangan',
             self::MasterKelola => 'Kelola master poli, tindakan, ICD-10, hapus obat',
             self::CabangKelola => 'Kelola cabang klinik',
@@ -88,7 +92,7 @@ enum Izin: string
             self::PemeriksaanPanggil, self::PemeriksaanVital, self::PemeriksaanDokter => 'Pelayanan',
             self::RmeLihat, self::RmeTindakan, self::RmeTerbatas, self::BerkasKelola => 'Rekam Medis',
             self::FarmasiResep, self::FarmasiObat, self::InventoriKelola => 'Farmasi',
-            self::KasirTagihan, self::KasirVoid, self::KasirShift, self::PromoKelola, self::LaporanKeuangan => 'Keuangan',
+            self::KasirTagihan, self::KasirVoid, self::KasirShift, self::PromoKelola, self::KomisiKelola, self::KomisiSetujui, self::LaporanKeuangan => 'Keuangan',
             default => 'Administrasi',
         };
     }

@@ -102,9 +102,9 @@ class OdontogramTest extends TestCase
 
         $this->as('admin@eklinik.test');
         $poli = Poli::where('kode', 'ESTETIKA')->firstOrFail();
-        $this->putJson("/api/polis/{$poli->id}", ['kode' => 'ESTETIKA', 'nama' => $poli->nama, 'tarif_konsultasi' => 50000, 'spesialisasi' => 'lain-lain'])
+        $this->putJson("/api/polis/{$poli->id}", ['kode' => 'ESTETIKA', 'nama' => $poli->nama, 'spesialisasi' => 'lain-lain'])
             ->assertUnprocessable()->assertJsonValidationErrors('spesialisasi');
-        $this->putJson("/api/polis/{$poli->id}", ['kode' => 'ESTETIKA', 'nama' => $poli->nama, 'tarif_konsultasi' => 50000, 'spesialisasi' => null])
+        $this->putJson("/api/polis/{$poli->id}", ['kode' => 'ESTETIKA', 'nama' => $poli->nama, 'spesialisasi' => null])
             ->assertOk()->assertJsonPath('spesialisasi', 'umum');
 
         // Kondisi hasil → otomatis per gigi

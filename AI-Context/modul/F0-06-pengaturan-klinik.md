@@ -22,6 +22,7 @@ kop & lebar struk, prefix nomor, keamanan. Jam operasional ada di data cabang (F
 | `struk.catatan_kaki` | "Terima kasih atas kunjungan Anda." | ≤255 | ya | kaki struk kasir |
 | `cetak.lebar_struk` | `80mm` | `58mm` / `80mm` | ya | `printElement(..., { lebar })` → `@page size` |
 | `penomoran.prefix_registrasi` / `_resep` / `_tagihan` / `_booking` / `_paket` | REG / RSP / INV / BOK / PKT | 2–5 huruf kapital | tidak | `NomorUrutService` |
+| `komisi.dasar` | `neto` | `bruto` / `neto` | tidak | dasar komisi persen (F1-09) |
 | `paket.boleh_transfer`, `paket.refund_sisa`, `paket.potongan_refund_persen` | false / false / 0 | bool / bool / 0–100 | tidak | kebijakan paket (F1-08) |
 | `keamanan.idle_timeout_menit` | 15 | 5–480 | tidak | validasi token + idle logout frontend (F0-04) |
 | `keamanan.wajib_2fa` | `[]` | array kode peran yang ada | tidak | middleware `wajib2fa` (F0-04) |

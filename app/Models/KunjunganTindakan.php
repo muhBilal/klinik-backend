@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Table('kunjungan_tindakans')]
-#[Fillable(['kunjungan_id', 'tindakan_id', 'jumlah', 'tarif', 'petugas_id', 'icd9cm_id', 'gigi', 'permukaan', 'rencana_item_id', 'paket_pasien_item_id', 'keterangan'])]
+#[Fillable(['kunjungan_id', 'tindakan_id', 'jumlah', 'tarif', 'petugas_id', 'asisten_id', 'icd9cm_id', 'gigi', 'permukaan', 'rencana_item_id', 'paket_pasien_item_id', 'keterangan'])]
 class KunjunganTindakan extends Model
 {
     use Auditable;
@@ -58,6 +58,12 @@ class KunjunganTindakan extends Model
     public function petugas(): BelongsTo
     {
         return $this->belongsTo(User::class, 'petugas_id')->withTrashed();
+    }
+
+    /** Asisten tindakan (dasar komisi peran asisten, KM-01). */
+    public function asisten(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'asisten_id')->withTrashed();
     }
 
     public function icd9cm(): BelongsTo

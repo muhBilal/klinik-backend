@@ -107,6 +107,8 @@
 | Menyimpan tindakan pemeriksaan | Kirim `tindakans[].id` agar baris (beserta catatan tindakan, consent, koreksi BHP, kondisi odontogram turunan) dipertahankan. Tanpa `id` backend mencocokkan `tindakan_id` + `gigi`; tindakan yang sama dua baris tanpa `id` pada gigi yang sama bisa tertukar. |
 | `Builder::value('kolom')` Eloquent | Menerapkan cast model (mis. `status` jadi enum). Untuk nilai mentah pakai `->toBase()->value(...)` (lihat `OdontogramKondisi::kunjunganTerbuka`). |
 | Hash RME & kolom baru | `RekamMedisService::hash` dipakai memverifikasi RME lama. Kolom/relasi baru ditambahkan ke isi hash **hanya bila terisi** agar hash tanda tangan lama tetap cocok (contoh gigi tindakan & odontogram). |
+| `getOriginal('kolom')` pada kolom ber-cast enum | Mengembalikan enum, bukan string → perbandingan `=== 'disetujui'` selalu false. Pakai `getRawOriginal()` (lihat `KomisiPeriode`). |
+| `withSum(...)` / `SUM` di PostgreSQL | Hasilnya string (`"35000"`), di SQLite integer → test lulus di SQLite tetapi gagal di PG. Tambahkan cast `'alias' => 'integer'` di model (lihat `KomisiPeriode::total_saya`). |
 | Atribut hitungan di model lalu `update()` | `setAttribute('sisa_sesi', …)` ikut tersimpan sebagai kolom → error "no such column". Lepas dulu (`PaketService::lepasRingkasan`) atau hitung di variabel. |
 | Dependensi service melingkar | `KasirService` ← `TagihanService` ← `PaketService`/`PromoService`. Kasir memanggil keduanya lewat `app(...)` di dalam method, bukan constructor. |
 | Batal/refund tagihan di test | Route butuh `kasir.tagihan` **dan** `kasir.void` → pakai admin; manajer hanya `kasir.void` (cukup untuk kebijakan paket). |

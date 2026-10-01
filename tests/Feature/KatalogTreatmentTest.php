@@ -214,7 +214,7 @@ class KatalogTreatmentTest extends TestCase
         $this->putJson("/api/kunjungans/{$id}/pemeriksaan", ['diagnosas' => $diagnosa, 'tindakans' => [['tindakan_id' => $laser->id]]])
             ->assertOk()->assertJsonPath('tindakans.0.tarif', 1000000);
         $selesai = $this->postJson("/api/kunjungans/{$id}/selesai")->assertOk();
-        $this->assertSame($selesai->json('poli.tarif_konsultasi') + 1000000, $selesai->json('tagihan.total'));
+        $this->assertSame($selesai->json('konsultasi.tarif_cabang') + 1000000, $selesai->json('tagihan.total'));
 
         // Cabang Utama: harga dasar, IPL tetap dilayani
         $id = $periksa($dokterUtama, $this->utama->id);

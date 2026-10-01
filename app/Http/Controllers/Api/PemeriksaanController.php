@@ -41,6 +41,7 @@ class PemeriksaanController extends Controller
             'tindakans.*.jumlah' => ['nullable', 'integer', 'min:1', 'max:100'],
             'tindakans.*.keterangan' => ['nullable', 'string', 'max:255'],
             'tindakans.*.petugas_id' => ['nullable', 'integer'],
+            'tindakans.*.asisten_id' => ['nullable', 'integer'],
             'tindakans.*.icd9cm_id' => ['nullable', Rule::exists('icd9cms', 'id')],
             // Tindakan per gigi (DG-07) & item rencana perawatan yang dikerjakan (DG-02)
             'tindakans.*.gigi' => ['nullable', 'integer', fn ($attr, $nilai, $gagal) => Gigi::valid($nilai) || $gagal('Nomor gigi harus notasi FDI: 11–48 (tetap) atau 51–85 (sulung).')],

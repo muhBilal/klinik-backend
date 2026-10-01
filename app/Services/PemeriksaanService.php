@@ -206,6 +206,11 @@ class PemeriksaanService
         if ($petugas) {
             $this->catatan->pastikanPetugas($petugas, $kunjungan->cabang_id, 'tindakans.*.petugas_id');
         }
+        // Asisten tindakan (dasar komisi peran asisten, KM-01) juga harus petugas medis di cabang kunjungan.
+        $asisten = array_filter(array_map(fn ($t) => $t['asisten_id'] ?? null, $tindakans));
+        if ($asisten) {
+            $this->catatan->pastikanPetugas($asisten, $kunjungan->cabang_id, 'tindakans.*.asisten_id');
+        }
 
         $sisa = $kunjungan->tindakans()->get()->keyBy('id');
         $pasangan = [];
@@ -239,6 +244,7 @@ class PemeriksaanService
                 'tarif' => $tindakan->tarif_cabang,
                 'keterangan' => $item['keterangan'] ?? null,
                 'petugas_id' => array_key_exists('petugas_id', $item) ? $item['petugas_id'] : ($baris ? $baris->petugas_id : $petugasDefault),
+                'asisten_id' => array_key_exists('asisten_id', $item) ? $item['asisten_id'] : $baris?->asisten_id,
                 'icd9cm_id' => array_key_exists('icd9cm_id', $item) ? $item['icd9cm_id'] : ($baris ? $baris->icd9cm_id : $tindakan->icd9cm_id),
                 'gigi' => $item['gigi'] ?? null,
                 'permukaan' => empty($item['gigi']) ? null : $item['permukaan'],

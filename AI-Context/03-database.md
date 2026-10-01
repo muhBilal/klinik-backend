@@ -33,6 +33,8 @@ kunjungan_tindakans *─1 rencana_perawatan_items (rencana_item_id: item yang di
 pakets 1─* paket_items *─1 tindakans                     pakets 1─* paket_pasiens *─1 pasiens, *─1 tagihans (penjualan)
 paket_pasiens 1─* paket_pasien_items 1─* kunjungan_tindakans (paket_pasien_item_id: sesi dipakai)
 promos 1─* promo_pemakaians *─1 tagihans                tagihans *─1 promos (promo_id, diskon_promo)
+tindakans 1─* tindakan_komisis (komisi per peran)          polis *─1 tindakans (tindakan_konsultasi_id = jasa konsultasi)
+cabangs 1─* komisi_periodes 1─* komisi_barises *─1 users, *─1 kunjungan_tindakans / tagihans / tindakans (snapshot)
 obats 1─* stok_mutasis
 
 audit_logs (tanpa FK: user_id, cabang_id, pasien_id, tipe + subjek_id)
@@ -48,11 +50,12 @@ pengaturans (kunci → nilai JSON)
 | `perans` | kode (unik, `^[a-z][a-z0-9_]*$`), nama, deskripsi, **is_sistem** (tidak bisa dihapus/ganti kode), **akses_penuh** (semua izin) |
 | `peran_izins` | peran_id, izin (nilai `App\Enums\Izin`). Unik `(peran_id, izin)` |
 | `users` | name, email (unik), password, **role** (= `perans.kode`), poli_id (dokter), **cabang_id** (null = semua cabang), sip, **sip_berlaku_sampai**, is_active, two_factor_secret (terenkripsi), two_factor_recovery_codes (terenkripsi), two_factor_confirmed_at, two_factor_last_step, deleted_at |
-| `polis` | kode (unik), nama, **spesialisasi** (`umum`/`gigi`/`kulit`/`estetika`/`lainnya`; `gigi` = odontogram di pemeriksaan), tarif_konsultasi, is_active, deleted_at |
+| `polis` | kode (unik), nama, **spesialisasi** (`umum`/`gigi`/`kulit`/`estetika`/`lainnya`; `gigi` = odontogram di pemeriksaan), **tindakan_konsultasi_id** (treatment jasa konsultasi, ditagihkan otomatis tiap kunjungan; menggantikan `tarif_konsultasi` sejak F1-09 revisi), is_active, deleted_at |
 | `icd10s` | kode (unik), nama, **sensitif** (IMS/HIV → kunjungan berakses terbatas) |
 | `icd9cms` | kode (unik), nama — kode tindakan/prosedur (62 kode dasar diisi migration) |
 | `pakets` | kode (unik), nama, deskripsi, harga, masa_berlaku_hari, lintas_cabang, is_active, deleted_at — katalog paket multi-sesi |
 | `paket_items` | paket_id, tindakan_id, jumlah_sesi. Unik `(paket_id, tindakan_id)` |
+| `tindakan_komisis` | tindakan_id, peran (`dokter`/`terapis`/`asisten`), jenis (`persen`/`nominal`), nilai — unik (tindakan_id, peran); diatur di master treatment |
 | `promos` | kode (unik), nama, deskripsi, jenis (`persen`/`nominal`), nilai, maks_potongan, min_transaksi, mulai, berakhir, kuota, kuota_per_pasien, cabang_ids/tindakan_ids/paket_ids (JSON), is_active, created_by, deleted_at |
 | `protokol_fotos` | nama, deskripsi, posisi (JSON `[{kode, label, petunjuk}]`), is_active, deleted_at — 5 protokol dasar diisi migration |
 | `template_soaps` | nama, poli_id (null = semua), tindakan_id, subjektif, objektif, asesmen, plan, icd10_ids (JSON), akses_terbatas, is_active, deleted_at |
@@ -75,9 +78,11 @@ pengaturans (kunci → nilai JSON)
 | `catatan_tindakan_titiks` | catatan_tindakan_id, tampilan, x, y (0..1), area, obat_id, batch_id, jumlah, satuan, kedalaman, alat (jarum/kanula), catatan |
 | `informed_consents` | uuid, cabang_id, kunjungan_id, pasien_id, kunjungan_tindakan_id, template_consent_id, judul, tindakan_nama, isi (snapshot), status, penandatangan_nama, hubungan, ttd_penandatangan & ttd_saksi (**terenkripsi**), saksi_nama, dokter_id, dibuat_oleh, ditandatangani_at, dicabut_at/_oleh, alasan_cabut, checksum, ip_address — tidak pernah dihapus |
 | `pemeriksaan_diagnosas` | pemeriksaan_id, icd10_id, jenis (`primer`/`sekunder`) |
-| `kunjungan_tindakans` | kunjungan_id, tindakan_id, jumlah, **tarif (snapshot harga cabang kunjungan)**, **petugas_id**, **icd9cm_id**, **gigi** (FDI), **permukaan** (`MO`), **rencana_item_id**, **paket_pasien_item_id** (sesi paket → ditagih Rp 0), keterangan |
+| `kunjungan_tindakans` | kunjungan_id, tindakan_id, jumlah, **tarif (snapshot harga cabang kunjungan)**, **petugas_id** (pelaksana), **asisten_id**, **icd9cm_id**, **gigi** (FDI), **permukaan** (`MO`), **rencana_item_id**, **paket_pasien_item_id** (sesi paket → ditagih Rp 0), keterangan |
 | `paket_pasiens` | no_paket, pasien_id, paket_id, cabang_id, tagihan_id, nama/harga (snapshot), nilai (bersih), status, lintas_cabang, masa_berlaku_hari, aktif_at, berlaku_sampai, catatan, dibuat_oleh, dialihkan_*, refund_* — sisa sesi dihitung dari `kunjungan_tindakans` |
 | `paket_pasien_items` | paket_pasien_id, tindakan_id, jumlah_sesi, nilai_per_sesi |
+| `komisi_periodes` | **cabang_id**, nama, mulai, selesai, status (`draf`/`disetujui`), dasar (bruto/neto, snapshot), total, dihitung_at/_oleh, disetujui_at/_oleh, catatan — terkunci setelah disetujui |
+| `komisi_barises` | komisi_periode_id, user_id, peran, sumber, kunjungan_id, kunjungan_tindakan_id, tagihan_id, tindakan_id, tanggal, deskripsi, dasar, jenis, nilai, komisi, dibuat_oleh (penyesuaian) |
 | `promo_pemakaians` | promo_id, tagihan_id, pasien_id, cabang_id, potongan, dipakai_at, dibatalkan_at (refund → kuota kembali) |
 | `odontogram_kondisis` | pasien_id, cabang_id, kunjungan_id (dicatat), kunjungan_tindakan_id (turunan tindakan), gigi, permukaan (null = seluruh gigi), kondisi, keterangan, dicatat_oleh, berakhir_kunjungan_id, berakhir_at, berakhir_oleh, berakhir_karena_id — terkunci setelah kunjungannya ditutup |
 | `rencana_perawatans` | pasien_id, cabang_id (dasar harga), kunjungan_id, dokter_id, judul, catatan, status, disetujui_at/_oleh, penyetuju_nama, selesai_at, dibatalkan_at/_oleh, alasan_batal, created_by |
@@ -125,6 +130,8 @@ Sudah diuji `migrate` + `migrate:rollback` + `migrate` ulang di PostgreSQL 17 de
 | `2026_09_30_130001_create_kasir_tables` (+ `130002` izin) | `pembayarans`, `shift_kas`, tagihan tanpa kunjungan, pajak | [F1-03](modul/F1-03-kasir.md) |
 | `2026_09_30_140001_create_inventori_tables` (+ `140002` izin) | `stok_batches`, `kunjungan_tindakan_bhps`, stok desimal | [F1-04](modul/F1-04-inventori.md) |
 | `2026_10_01_100001_create_foto_klinis_tables` | `protokol_fotos` (+ 5 protokol), `persetujuan_fotos`; kolom foto di `berkas`, `tindakans.protokol_foto_id` | [F1-06](modul/F1-06-foto-klinis.md) |
+| `2026_10_01_130001_create_komisi_tables` | `aturan_komisis` (dihapus revisi), `komisi_periodes`, `komisi_barises`, `kunjungan_tindakans.asisten_id`; izin `komisi.kelola` → manajer | [F1-09](modul/F1-09-komisi.md) |
+| `2026_10_01_140001_pindah_komisi_dan_konsultasi_ke_treatment` | `tindakan_komisis`, `polis.tindakan_konsultasi_id` (− `tarif_konsultasi`), `komisi_barises.tindakan_id` (− `aturan_komisi_id`), drop `aturan_komisis`; konversi data tarif poli → treatment konsultasi & aturan → komisi treatment | [F1-09](modul/F1-09-komisi.md) |
 | `2026_10_01_120001_create_paket_promo_tables` | `pakets`, `paket_items`, `paket_pasiens`, `paket_pasien_items`, `promos`, `promo_pemakaians`; `kunjungan_tindakans.paket_pasien_item_id`, `tagihans.promo_id/diskon_promo`, `tagihan_items.tindakan_id/paket_id`; izin `promo.kelola` (manajer, marketing) & `pasien.lihat` (kasir) | [F1-08](modul/F1-08-paket-promo.md) |
 | `2026_10_01_110001_create_odontogram_tables` | `polis.spesialisasi`, `tindakans.per_gigi/kondisi_gigi_hasil`, `odontogram_kondisis`, `rencana_perawatans`, `rencana_perawatan_items`, kolom gigi di `kunjungan_tindakans`; isi data lama dari kode/nama poli & ICD-9-CM 23.xx | [F1-07](modul/F1-07-odontogram.md) |
 | `2026_09_30_150001_create_rme_estetika_tables` (+ `150002` izin) | `icd9cms` (+ 62 kode), `template_soaps`, `template_consents`, `catatan_tindakans`, `catatan_tindakan_titiks`, `informed_consents`, `pemeriksaan_addendums`, `kode_favorits`; kolom baru di `icd10s`, `tindakans`, `kunjungans`, `kunjungan_tindakans`, `pemeriksaans`, `users` | [F1-05](modul/F1-05-rme-estetika.md) |
@@ -151,6 +158,8 @@ Selalu lakukan hal yang sama untuk model baru.
 | ProtokolFoto | protokol_fotos | Auditable, SoftDeletes |
 | PersetujuanFoto | persetujuan_fotos | Auditable (ttd/naskah tidak disalin ke audit), route key `uuid` |
 | OdontogramKondisi | odontogram_kondisis | Auditable; scope `aktif`, `berlakuPada($kunjunganId)`; menolak ubah/hapus isi bila kunjungannya sudah ditutup |
+| TindakanKomisi | tindakan_komisis | Auditable. `hitung($dasar, $jumlah)`, `teksNilai()`; relasi `Tindakan::komisis()` |
+| KomisiPeriode / KomisiBaris | komisi_periodes / komisi_barises | Auditable + **DalamCabang** (periode); keduanya menolak ubah/hapus setelah periode disetujui |
 | Paket / PaketItem | pakets / paket_items | Auditable, SoftDeletes (Paket) |
 | PaketPasien / PaketPasienItem | paket_pasiens / paket_pasien_items | Auditable. `statusEfektif($sisa)` → habis/kedaluwarsa dihitung |
 | Promo / PromoPemakaian | promos / promo_pemakaians | Auditable, SoftDeletes (Promo) |

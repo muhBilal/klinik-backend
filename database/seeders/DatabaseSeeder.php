@@ -40,9 +40,9 @@ class DatabaseSeeder extends Seeder
 
         // Poli sesuai cakupan PRD (klinik estetika & spesialis): estetika medis, kulit & kelamin, gigi (bagian 6).
         $polis = collect([
-            ['kode' => 'ESTETIKA', 'nama' => 'Poli Estetika Medis', 'spesialisasi' => 'estetika', 'tarif_konsultasi' => 100000],
-            ['kode' => 'KULIT', 'nama' => 'Poli Kulit & Kelamin', 'spesialisasi' => 'kulit', 'tarif_konsultasi' => 150000],
-            ['kode' => 'GIGI', 'nama' => 'Poli Gigi & Estetika Gigi', 'spesialisasi' => 'gigi', 'tarif_konsultasi' => 75000],
+            ['kode' => 'ESTETIKA', 'nama' => 'Poli Estetika Medis', 'spesialisasi' => 'estetika'],
+            ['kode' => 'KULIT', 'nama' => 'Poli Kulit & Kelamin', 'spesialisasi' => 'kulit'],
+            ['kode' => 'GIGI', 'nama' => 'Poli Gigi & Estetika Gigi', 'spesialisasi' => 'gigi'],
         ])->map(fn ($p) => Poli::create($p))->keyBy('kode');
 
         // Semua akun demo memakai password: password. Administrator lintas cabang (cabang_id null), staf di cabang utama.
@@ -104,6 +104,16 @@ class DatabaseSeeder extends Seeder
             'TND-107' => 'mis', 'TND-108' => 'fis',
         ];
 
+        // Komisi per treatment contoh (KM-01) — tiap klinik wajib menyesuaikan di master treatment. Bawaan dokter 10%; per kategori /
+        // treatment menimpa seluruhnya (peran yang tidak disebut = tanpa komisi). [peran => [jenis, nilai]]
+        $komisiKategori = [
+            'Konsultasi' => ['dokter' => ['persen', 40]],
+            'Facial & Peeling' => ['terapis' => ['persen', 10]],
+            'Laser & Energy Device' => ['dokter' => ['persen', 5], 'terapis' => ['nominal', 50000]],
+            'Perawatan Gigi' => ['dokter' => ['persen', 30], 'asisten' => ['nominal', 10000]],
+        ];
+        $komisiTindakan = ['TRT-001' => ['dokter' => ['persen', 15], 'asisten' => ['nominal', 25000]]];
+
         foreach ($this->tindakan() as $kategori => $tindakans) {
             $kategoriId = KategoriTindakan::create(['nama' => $kategori])->id;
 
@@ -118,7 +128,15 @@ class DatabaseSeeder extends Seeder
                 foreach ($bhp as $kodeObat => $jumlah) {
                     $tindakan->bhps()->create(['obat_id' => $obats[$kodeObat]->id, 'jumlah' => $jumlah]);
                 }
+                foreach ($komisiTindakan[$kode] ?? $komisiKategori[$kategori] ?? ['dokter' => ['persen', 10]] as $peran => [$jenis, $nilai]) {
+                    $tindakan->komisis()->create(['peran' => $peran, 'jenis' => $jenis, 'nilai' => $nilai]);
+                }
             }
+        }
+
+        // Jasa konsultasi dokter per poli = treatment kategori Konsultasi (harga per cabang & komisi dokter diatur di katalog).
+        foreach (['ESTETIKA' => 'KNS-001', 'KULIT' => 'KNS-002', 'GIGI' => 'KNS-003'] as $kodePoli => $kodeTindakan) {
+            $polis[$kodePoli]->update(['tindakan_konsultasi_id' => Tindakan::where('kode', $kodeTindakan)->value('id')]);
         }
 
         // Paket multi-sesi (TR-02) & voucher/promo (TR-06) contoh
@@ -245,6 +263,9 @@ class DatabaseSeeder extends Seeder
     private function rmeTindakan(): array
     {
         return [
+            'KNS-001' => ['89.07', 'umum', null],
+            'KNS-002' => ['89.07', 'umum', null],
+            'KNS-003' => ['89.07', 'umum', null],
             'TND-004' => ['93.94', 'umum', null],
             'TND-005' => ['93.57', 'umum', null],
             'TND-006' => ['86.59', 'umum', 'umum'],
@@ -271,6 +292,12 @@ class DatabaseSeeder extends Seeder
     private function tindakan(): array
     {
         return [
+            // Jasa konsultasi dokter; dipasang ke poli sebagai jasa konsultasi (ditagihkan otomatis tiap kunjungan).
+            'Konsultasi' => [
+                ['KNS-001', 'Konsultasi dokter estetika', 100000, 15, 0, []],
+                ['KNS-002', 'Konsultasi dokter spesialis kulit & kelamin', 150000, 20, 0, []],
+                ['KNS-003', 'Konsultasi dokter gigi', 75000, 15, 0, []],
+            ],
             'Pemeriksaan Penunjang' => [
                 ['TND-001', 'Pemeriksaan gula darah sewaktu', 25000, 10, 0, []],
                 ['TND-002', 'Pemeriksaan kolesterol total', 35000, 10, 0, []],

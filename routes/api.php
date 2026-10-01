@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\InformedConsentController;
 use App\Http\Controllers\Api\JadwalController;
 use App\Http\Controllers\Api\KategoriTindakanController;
 use App\Http\Controllers\Api\KodeFavoritController;
+use App\Http\Controllers\Api\KomisiPeriodeController;
 use App\Http\Controllers\Api\KunjunganController;
 use App\Http\Controllers\Api\ObatController;
 use App\Http\Controllers\Api\OdontogramController;
@@ -268,6 +269,22 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
 
         // Voucher & promo (TR-06)
         Route::apiResource('promos', PromoController::class)->middleware('izin:promo.kelola');
+
+        // Komisi & jasa medis (KM-01, KM-03): komisi per treatment diatur di master treatment (TindakanController); rekap dikelola
+        // manajer; persetujuan (kunci) terpisah; slip sendiri untuk semua.
+        Route::get('komisi-saya', [KomisiPeriodeController::class, 'saya']);
+        Route::middleware('izin:komisi.kelola,komisi.setujui')->group(function () {
+            Route::get('komisi-periodes', [KomisiPeriodeController::class, 'index']);
+            Route::get('komisi-periodes/{komisiPeriode}', [KomisiPeriodeController::class, 'show']);
+        });
+        Route::middleware('izin:komisi.kelola')->group(function () {
+            Route::post('komisi-periodes', [KomisiPeriodeController::class, 'store']);
+            Route::post('komisi-periodes/{komisiPeriode}/hitung', [KomisiPeriodeController::class, 'hitung']);
+            Route::post('komisi-periodes/{komisiPeriode}/penyesuaian', [KomisiPeriodeController::class, 'penyesuaian']);
+            Route::delete('komisi-periodes/{komisiPeriode}/penyesuaian/{baris}', [KomisiPeriodeController::class, 'hapusPenyesuaian']);
+            Route::delete('komisi-periodes/{komisiPeriode}', [KomisiPeriodeController::class, 'destroy']);
+        });
+        Route::post('komisi-periodes/{komisiPeriode}/setujui', [KomisiPeriodeController::class, 'setujui'])->middleware('izin:komisi.setujui');
 
         // Master data
         Route::middleware('izin:master.kelola')->group(function () {

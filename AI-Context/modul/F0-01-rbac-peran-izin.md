@@ -37,6 +37,7 @@ baru (mis. "Dokter Estetika", "Kasir Farmasi") dan mengatur izinnya dari menu **
 | Farmasi | `farmasi.resep`, `farmasi.obat` | resep & penyerahan; obat & stok |
 | Keuangan | `kasir.tagihan`, `laporan.keuangan` | tagihan & bayar (+ jual paket, pasang kode promo); pendapatan di dashboard |
 | | `promo.kelola` | kelola voucher & kode promo (F1-08) |
+| | `komisi.kelola`, `komisi.setujui` | komisi per treatment (di master treatment, bersama `master.kelola`), hitung rekap & penyesuaian; setujui & kunci rekap (F1-09) |
 | Administrasi | `master.kelola`, `cabang.kelola`, `pengguna.kelola`, `peran.kelola`, `pengaturan.kelola`, `audit.lihat` | master data, cabang, pengguna, peran, pengaturan, audit log |
 
 ## Peta peran bawaan → izin (migration `2026_09_30_100002`)
@@ -55,7 +56,8 @@ baru (mis. "Dokter Estetika", "Kasir Farmasi") dan mengatur izinnya dari menu **
 
 Tambahan per modul (migration `*_beri_izin_*_ke_peran`): booking/jadwal (F1-02), kasir.void/kasir.shift (F1-03),
 inventori.kelola (F1-04), **`rme.tindakan` → perawat, dokter, terapis** (F1-05), **`promo.kelola` → manajer, marketing** dan
-**`pasien.lihat` → kasir** (menjual paket ke pasien; identitas saja, F1-08). `rme.terbatas` sengaja tidak diberikan ke peran
+**`pasien.lihat` → kasir** (menjual paket ke pasien; identitas saja, F1-08), **`komisi.kelola` → manajer** (F1-09; `komisi.setujui`
+sengaja hanya administrator — pemisahan tugas). `rme.terbatas` sengaja tidak diberikan ke peran
 bawaan: tim yang menangani kunjungan tetap bisa membukanya.
 
 Peta ini mempertahankan perilaku sebelum RBAC (semua test lama tetap lulus), dengan dua perubahan sesuai PRD:

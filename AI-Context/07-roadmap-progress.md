@@ -37,7 +37,7 @@ Smoke test HTTP lewat nginx (stack dev terisolasi) lulus: pengaturan, cabang, pe
 | FT-03 | Selesai | enkripsi, tautan bertanda tangan, audit akses |
 | PS-01 | Selesai | (sudah ada sebelumnya) |
 | FR-03 | Selesai | (sudah ada sebelumnya; kop etiket kini dari pengaturan) |
-| TR-01 | Parsial | kategori, durasi + buffer, harga per cabang, BHP standar selesai (F1-01); aturan komisi → KM-01 |
+| TR-01 | Selesai | kategori, durasi + buffer, harga per cabang, BHP standar (F1-01); komisi per peran di master treatment (F1-09) |
 | BK-01/02/03 | Selesai | kalender multi-resource, slot = durasi + buffer, jadwal praktik & cuti (F1-02) |
 | AN-01 | Selesai | tahap booking → check-in → kunjungan (F1-02) |
 | IN-01/02/03 | Selesai | batch & kedaluwarsa FEFO per cabang, potong BHP otomatis, satuan fraksional (F1-04) |
@@ -52,6 +52,8 @@ Smoke test HTTP lewat nginx (stack dev terisolasi) lulus: pengaturan, cabang, pe
 | ES-01 / ES-02 | Selesai | face chart injeksi; parameter laser/energy device (F1-05) |
 | FT-01 / FT-02 / FT-04, RM-04 | Selesai | protokol posisi & kamera terpandu, galeri + slider before-after, consent foto bertingkat (F1-06) |
 | FT-03 | Selesai | + thumbnail terenkripsi, EXIF dibuang, kamera di dalam aplikasi (F1-06) |
+| KM-01 | Selesai | komisi per treatment × peran dokter/terapis/asisten di master treatment, persen/nominal; jasa konsultasi = treatment poli (F1-09) |
+| KM-03 | Selesai | rekap per periode dari tagihan lunas, penyesuaian, setujui & kunci, slip per petugas & Komisi Saya (F1-09) |
 | TR-02 | Selesai | paket multi-sesi: jual via tagihan, aktif saat lunas, sisa sesi, masa berlaku, refund/alih/perpanjang sesuai kebijakan (F1-08) |
 | TR-06 | Selesai | voucher & promo: kode, periode, kuota total & per pasien, minimum, cabang, treatment/paket (F1-08) |
 | BL-01 | Selesai | + pemakaian sesi paket di tagihan kunjungan (F1-08) |
@@ -59,7 +61,7 @@ Smoke test HTTP lewat nginx (stack dev terisolasi) lulus: pengaturan, cabang, pe
 | DG-02 | Selesai | rencana perawatan per gigi berfase + estimasi biaya, persetujuan pasien, revisi, cetak, dikerjakan dari pemeriksaan (F1-07) |
 | DG-07 | Selesai | tindakan per gigi wajib nomor gigi, ditagih per gigi, memperbarui odontogram otomatis (F1-07) |
 | Bagian 6 (modul per spesialisasi) | Parsial | `polis.spesialisasi` menampilkan odontogram hanya untuk poli gigi (F1-07); face chart per jenis catatan treatment (F1-05); pengaturan per cabang belum |
-| AN-03 | Parsial | petugas pelaksana per tindakan (dasar komisi) (F1-05); tindakan oleh beberapa petugas per baris belum |
+| AN-03 | Parsial | pelaksana (F1-05) + asisten (F1-09) per tindakan; lebih dari satu orang per peran belum |
 | 7.1 SIP | Parsial | `sip_berlaku_sampai`, hanya SIP aktif yang menandatangani RME (F1-05); peringatan sebelum kedaluwarsa & STR belum |
 | Lainnya | lihat PRD bagian 8.2 | belum berubah |
 
@@ -78,7 +80,7 @@ Urutan kerja yang disarankan (dependensi di kolom kanan):
 | 7 | Inventori: batch/expired per gudang cabang, BHP otomatis, satuan fraksional | IN-01..03 | 1, F0-02 | **Selesai** 30 Sep 2026 | [modul/F1-04](modul/F1-04-inventori.md) |
 | 8 | Paket multi-sesi, voucher & promo | TR-02, TR-06 | 1 | **Selesai** 1 Okt 2026 (backend + frontend) | [modul/F1-08](modul/F1-08-paket-promo.md) |
 | 9 | Kasir: tagihan tanpa kunjungan, split payment, diskon per peran, void/refund, shift kas, pajak | BL-01..03/05/06, AD-04, 8.3 #3 #7 | — | **Selesai** 30 Sep 2026 (paket & promo: F1-08; deposit = TR-07 Fase 3) | [modul/F1-03](modul/F1-03-kasir.md) |
-| 10 | Komisi dokter & terapis (termasuk aturan komisi per treatment dari TR-01) | KM-01, KM-03 | 1, 9 | Belum | |
+| 10 | Komisi dokter & terapis (termasuk aturan komisi per treatment dari TR-01) | KM-01, KM-03 | 1, 9 | **Selesai** 1 Okt 2026 (backend + frontend) | [modul/F1-09](modul/F1-09-komisi.md) |
 | 11 | Consent data pasien (UU PDP) & data klinis pasien terstruktur | PS-03, PS-04 | — | Belum | |
 | 12 | Integrasi SATUSEHAT (IHS pasien, Encounter, Condition, ...) | PS-05, 7.1 | 4, F0-07 | **Terblokir**: butuh Organization ID & kredensial Kemenkes | |
 | 13 | Laporan penjualan & paket | LP-01..03 | 8, 9 | Belum | |
@@ -89,8 +91,8 @@ diisi lewat UI katalog — booking belum memaksa memilih ruang yang kompatibel. 
 Modul #3 dan #12 terblokir kredensial pihak ketiga, bukan pekerjaan kode: WhatsApp Business API dan Organization ID
 SATUSEHAT. Payment gateway (BL-08, Fase 2) juga menunggu merchant account.
 
-Test backend setelah F1-08: **107 test / 1452 assertion** lulus di SQLite **dan** PostgreSQL 17; migrate → rollback → migrate F1-05
-s.d. F1-08 diuji di PostgreSQL 17 dengan data demo. Alur F1-05 s.d. F1-08 juga diuji E2E di browser (lihat modul masing-masing).
+Test backend setelah F1-09 (revisi komisi di master treatment): **114 test / 1625 assertion** lulus di SQLite **dan** PostgreSQL 17;
+migrate → rollback → migrate F1-05 s.d. F1-09 diuji di PostgreSQL 17 dengan data demo (termasuk konversi data migration revisi). Alur F1-05 s.d. F1-09 juga diuji E2E di browser (lihat modul masing-masing).
 
 Frontend: F1-05 s.d. F1-08 punya UI lengkap. Editor pemakaian BHP (F1-04) tersedia di modal catatan tindakan; kasir kini menangani
 tagihan tanpa kunjungan, kode promo & pajak (F1-08). Halaman Booking, Kasir split payment/shift/void, dan Inventori (batch, opname)
@@ -102,6 +104,8 @@ Gerbang PRD Fase 1: "P0 lolos UAT, go-live klinik pilot".
 
 | Tanggal | Perubahan |
 |---------|-----------|
+| 2026-10-01 | F1-09 revisi (permintaan user): **komisi diatur langsung di master treatment** (`tindakan_komisis`, bagian "Komisi & jasa medis" di form treatment; halaman & API Aturan Komisi dihapus) dan **jasa konsultasi dokter = treatment** (kategori Konsultasi; `polis.tindakan_konsultasi_id` menggantikan `tarif_konsultasi`, harga per cabang & komisi dokter ikut katalog, tidak dobel bila dicatat sebagai tindakan). Migration `140001` mengonversi data lama |
+| 2026-10-01 | Fase 1 #10 selesai: F1-09 Komisi & jasa medis (mesin aturan treatment/kategori/umum & konsultasi × dokter/terapis/asisten, persen/nominal, khusus cabang; rekap per cabang dari tagihan lunas, bruto/neto, sesi paket; setujui & kunci dengan izin terpisah; penyesuaian; slip & Komisi Saya). `kunjungan_tindakans.asisten_id`; tagihan Rp 0 bisa dilunasi |
 | 2026-10-01 | Nama produk **e-klinik → lefaklinik** (wordmark header/drawer `lefa`+`klinik`, judul tab, manifest, default `APP_NAME` & nama klinik, dokumen; logo K tetap; nama teknis `eklinik` tidak diubah). Data demo poli disesuaikan PRD: Poli Estetika Medis, Poli Kulit & Kelamin, Poli Gigi & Estetika Gigi (Poli Umum & KIA serta treatment KIA dihapus); akun `dokter.kia@` → `dokter.kulit@` (Sp.D.V.E); test tarif konsultasi kini membaca tarif poli |
 | 2026-10-01 | Fase 1 #8 selesai: F1-08 Paket multi-sesi (jual via tagihan, aktif saat lunas, sisa sesi dihitung dari tindakan kunjungan, pemakaian di pemeriksaan Rp 0, nilai per sesi untuk LP-03, refund/alih/perpanjang sesuai pengaturan) & voucher/promo (periode, kuota, minimum, cabang, treatment/paket). Kasir mendapat `pasien.lihat`; izin baru `promo.kelola`. Frontend: master Paket Treatment, Voucher & Promo, kartu paket pasien, pakai paket di pemeriksaan, kode promo & tagihan tanpa kunjungan di kasir (bug daftar kasir untuk tagihan mandiri diperbaiki) |
 | 2026-10-01 | Fase 1 #6 selesai: F1-07 Kedokteran gigi (odontogram FDI per gigi & permukaan dengan riwayat per kunjungan, aturan penggantian kondisi, rencana perawatan berfase + estimasi & persetujuan, tindakan per gigi → odontogram otomatis & tagihan per gigi, `polis.spesialisasi`). Hash RME mencakup odontogram (RME lama tetap valid). Frontend: komponen `components/gigi/*` di pemeriksaan, detail kunjungan & pasien; master Poli & Treatment |

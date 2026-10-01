@@ -127,8 +127,8 @@ class AlurKlinikTest extends TestCase
             ->assertJsonPath('status', 'menunggu_pembayaran')
             ->json();
 
-        // Tarif konsultasi dari poli kunjungan (data demo bisa berubah), bukan angka tetap.
-        $total = $kunjungan['poli']['tarif_konsultasi'] + $gds->tarif + 10 * $paracetamol->harga;
+        // Jasa konsultasi = treatment poli kunjungan (data demo bisa berubah), bukan angka tetap.
+        $total = $kunjungan['konsultasi']['tarif_cabang'] + $gds->tarif + 10 * $paracetamol->harga;
         $this->assertSame($total, $kunjungan['tagihan']['total']);
         $this->assertArrayNotHasKey('items', $kunjungan['tagihan'], 'Detail kunjungan tidak perlu rincian tagihan.');
 
@@ -206,8 +206,8 @@ class AlurKlinikTest extends TestCase
         $this->getJson('/api/polis?aktif=1')->assertOk()
             ->assertJsonStructure([['id', 'kode', 'nama']])
             ->assertJsonMissingPath('0.dokters_count')
-            ->assertJsonMissingPath('0.tarif_konsultasi');
-        $this->getJson('/api/polis')->assertOk()->assertJsonStructure([['id', 'tarif_konsultasi', 'dokters_count']]);
+            ->assertJsonMissingPath('0.tindakan_konsultasi_id');
+        $this->getJson('/api/polis')->assertOk()->assertJsonStructure([['id', 'tindakan_konsultasi_id', 'tindakan_konsultasi', 'dokters_count']]);
 
         // Detail pasien ringkas tanpa riwayat kunjungan
         $this->getJson("/api/pasiens/{$pasien->id}?ringkas=1")->assertOk()

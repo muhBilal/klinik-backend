@@ -42,6 +42,8 @@ return [
         // dipotong `potongan_refund_persen`. Pengalihan sisa sesi ke pasien lain hanya bila diizinkan.
         'paket.boleh_transfer' => ['default' => false, 'rules' => ['boolean'], 'publik' => false],
         'paket.refund_sisa' => ['default' => false, 'rules' => ['boolean'], 'publik' => false],
+        // Komisi (KM-01): dasar persen = harga tindakan sebelum diskon (`bruto`) atau setelah diskon manual + promo tagihan (`neto`).
+        'komisi.dasar' => ['default' => 'neto', 'rules' => ['required', 'in:bruto,neto'], 'publik' => false],
         'paket.potongan_refund_persen' => ['default' => 0, 'rules' => ['required', 'integer', 'between:0,100'], 'publik' => false],
 
         // Treatment ber-template consent wajib punya informed consent yang disetujui sebelum pemeriksaan ditutup (RM-03).

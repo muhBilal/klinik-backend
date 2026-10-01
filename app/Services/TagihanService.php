@@ -19,19 +19,23 @@ class TagihanService
     ) {}
 
     /**
-     * Susun tagihan dari biaya konsultasi poli, tindakan dan obat pada resep (BL-01). Tindakan yang memakai sesi paket
+     * Susun tagihan dari jasa konsultasi poli, tindakan dan obat pada resep (BL-01). Tindakan yang memakai sesi paket
      * (TR-02) ditagih Rp 0 dengan keterangan nomor paket & urutan sesi.
      */
     public function buatDariKunjungan(Kunjungan $kunjungan): Tagihan
     {
         $kunjungan->loadMissing(['poli', 'tindakans.tindakan', 'tindakans.paketItem.paketPasien:id,no_paket', 'resep.items.obat']);
 
-        $items = [[
+        // Jasa konsultasi = treatment yang dipilih di master poli (harga cabang & komisi dokter ikut katalog). Bila dokter sudah
+        // mencatat treatment itu sebagai tindakan (mis. konsultasi ×2), tidak ditagih dua kali.
+        $konsultasi = $kunjungan->poli->jasaKonsultasi($kunjungan->cabang_id);
+        $items = $konsultasi && ! $kunjungan->tindakans->contains('tindakan_id', $konsultasi->id) ? [[
             'kategori' => 'konsultasi',
-            'deskripsi' => 'Konsultasi '.$kunjungan->poli->nama,
+            'tindakan_id' => $konsultasi->id,
+            'deskripsi' => Str::limit($konsultasi->nama, 180, ''),
             'jumlah' => 1,
-            'harga' => $kunjungan->poli->tarif_konsultasi,
-        ]];
+            'harga' => $konsultasi->tarif_cabang,
+        ]] : [];
 
         foreach ($kunjungan->tindakans as $tindakan) {
             // Tindakan per gigi ditagih per gigi, mis. "Tambal gigi komposit — gigi 16 (MO)" (DG-07).

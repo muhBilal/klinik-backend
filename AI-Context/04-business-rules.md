@@ -64,7 +64,8 @@ Status resep: `menunggu` → `diserahkan`. Status tagihan: `belum_bayar` → `lu
   default aktif) → 422 `informed_consent` berisi daftar tindakan yang kurang / ditolak pasien.
 - RME **ditandatangani** (`ditandatangani_at/_oleh`, `hash_ttd`) lalu terkunci; koreksi hanya lewat addendum.
 - Membuat tagihan otomatis (`TagihanService::buatDariKunjungan`):
-  konsultasi (`polis.tarif_konsultasi`) + tiap tindakan (`tarif × jumlah`) + tiap item resep (`harga × jumlah`).
+  jasa konsultasi (treatment `polis.tindakan_konsultasi_id`, harga cabang; dilewati bila poli tanpa jasa konsultasi, treatment nonaktif /
+  tidak dilayani di cabang, atau sudah dicatat dokter sebagai tindakan) + tiap tindakan (`tarif × jumlah`) + tiap item resep (`harga × jumlah`).
 
 ### Pembayaran (`TagihanService::bayar`)
 - Hanya tagihan `belum_bayar`; baris dikunci.
@@ -116,6 +117,14 @@ Status resep: `menunggu` → `diserahkan`. Status tagihan: `belum_bayar` → `lu
   `paket.*`, oleh pemegang `kasir.void`; refund tunai mengurangi kas seharusnya shift.
 - Kode promo dipasang sebelum bayar, diperiksa ulang & dikunci saat bayar, dicatat saat lunas, kuota kembali saat refund. Potongan promo
   di luar batas diskon per peran; diskon manual + promo ≤ total; pajak dari nilai setelah keduanya.
+
+### Komisi (detail: [modul/F1-09-komisi.md](modul/F1-09-komisi.md))
+- Peran per tindakan: dokter = dokter kunjungan, terapis = pelaksana (`petugas_id`), asisten = `asisten_id`. Komisi diatur **per treatment
+  per peran** di master treatment (`tindakan_komisis`; kosong = tanpa komisi; ubah butuh `master.kelola` + `komisi.kelola`). Jasa konsultasi
+  = treatment poli → komisi dokter treatment itu.
+- Rekap per cabang per periode dari tagihan kunjungan **lunas** (`dibayar_at`); dasar bruto/neto (`komisi.dasar`), sesi paket = nilai per sesi.
+  Periode tidak boleh tumpang tindih. Draf bisa dihitung ulang & diberi penyesuaian; **disetujui = terkunci** (izin `komisi.setujui`).
+- Tagihan Rp 0 boleh dilunasi tanpa pembayaran.
 
 ### Farmasi (`FarmasiService`)
 - **Obat hanya diserahkan setelah tagihan lunas** (alur: poli → kasir → farmasi).

@@ -2,8 +2,8 @@
 
 **PRD:** TR-01 (master treatment: kategori, durasi, harga per cabang, BHP standar, aturan komisi), bagian AD-01 (harga per
 cabang) · **Fase:** 1 · **Status:** selesai untuk kategori, durasi + buffer, harga dasar & harga per cabang, BHP standar.
-**Aturan komisi** dikerjakan di modul Komisi (KM-01, roadmap Fase 1 #10) karena butuh mesin aturan per peran & split
-dokter–terapis–asisten; katalog belum menyimpan apa pun tentang komisi.
+**Komisi per peran** (dokter/terapis/asisten, persen/nominal) diatur di form treatment sejak F1-09 (`tindakan_komisis`, lihat
+[F1-09](F1-09-komisi.md)). **Jasa konsultasi dokter** juga treatment (kategori Konsultasi) yang dipilih per poli.
 
 ## Keputusan desain
 
@@ -106,9 +106,9 @@ database kosong — database yang sudah berisi data tidak mendapat kategori & tr
 
 ## Belum dikerjakan (modul berikutnya)
 
-- Aturan komisi per treatment (KM-01), kebutuhan resource/ruang/alat per treatment untuk kalender (BK-01), template SOAP &
+- ~~Komisi per treatment (KM-01)~~ → F1-09. Kebutuhan resource/ruang/alat per treatment untuk kalender (BK-01), template SOAP &
   informed consent per treatment (RM-01, RM-03), kode ICD-9-CM (RM-02), instruksi pasca tindakan (ES-04), HPP (IN-06).
-- Tarif konsultasi poli masih satu harga untuk semua cabang.
+- ~~Tarif konsultasi poli satu harga untuk semua cabang~~ → jasa konsultasi = treatment, harga per cabang ikut katalog (F1-09).
 
 ## Test
 

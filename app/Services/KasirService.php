@@ -132,7 +132,8 @@ class KasirService
             $this->pastikanDiskonDiizinkan($tagihan, $diskon, $kasir);
 
             $grandTotal = $this->hitungGrandTotal($tagihan->total, $diskon + $diskonPromo, $tagihan->pajak_persen);
-            $baris = $this->normalkanPembayaran($pembayarans, $kunciNominal);
+            // Tagihan Rp 0 (mis. seluruhnya sesi paket di poli tanpa biaya konsultasi) boleh dilunasi tanpa pembayaran.
+            $baris = $this->normalkanPembayaran($pembayarans, $kunciNominal, bolehKosong: $grandTotal === 0);
             $dibayar = (int) $baris->sum('jumlah');
 
             if ($dibayar < $grandTotal) {
@@ -306,11 +307,11 @@ class KasirService
      * @param  list<array{metode: string, jumlah: int, referensi?: string}>  $pembayarans
      * @return Collection<int, array{metode: string, jumlah: int, referensi?: string}>
      */
-    private function normalkanPembayaran(array $pembayarans, string $kunciNominal): Collection
+    private function normalkanPembayaran(array $pembayarans, string $kunciNominal, bool $bolehKosong = false): Collection
     {
         $baris = collect($pembayarans)->filter(fn ($b) => (int) $b['jumlah'] > 0)->values();
 
-        if ($baris->isEmpty()) {
+        if ($baris->isEmpty() && ! $bolehKosong) {
             throw ValidationException::withMessages([$kunciNominal => 'Masukkan minimal satu pembayaran.']);
         }
 

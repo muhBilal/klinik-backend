@@ -137,11 +137,12 @@ class Kunjungan extends Model
             'pemeriksaan.diagnosas.icd10:id,kode,nama,sensitif',
             'pemeriksaan.addendums:id,pemeriksaan_id,user_id,bagian,isi,alasan,created_at',
             'pemeriksaan.addendums.user:id,name',
-            'tindakans:id,kunjungan_id,tindakan_id,jumlah,tarif,petugas_id,icd9cm_id,gigi,permukaan,rencana_item_id,paket_pasien_item_id,keterangan',
+            'tindakans:id,kunjungan_id,tindakan_id,jumlah,tarif,petugas_id,asisten_id,icd9cm_id,gigi,permukaan,rencana_item_id,paket_pasien_item_id,keterangan',
             'tindakans.paketItem:id,paket_pasien_id,tindakan_id,jumlah_sesi',
             'tindakans.paketItem.paketPasien:id,no_paket,nama',
             'tindakans.tindakan:id,nama,jenis_catatan,template_consent_id,protokol_foto_id,per_gigi,kondisi_gigi_hasil',
             'tindakans.petugas:id,name',
+            'tindakans.asisten:id,name',
             'tindakans.icd9cm:id,kode,nama',
             'tindakans.catatan:id,kunjungan_tindakan_id,jenis,area,catatan,parameter,sumber_daya_id',
             'tindakans.catatan.alat:id,kode,nama',
@@ -167,12 +168,14 @@ class Kunjungan extends Model
     {
         return $this->load([
             'pasien:id,no_rm,nama,jenis_kelamin,tanggal_lahir,golongan_darah,alergi',
-            'poli:id,kode,nama,spesialisasi,tarif_konsultasi',
+            'poli:id,kode,nama,spesialisasi,tindakan_konsultasi_id',
             'dokter:id,name,sip',
             'cabang:id,kode,nama',
             ...($rekamMedis ? [...self::relasiRekamMedis(), 'resep.items.obat:id,nama,satuan,stok'] : []),
             'tagihan:id,kunjungan_id,no_tagihan,total,grand_total,status',
-        ]);
+        ])
+            // Jasa konsultasi poli di cabang kunjungan (estimasi biaya; yang ditagihkan dihitung ulang saat tagihan dibuat).
+            ->setRelation('konsultasi', $this->poli?->jasaKonsultasi($this->cabang_id));
     }
 
     public function auditLabel(): ?string

@@ -15,7 +15,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * Treatment / tindakan (PRD TR-01). Master pusat: `tarif` = harga dasar, ditimpa per cabang lewat `hargas`.
+ * Treatment / tindakan (PRD TR-01). Master pusat: `tarif` = harga dasar, ditimpa per cabang lewat `hargas`; komisi per peran lewat
+ * `komisis` (KM-01). Jasa konsultasi dokter juga treatment (dipilih per poli: `polis.tindakan_konsultasi_id`).
  */
 #[Table('tindakans')]
 #[Fillable([
@@ -74,6 +75,12 @@ class Tindakan extends Model
     public function bhps(): HasMany
     {
         return $this->hasMany(TindakanBhp::class);
+    }
+
+    /** Komisi per peran (dokter / terapis / asisten); peran tanpa baris = tanpa komisi. */
+    public function komisis(): HasMany
+    {
+        return $this->hasMany(TindakanKomisi::class);
     }
 
     /** Ruang/alat yang boleh dipakai treatment ini (BK-01). Kosong = tidak butuh sumber daya khusus. */

@@ -21,7 +21,7 @@ class PoliController extends Controller
             ->when(
                 $request->boolean('aktif'),
                 fn ($q) => $q->select(['id', 'kode', 'nama', 'spesialisasi'])->where('is_active', true),
-                fn ($q) => $q->withCount('dokters'),
+                fn ($q) => $q->withCount('dokters')->with('tindakanKonsultasi:id,kode,nama,tarif,is_active,deleted_at'),
             )
             ->when($request->filled('q'), function ($query) use ($request) {
                 $q = $request->string('q')->trim();
@@ -47,7 +47,7 @@ class PoliController extends Controller
     {
         $poli->update($this->validated($request, $poli));
 
-        return response()->json($poli);
+        return response()->json($poli->load('tindakanKonsultasi:id,kode,nama,tarif,is_active,deleted_at'));
     }
 
     public function destroy(Poli $poli): JsonResponse
@@ -66,7 +66,8 @@ class PoliController extends Controller
             'nama' => ['required', 'string', 'max:255'],
             // Modul spesialisasi di pemeriksaan (PRD bagian 6), mis. odontogram untuk poli gigi
             'spesialisasi' => ['nullable', Rule::enum(Spesialisasi::class)],
-            'tarif_konsultasi' => ['required', 'integer', 'min:0'],
+            // Jasa konsultasi = treatment di katalog (harga per cabang & komisi dokter diatur di sana); kosong = tanpa jasa konsultasi.
+            'tindakan_konsultasi_id' => ['nullable', Rule::exists('tindakans', 'id')->whereNull('deleted_at')],
             'is_active' => ['boolean'],
         ]);
 

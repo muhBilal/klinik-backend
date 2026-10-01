@@ -30,6 +30,9 @@ Kolom baru `tagihans`: `pasien_id`, `shift_id`, `pajak`, `pajak_persen`, `ketera
 - **Split payment**: `pembayarans[]` boleh berisi beberapa metode. Hanya **tunai** yang boleh berlebih (jadi kembalian);
   total non-tunai tidak boleh melebihi tagihan. Bila hanya satu metode, kolom lama `metode_bayar` tetap diisi;
   lebih dari satu metode → `metode_bayar` null.
+- **Item konsultasi** = treatment jasa konsultasi poli (`tindakan_id` terisi, harga cabang; F1-09) — bisa jadi target promo per treatment.
+- **Tagihan Rp 0** (mis. seluruhnya sesi paket, atau lunas oleh diskon/promo) boleh dilunasi **tanpa** pembayaran (F1-09) — agar kunjungan
+  selesai dan masuk rekap komisi. Tagihan di atas Rp 0 tetap wajib minimal satu pembayaran.
 - **Pajak** (AD-04): tarif dari pengaturan `keuangan.pajak_persen`, **di-snapshot** ke `tagihans.pajak_persen` saat
   tagihan dibuat. Mengubah tarif tidak mengubah tagihan lama. Pajak dihitung dari nilai *setelah* diskon.
 - **Batas diskon** (BL-02): pengaturan `keuangan.batas_diskon_persen` = `{kode_peran: persen}`. Bersifat **opt-in** —

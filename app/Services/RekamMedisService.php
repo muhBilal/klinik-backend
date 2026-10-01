@@ -23,7 +23,7 @@ class RekamMedisService
     /**
      * Boleh membaca isi rekam medis kunjungan ini (di luar izin rme.lihat yang dicek terpisah).
      * Kunjungan berakses terbatas hanya untuk: pemegang rme.terbatas, tim yang tercatat menangani (dokter, perawat,
-     * petugas tindakan), dan tenaga pelayanan di cabang itu selama pemeriksaan masih berjalan.
+     * petugas & asisten tindakan), dan tenaga pelayanan di cabang itu selama pemeriksaan masih berjalan.
      */
     public function bolehLihat(User $user, Kunjungan $kunjungan): bool
     {
@@ -35,9 +35,11 @@ class RekamMedisService
         $pemeriksaan = $kunjungan->relationLoaded('pemeriksaan')
             ? $kunjungan->pemeriksaan
             : $kunjungan->pemeriksaan()->first(['id', 'kunjungan_id', 'dokter_id', 'perawat_id']);
-        $petugas = $kunjungan->relationLoaded('tindakans')
-            ? $kunjungan->tindakans->pluck('petugas_id')
-            : $kunjungan->tindakans()->pluck('petugas_id');
+        // Pelaksana & asisten tindakan termasuk tim yang menangani.
+        $tindakans = $kunjungan->relationLoaded('tindakans')
+            ? $kunjungan->tindakans
+            : $kunjungan->tindakans()->get(['id', 'petugas_id', 'asisten_id']);
+        $petugas = $tindakans->pluck('petugas_id')->merge($tindakans->pluck('asisten_id'));
 
         $tim = array_map('intval', array_filter([
             $kunjungan->dokter_id, $pemeriksaan?->dokter_id, $pemeriksaan?->perawat_id, ...$petugas->all(),
@@ -145,6 +147,7 @@ class RekamMedisService
                 ] : null,
                 // Ditambahkan hanya bila ada agar hash RME lama (sebelum F1-07) tetap cocok.
                 ...($t->gigi ? [[$t->gigi, $t->permukaan]] : []),
+                ...($t->asisten_id ? [['asisten', $t->asisten_id]] : []),
             ])->values()->all(),
             'consent' => $kunjungan->informedConsents->map(fn ($c) => [$c->uuid, $c->status->value, $c->checksum])->all(),
         ];

@@ -53,7 +53,7 @@ di PostgreSQL 17 dengan data demo.
 | `tindakans` (+) | **icd9cm_id**, **template_consent_id** (diisi = wajib consent), **jenis_catatan** (`umum`/`injeksi`/`energi`) |
 | `template_soaps` | nama, poli_id (null = semua poli), tindakan_id, subjektif, objektif, asesmen, plan, **icd10_ids** (JSON, saran diagnosa), akses_terbatas, is_active, deleted_at |
 | `kunjungans` (+) | **akses_terbatas** |
-| `kunjungan_tindakans` (+) | **petugas_id** (pelaksana, dasar komisi), **icd9cm_id** |
+| `kunjungan_tindakans` (+) | **petugas_id** (pelaksana, dasar komisi), **icd9cm_id** — `asisten_id` ditambah F1-09 |
 | `pemeriksaans` (+) | **ditandatangani_at**, **ditandatangani_oleh**, **hash_ttd** |
 | `pemeriksaan_addendums` | pemeriksaan_id, user_id, bagian, isi, alasan, created_at — append-only |
 | `catatan_tindakans` | kunjungan_tindakan_id (unik), jenis, area, catatan, parameter (JSON), sumber_daya_id (alat), dicatat_oleh |

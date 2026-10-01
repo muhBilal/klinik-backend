@@ -46,7 +46,7 @@ Bentuk `user` (login, `/me`):
 | GET | `/icd9cms` | login | `q`, `favorit=1`; + `favorit` |
 | GET | `/template-soaps` | login | **array**; `poli_id` (template poli itu + umum), `aktif=1`, `status`, `q`; + `poli`, `tindakan`, `diagnosas` |
 | GET | `/petugas` | login | **array** petugas medis (dokter/perawat/terapis) cabang aktif + lintas cabang |
-| GET | `/tindakans` | login | `q`, `aktif=1` (juga sembunyikan yang tidak dilayani di cabang), `status`, `kategori_id`, `cabang_id` (default cabang aktif). + `kategori`, `icd9cm`, `icd9cm_id`, `template_consent_id`, `jenis_catatan`, `per_gigi`, `kondisi_gigi_hasil`, `tarif_cabang`, `tersedia`, `hargas_count`, `bhps_count` |
+| GET | `/tindakans` | login | `q`, `aktif=1` (juga sembunyikan yang tidak dilayani di cabang), `status`, `kategori_id`, `cabang_id` (default cabang aktif). + `kategori`, `icd9cm`, `icd9cm_id`, `template_consent_id`, `jenis_catatan`, `per_gigi`, `kondisi_gigi_hasil`, `tarif_cabang`, `tersedia`, `hargas_count`, `bhps_count`; `komisi=1` + `komisis` (hanya pemegang komisi.kelola) |
 | GET | `/kategori-tindakans` | login | **array**. `aktif=1`: `{id, nama}` aktif; tanpa filter: lengkap + `tindakans_count`. `status`, `q` |
 | GET | `/obats`, `/obats/{obat}` | login | `q`, `aktif=1`, `menipis=1`, `satuan`, `status` |
 
@@ -66,7 +66,7 @@ Field pasien: `nama*`, `jenis_kelamin*` (L/P), `tanggal_lahir*` (≤ hari ini), 
 | Method | Path | Izin | Keterangan |
 |--------|------|------|------------|
 | GET | `/kunjungans` | login | `tanggal` (default hari ini), `poli_id`, `dokter_id`, `status` (bisa koma), `penjamin`, `q`; + `cabang`; per_page default 50 |
-| GET | `/kunjungans/{id}` | login | detail (`loadDetail`), **termasuk cabang lain**. Tanpa `rme.lihat` — atau kunjungan berakses terbatas yang tidak boleh dibaca (`rme_disembunyikan: true`) — tanpa pemeriksaan/tindakans/informed_consents/resep. Dengan RME: tercatat audit `lihat` |
+| GET | `/kunjungans/{id}` | login | detail (`loadDetail`, + `konsultasi`: jasa konsultasi poli di cabang kunjungan `{id, nama, tarif_cabang}` atau null), **termasuk cabang lain**. Tanpa `rme.lihat` — atau kunjungan berakses terbatas yang tidak boleh dibaca (`rme_disembunyikan: true`) — tanpa pemeriksaan/tindakans/informed_consents/resep. Dengan RME: tercatat audit `lihat` |
 | POST | `/kunjungans` | kunjungan.daftar | `{ pasien_id*, poli_id*, dokter_id?, penjamin*, no_penjamin?, keluhan? }` → + `cabang`. 422 `cabang` bila cabang aktif belum dipilih |
 | POST | `/kunjungans/{id}/batal` | kunjungan.daftar | hanya status menunggu |
 | POST | `/kunjungans/{id}/panggil` | pemeriksaan.panggil | menunggu → diperiksa |
@@ -84,7 +84,7 @@ Payload `PUT /pemeriksaan` (semua opsional; tanpa `pemeriksaan.dokter` hanya vit
   "diagnosas": [{ "icd10_id": 5, "jenis": "primer" }],
   "akses_terbatas": false,
   "tindakans": [{ "id": 12, "tindakan_id": 1, "jumlah": 1, "keterangan": null, "petugas_id": 9, "icd9cm_id": 58,
-                  "gigi": 16, "permukaan": "MO", "rencana_item_id": null, "paket_pasien_item_id": null }],
+                  "asisten_id": null, "gigi": 16, "permukaan": "MO", "rencana_item_id": null, "paket_pasien_item_id": null }],
   "resep": [{ "obat_id": 1, "jumlah": 10, "aturan_pakai": "3 x 1 sesudah makan" }],
   "catatan_resep": "..."
 }
@@ -131,6 +131,18 @@ menyetujui foto. `GET /berkas` + filter `protokol_foto_id`, `posisi`, `tahap` da
 | POST | `/persetujuan-fotos/{uuid}/cabut` | pasien.kelola, rme.tindakan | `{ alasan* }` |
 
 Bentuk berkas: `{ uuid, cabang_id, pasien_id, kunjungan_id, kategori, keterangan, nama_file, mime, ukuran, diunggah_oleh, pengunggah: {id, name}, created_at }` (tanpa `id`, `path`, `checksum`).
+
+## Komisi & jasa medis
+Detail & aturan: [modul/F1-09](modul/F1-09-komisi.md)
+
+| Method | Path | Izin | Keterangan |
+|--------|------|------|------------|
+| POST / PUT | `/tindakans`, `/{id}` | master.kelola + komisi.kelola | komisi per treatment: `komisis[]{peran*, jenis*, nilai*}` replace-all (lihat Master data) |
+| GET | `/komisi-periodes`, `/{id}` | komisi.kelola, komisi.setujui | daftar paginated (cabang aktif); detail + `ringkasan`, `barises` (`?user_id=`) |
+| POST | `/komisi-periodes` · `/{id}/hitung` · `/{id}/penyesuaian` | komisi.kelola | `{nama*, mulai*, selesai*}` · — · `{user_id*, komisi*, keterangan*}` |
+| DELETE | `/komisi-periodes/{id}` · `/{id}/penyesuaian/{baris}` | komisi.kelola | hanya draf |
+| POST | `/komisi-periodes/{id}/setujui` | komisi.setujui | kunci |
+| GET | `/komisi-saya` | login | periode disetujui milik user (+ `total_saya`); `?periode_id=` = slip |
 
 ## Paket multi-sesi & voucher/promo
 Detail & aturan: [modul/F1-08](modul/F1-08-paket-promo.md)
@@ -224,8 +236,8 @@ Detail: [modul/F1-04](modul/F1-04-inventori.md)
 ## Master data
 | Method | Path | Izin |
 |--------|------|------|
-| POST / PUT / DELETE | `/polis`, `/polis/{poli}` — `{ kode*, nama*, spesialisasi (umum/gigi/kulit/estetika/lainnya), tarif_konsultasi*, is_active }` | master.kelola |
-| apiResource (kecuali index) | `/tindakans` — `{ kode*, nama*, kategori_id, icd9cm_id, template_consent_id (diisi = wajib consent), jenis_catatan (umum/injeksi/energi), per_gigi, kondisi_gigi_hasil (kode odontogram; diisi = per_gigi), durasi_menit* (1–720), buffer_menit (0–240), tarif* (harga dasar), is_active, hargas?: [{cabang_id*, tarif*, tersedia}], bhps?: [{obat_id*, jumlah* (desimal ≤3)}] }`; `hargas`/`bhps` replace-all bila dikirim. Show/store/update → + `kategori`, `hargas[].cabang`, `bhps[].obat`. Detail: [modul/F1-01](modul/F1-01-katalog-treatment.md) | master.kelola |
+| POST / PUT / DELETE | `/polis`, `/polis/{poli}` — `{ kode*, nama*, spesialisasi (umum/gigi/kulit/estetika/lainnya), tindakan_konsultasi_id (treatment jasa konsultasi; null = tanpa), is_active }`; daftar lengkap & respons + `tindakan_konsultasi` | master.kelola |
+| apiResource (kecuali index) | `/tindakans` — `{ kode*, nama*, kategori_id, icd9cm_id, template_consent_id (diisi = wajib consent), jenis_catatan (umum/injeksi/energi), per_gigi, kondisi_gigi_hasil (kode odontogram; diisi = per_gigi), durasi_menit* (1–720), buffer_menit (0–240), tarif* (harga dasar), is_active, hargas?: [{cabang_id*, tarif*, tersedia}], bhps?: [{obat_id*, jumlah* (desimal ≤3)}] }`; `komisis?: [{peran* (dokter/terapis/asisten), jenis* (persen/nominal), nilai* (persen ≤ 100)}]` (hanya pemegang komisi.kelola, selain itu 403); `hargas`/`bhps`/`komisis` replace-all bila dikirim. Show/store/update → + `kategori`, `hargas[].cabang`, `bhps[].obat`, `komisis` (pemegang komisi.kelola). Hapus ditolak bila treatment dipakai sebagai jasa konsultasi poli. Detail: [modul/F1-01](modul/F1-01-katalog-treatment.md) | master.kelola |
 | POST / PUT / DELETE | `/kategori-tindakans`, `/kategori-tindakans/{kategori}` — `{ nama* (unik), deskripsi, is_active }`; hapus ditolak bila masih dipakai | master.kelola |
 | apiResource (kecuali index) | `/icd10s` — `{ kode*, nama*, sensitif? }` (kosong = otomatis untuk kode IMS/HIV) | master.kelola |
 | apiResource (kecuali index) | `/icd9cms` — `{ kode* (mis. 86.3), nama* }`; hapus ditolak bila dipakai | master.kelola |

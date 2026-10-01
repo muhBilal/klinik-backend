@@ -76,7 +76,7 @@ kunjungan/resep/tagihan, pindahkan semua user **selain admin** ke cabang itu, ga
 ## Belum dikerjakan (fase berikutnya)
 
 - ~~Harga tindakan per cabang (TR-01)~~ → selesai di [F1-01](F1-01-katalog-treatment.md). Stok obat/BHP per gudang cabang & mutasi
-  antar cabang (IN-01, IN-05). Tarif konsultasi poli per cabang.
+  antar cabang (IN-01, IN-05). ~~Tarif konsultasi poli per cabang~~ → jasa konsultasi kini treatment, ikut harga per cabang (F1-09).
 - Laporan konsolidasi lintas cabang (LP-02) — dashboard sudah mendukung tampilan semua cabang.
 - Modul spesialisasi aktif per cabang (PRD bagian 6).
 
