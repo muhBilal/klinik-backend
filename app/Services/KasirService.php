@@ -9,6 +9,7 @@ use App\Models\PaketPasien;
 use App\Models\Pembayaran;
 use App\Models\ShiftKas;
 use App\Models\Tagihan;
+use App\Models\TagihanItem;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -70,19 +71,29 @@ class KasirService
         });
     }
 
-    /** Rekap shift per metode bayar, untuk layar tutup shift & cetak. */
+    /**
+     * Rekap shift per metode bayar, untuk layar tutup shift & cetak. Baris pembayaran tunai menyimpan uang yang diserahkan
+     * pasien; kembalian (`tagihans.kembalian`) dikurangkan agar total & kas seharusnya = uang yang benar-benar masuk laci.
+     */
     public function rekapShift(ShiftKas $shift): array
     {
+        $kembalian = fn (bool $direfund) => (int) Tagihan::withoutGlobalScope('cabang')
+            ->whereIn('id', $shift->pembayarans()->where('metode', MetodeBayar::Tunai)
+                ->when($direfund, fn ($q) => $q->whereNotNull('dikembalikan_at'), fn ($q) => $q->whereNull('dikembalikan_at'))
+                ->select('tagihan_id'))
+            ->sum('kembalian');
+        $kembalianBerlaku = $kembalian(false);
+
         $perMetode = $shift->pembayarans()->berlaku()
             ->selectRaw('metode, COUNT(*) AS jumlah_transaksi, SUM(jumlah) AS total')
             ->groupBy('metode')->get()
             ->map(fn ($b) => [
                 'metode' => $b->metode->value,
                 'jumlah_transaksi' => (int) $b->jumlah_transaksi,
-                'total' => (int) $b->total,
+                'total' => (int) $b->total - ($b->metode === MetodeBayar::Tunai ? $kembalianBerlaku : 0),
             ])->values();
 
-        $refund = (int) $shift->pembayarans()->whereNotNull('dikembalikan_at')->sum('jumlah');
+        $refund = (int) $shift->pembayarans()->whereNotNull('dikembalikan_at')->sum('jumlah') - $kembalian(true);
         $tunai = (int) ($perMetode->firstWhere('metode', MetodeBayar::Tunai->value)['total'] ?? 0);
         // Pengembalian sisa paket (TR-02) = uang keluar di shift ini; yang tunai mengurangi kas seharusnya.
         $refundPaket = $this->refundPaket($shift);
@@ -174,6 +185,7 @@ class KasirService
                 ]);
             }
 
+            $this->alokasikanNeto($tagihan);
             app(PromoService::class)->catatPemakaian($tagihan);
             app(PaketService::class)->aktifkanDariTagihan($tagihan);
 
@@ -190,6 +202,53 @@ class KasirService
 
             return $tagihan;
         });
+    }
+
+    /**
+     * Nilai bersih per baris saat lunas (`tagihan_items.neto`, sebelum pajak): potongan promo dibagi ke baris yang memenuhi syarat promo
+     * (sebanding subtotal), lalu diskon manual dibagi ke semua baris sebanding sisanya. Pembulatan ke rupiah dengan metode sisa terbesar
+     * sehingga Σ neto = total − diskon − potongan promo. Satu sumber untuk nilai paket, komisi (dasar neto) & laporan penjualan.
+     */
+    private function alokasikanNeto(Tagihan $tagihan): void
+    {
+        $items = $tagihan->items()->get()->keyBy('id');
+        $neto = $items->map(fn (TagihanItem $i) => $i->subtotal)->all();
+
+        $layak = app(PromoService::class)->barisMemenuhiSyarat($tagihan, $items);
+        $this->kurangiSebanding($neto, $layak->map(fn (TagihanItem $i) => $i->subtotal)->all(), (int) $tagihan->diskon_promo);
+        $this->kurangiSebanding($neto, $neto, (int) $tagihan->diskon);
+
+        foreach ($items as $id => $item) {
+            $item->update(['neto' => max(0, $neto[$id])]);
+        }
+    }
+
+    /**
+     * Kurangi `$jumlah` dari `$nilai` sebanding `$bobot` (id => bobot, bilangan bulat): tiap bagian dibulatkan ke bawah, sisanya diberikan
+     * satu-satu ke baris dengan sisa bagi terbesar, sehingga total yang dikurangi tepat `$jumlah`.
+     *
+     * @param  array<int, int>  $nilai
+     * @param  array<int, int>  $bobot
+     */
+    private function kurangiSebanding(array &$nilai, array $bobot, int $jumlah): void
+    {
+        $totalBobot = array_sum($bobot);
+        if ($jumlah <= 0 || $totalBobot <= 0) {
+            return;
+        }
+
+        $sisaBagi = [];
+        $terbagi = 0;
+        foreach ($bobot as $id => $b) {
+            $bagian = intdiv($b * $jumlah, $totalBobot);
+            $sisaBagi[$id] = ($b * $jumlah) % $totalBobot;
+            $nilai[$id] -= $bagian;
+            $terbagi += $bagian;
+        }
+        arsort($sisaBagi);
+        foreach (array_slice(array_keys($sisaBagi), 0, $jumlah - $terbagi) as $id) {
+            $nilai[$id]--;
+        }
     }
 
     /** Batalkan (void) tagihan yang belum dibayar — BL-06, temuan 8.3 #7. */

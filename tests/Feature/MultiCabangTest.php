@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Cabang;
 use App\Models\Icd10;
+use App\Models\Paket;
 use App\Models\Pasien;
 use App\Models\Tagihan;
 use App\Models\User;
@@ -154,5 +155,31 @@ class MultiCabangTest extends TestCase
         $this->getJson('/api/me')->assertJsonCount(1, 'cabangs')->assertJsonPath('cabangs.0.kode', 'SEL');
         $this->getJson('/api/cabangs')->assertOk()->assertJsonCount(1);
         $this->postJson('/api/cabangs', ['kode' => 'X', 'nama' => 'X'])->assertForbidden();
+    }
+
+    public function test_binding_rute_ikut_cabang_aktif_request_untuk_endpoint_paket(): void
+    {
+        $pasien = Pasien::first();
+        $id = $this->daftar('pendaftaran@eklinik.test', $pasien)->json('id');
+        $paketId = Paket::where('kode', 'PKT-LSR6')->value('id');
+
+        $this->as('dokter@eklinik.test');
+        $this->postJson("/api/kunjungans/{$id}/panggil")->assertOk();
+        $pesanan = $this->postJson("/api/kunjungans/{$id}/pakets", ['paket_id' => $paketId])->assertCreated()->json();
+
+        // Dokter cabang lain: tidak bisa memesan / membatalkan / mencatat tindakan di kunjungan cabang UTAMA
+        $this->as('dokter.sel@eklinik.test');
+        $this->postJson("/api/kunjungans/{$id}/pakets", ['paket_id' => $paketId])->assertNotFound();
+        $this->deleteJson("/api/kunjungans/{$id}/pakets/{$pesanan['id']}")->assertNotFound();
+        $this->putJson("/api/kunjungans/{$id}/pemeriksaan", ['tindakans' => []])->assertNotFound();
+
+        $this->as('dokter@eklinik.test');
+        $this->putJson("/api/kunjungans/{$id}/pemeriksaan", ['diagnosas' => [['icd10_id' => Icd10::first()->id]]])->assertOk();
+        $tagihanId = $this->postJson("/api/kunjungans/{$id}/selesai")->assertOk()->json('tagihan.id');
+
+        // Kasir cabang lain tidak bisa melepas paket dari tagihan cabang UTAMA
+        $this->as('kasir.sel@eklinik.test');
+        $this->deleteJson("/api/tagihans/{$tagihanId}/pakets/{$pesanan['id']}")->assertNotFound();
+        $this->postJson("/api/tagihans/{$tagihanId}/bayar", ['metode_bayar' => 'tunai', 'dibayar' => 10000000])->assertNotFound();
     }
 }

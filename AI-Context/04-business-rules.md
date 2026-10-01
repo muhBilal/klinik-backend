@@ -112,13 +112,19 @@ Status resep: `menunggu` → `diserahkan`. Status tagihan: `belum_bayar` → `lu
 - Odontogram & rencana tampil untuk poli ber-`spesialisasi = gigi` (atau kunjungan yang punya data gigi).
 
 ### Paket multi-sesi & promo (detail: [modul/F1-08-paket-promo.md](modul/F1-08-paket-promo.md))
-- Paket dijual lewat tagihan mandiri; **aktif saat tagihan lunas** (masa berlaku sejak lunas). Sesi dipakai dari pemeriksaan
+- Paket dipesan dokter/terapis dari pemeriksaan (ditagihkan bersama tagihan kunjungan, sesi pertama boleh di kunjungan yang sama, pasien bisa
+  menolak di kasir) atau dijual langsung di kasir (tagihan mandiri); **aktif saat tagihan lunas** (masa berlaku sejak lunas). Sesi dipakai dari pemeriksaan
   (`paket_pasien_item_id`) → baris tagihan Rp 0 "paket … sesi n/N". Sisa = sesi − pemakaian di kunjungan bukan batal (kunjungan terbuka
   ikut mengurangi). Kedaluwarsa dicek terhadap tanggal kunjungan.
-- Refund tagihan paket hanya bila belum ada sesi dipakai. Refund sisa prorata & pengalihan ke pasien lain hanya bila diizinkan pengaturan
+- Refund tagihan paket hanya bila belum ada sesi dipakai di kunjungan lain (sesi di kunjungan milik tagihan itu ikut direfund). Refund sisa prorata & pengalihan ke pasien lain hanya bila diizinkan pengaturan
   `paket.*`, oleh pemegang `kasir.void`; refund tunai mengurangi kas seharusnya shift.
 - Kode promo dipasang sebelum bayar, diperiksa ulang & dikunci saat bayar, dicatat saat lunas, kuota kembali saat refund. Potongan promo
   di luar batas diskon per peran; diskon manual + promo ≤ total; pajak dari nilai setelah keduanya.
+- Neto per baris (`tagihan_items.neto`, saat lunas): promo ke baris yang memenuhi syarat, diskon manual sebanding sisa → nilai paket, dasar
+  komisi neto & laporan per item. Pendapatan sesi paket diakui hanya dari paket berbayar.
+- Tindakan & sesi paket dicatat dokter atau `rme.tindakan`; sinkron sadar snapshot (`tindakan_ids_awal`), baris petugas lain terlindungi
+  dari perawat/terapis, hanya kolom yang dikirim yang berubah, simpan/tutup/pesan berurutan per kunjungan (kunci baris). Detail: F1-05.
+- Binding rute memakai cabang aktif request (middleware `cabang` sebelum `SubstituteBindings`) — data cabang lain tidak bisa dibuka lewat id.
 
 ### Data klinis pasien & UU PDP (detail: [modul/F1-10-data-klinis-pdp.md](modul/F1-10-data-klinis-pdp.md))
 - Data klinis (alergi, Fitzpatrick, hamil/menyusui, riwayat obat & penyakit) terpisah dari identitas: baca `rme.lihat` (farmasi menerima
@@ -126,6 +132,13 @@ Status resep: `menunggu` → `diserahkan`. Status tagihan: `belum_bayar` → `lu
 - Hamil/menyusui hanya untuk perempuan, selalu bertanggal; alergi obat bisa bertaut master obat → peringatan resep (tidak memblokir).
 - Persetujuan pemrosesan & opt-in marketing = baris terpisah; formulir baru mengganti yang lama, tidak bersedia promosi mencabut opt-in;
   cabut pemrosesan ikut mencabut marketing. Tidak pernah dihapus.
+
+### Laporan (detail: [modul/F1-11-laporan.md](modul/F1-11-laporan.md))
+- Penjualan = tagihan dibayar dalam periode (termasuk yang kemudian direfund); refund mengurangi di periode refund. Penjualan bersih =
+  total − diskon − promo (sebelum pajak); potongan dialokasikan proporsional per baris; tunai tanpa kembalian.
+- Paket: pendapatan diakui per sesi yang dikerjakan (nilai per sesi); sisa kewajiban = sisa sesi paket aktif yang masih berlaku; hangus =
+  sisa sesi paket yang kedaluwarsa dalam periode.
+- Rekap shift kas mengurangkan kembalian dari tunai (baris pembayaran tunai menyimpan uang yang diserahkan pasien).
 
 ### Komisi (detail: [modul/F1-09-komisi.md](modul/F1-09-komisi.md))
 - Peran per tindakan: dokter = dokter kunjungan, terapis = pelaksana (`petugas_id`), asisten = `asisten_id`. Komisi diatur **per treatment

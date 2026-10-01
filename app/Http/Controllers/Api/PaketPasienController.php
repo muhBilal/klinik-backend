@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\MetodeBayar;
 use App\Enums\StatusKunjungan;
 use App\Http\Controllers\Controller;
+use App\Models\Kunjungan;
 use App\Models\KunjunganTindakan;
 use App\Models\Paket;
 use App\Models\PaketPasien;
@@ -16,18 +17,22 @@ use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
 /**
- * Paket milik pasien (PRD TR-02): daftar & sisa sesi, jual (tagihan mandiri), riwayat pemakaian, dan tindakan kebijakan
- * (perpanjang masa berlaku, alihkan ke pasien lain, refund sisa) yang butuh persetujuan manajer (`kasir.void`).
+ * Paket milik pasien (PRD TR-02): daftar & sisa sesi, dipesan dokter/terapis dari pemeriksaan (ditagihkan bersama kunjungan) atau
+ * dijual langsung di kasir (tagihan mandiri), riwayat pemakaian, dan tindakan kebijakan (perpanjang masa berlaku, alihkan ke pasien
+ * lain, refund sisa) yang butuh persetujuan manajer (`kasir.void`).
  */
 class PaketPasienController extends Controller
 {
     public function __construct(private PaketService $service) {}
 
-    /** **Array** terbaru dulu, + sisa per item & `status_efektif`. `aktif=1` = hanya yang bisa dipakai sekarang. */
+    /**
+     * **Array** terbaru dulu, + sisa per item & `status_efektif`. `aktif=1` = hanya yang bisa dipakai sekarang; `kunjungan_id=` ikut
+     * menyertakan paket yang dipesan di kunjungan itu (belum ditagihkan, sesinya boleh dipakai di kunjungan tersebut).
+     */
     public function index(Request $request, Pasien $pasien): JsonResponse
     {
         if ($request->boolean('aktif')) {
-            return response()->json($this->service->aktif($pasien));
+            return response()->json($this->service->aktif($pasien, $request->integer('kunjungan_id') ?: null));
         }
 
         $pakets = $pasien->paketPasiens()->with(PaketService::RELASI)->latest('id')->get()
@@ -47,6 +52,23 @@ class PaketPasienController extends Controller
         $paket = $this->service->jual($pasien, Paket::findOrFail($data['paket_id']), $data['catatan'] ?? null, $request->user());
 
         return response()->json($paket, 201);
+    }
+
+    /** Dokter/terapis memesankan paket dari pemeriksaan → 201 paket menunggu bayar (ditagihkan saat pemeriksaan ditutup). */
+    public function pesan(Request $request, Kunjungan $kunjungan): JsonResponse
+    {
+        $data = $request->validate([
+            'paket_id' => ['required', Rule::exists('pakets', 'id')->whereNull('deleted_at')],
+            'catatan' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        return response()->json($this->service->pesanDariKunjungan($kunjungan, Paket::findOrFail($data['paket_id']), $data['catatan'] ?? null,
+            $request->user()), 201);
+    }
+
+    public function batalPesanan(Kunjungan $kunjungan, PaketPasien $paketPasien): JsonResponse
+    {
+        return response()->json($this->service->batalPesanan($paketPasien, $kunjungan));
     }
 
     /** Detail + riwayat pemakaian sesi (tindakan kunjungan bukan batal). */

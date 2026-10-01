@@ -62,7 +62,7 @@ enum Izin: string
             self::PemeriksaanVital => 'Isi tanda vital & anamnesis',
             self::PemeriksaanDokter => 'Pemeriksaan dokter: SOAP, diagnosa, tindakan, resep (tercatat sebagai dokter)',
             self::RmeLihat => 'Lihat isi rekam medis & lampiran klinis',
-            self::RmeTindakan => 'Catatan tindakan (area, dosis, face chart, parameter alat) & informed consent',
+            self::RmeTindakan => 'Catat tindakan & sesi paket, pesan paket, catatan tindakan (area, dosis, face chart, parameter alat) & informed consent',
             self::RmeTerbatas => 'Lihat rekam medis berakses terbatas (mis. IMS) yang tidak ditangani sendiri',
             self::BerkasKelola => 'Unggah & hapus lampiran klinis',
             self::FarmasiResep => 'Proses & serahkan resep',

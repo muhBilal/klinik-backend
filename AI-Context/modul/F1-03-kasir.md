@@ -43,7 +43,8 @@ Kolom baru `tagihans`: `pasien_id`, `shift_id`, `pajak`, `pajak_persen`, `ketera
 - Refund menandai seluruh pembayaran sebagai dikembalikan, mengembalikan kunjungan ke `menunggu_pembayaran`,
   dan tidak lagi dihitung di rekap shift (tetapi muncul sebagai `total_refund`).
 - **Kunjungan selesai** hanya bila tidak ada lagi tagihannya yang berstatus belum bayar.
-- **Shift kas**: satu kasir hanya boleh punya satu shift terbuka per cabang.
+- **Shift kas**: satu kasir hanya boleh punya satu shift terbuka per cabang. Rekap tunai = baris pembayaran tunai − kembalian tagihan
+  (baris menyimpan uang yang diserahkan pasien; diperbaiki F1-11 — sebelumnya kas seharusnya kelebihan sebesar kembalian).
   `selisih = kas_fisik − (modal_awal + tunai berlaku)`; negatif berarti uang kurang.
 
 ## Izin
@@ -93,6 +94,12 @@ Pesan error nominal tetap memakai kunci `dibayar` pada bentuk lama, dan `pembaya
 - `app/Services/KasirService.php` — shift, split payment, batas diskon, void, refund, hitung grand total & pajak.
 - `app/Services/TagihanService.php` — `buatDariKunjungan()` (kini dengan pajak) & `buatMandiri()` (tagihan tanpa kunjungan).
 - `app/Http/Controllers/Api/{TagihanController, ShiftKasController}.php`
+
+### Revisi 1 Okt 2026 (paket dari pemeriksaan)
+- Saat lunas, neto tiap baris disimpan (`tagihan_items.neto`): potongan promo hanya ke baris yang memenuhi syarat, diskon manual sebanding
+  sisa (pembulatan sisa terbesar). Dipakai nilai paket (F1-08), dasar komisi neto (F1-09), dan laporan per item (F1-11).
+- Tagihan kunjungan bisa memuat baris paket yang dipesan di pemeriksaan; **Batalkan paket** (`DELETE /tagihans/{id}/pakets/{paketPasien}`,
+  `kasir.tagihan`) menyusun ulang tagihan belum bayar (`TagihanService::susunUlang`; promo dihitung ulang, dilepas bila tidak memenuhi syarat).
 
 ## Test
 

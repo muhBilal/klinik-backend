@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  */
 #[Table('paket_pasiens')]
 #[Fillable([
-    'no_paket', 'pasien_id', 'paket_id', 'cabang_id', 'tagihan_id', 'nama', 'harga', 'nilai', 'status', 'lintas_cabang',
+    'no_paket', 'pasien_id', 'paket_id', 'cabang_id', 'tagihan_id', 'kunjungan_id', 'nama', 'harga', 'nilai', 'status', 'lintas_cabang',
     'masa_berlaku_hari', 'aktif_at', 'berlaku_sampai', 'catatan', 'dibuat_oleh',
     'dialihkan_dari_id', 'dialihkan_at', 'dialihkan_oleh', 'alasan_alih',
     'refund_nominal', 'refund_metode', 'refund_referensi', 'refund_shift_id', 'direfund_at', 'direfund_oleh', 'alasan_refund',
@@ -71,9 +71,16 @@ class PaketPasien extends Model
         return $this->belongsTo(Tagihan::class)->withoutGlobalScope('cabang');
     }
 
+    /** Pembuat: kasir (jual langsung) atau dokter/terapis yang memesankan paket dari pemeriksaan. */
     public function pembuat(): BelongsTo
     {
         return $this->belongsTo(User::class, 'dibuat_oleh')->withTrashed();
+    }
+
+    /** Kunjungan tempat paket dipesan dokter/terapis (ditagihkan bersama tagihan kunjungan); null = dijual langsung di kasir. */
+    public function kunjungan(): BelongsTo
+    {
+        return $this->belongsTo(Kunjungan::class)->withoutGlobalScope('cabang');
     }
 
     public function dialihkanDari(): BelongsTo

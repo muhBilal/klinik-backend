@@ -65,6 +65,12 @@ kunjungan/resep/tagihan, pindahkan semua user **selain admin** ke cabang itu, ga
 `GET /cabangs` (login; pemegang `cabang.kelola` melihat semua + `users_count`), `POST/GET/PUT/DELETE /cabangs/{id}` (cabang.kelola).
 `/me` → `cabang`, `cabangs` (pilihan). Kunjungan/tagihan/resep detail menyertakan `cabang`.
 
+### Urutan middleware (perbaikan keamanan, 1 Okt 2026)
+Middleware `cabang` (`ResolveCabang`) didaftarkan di prioritas **sebelum** `SubstituteBindings` (`bootstrap/app.php`), sehingga model
+ber-scope cabang dari parameter rute (kunjungan, tagihan, paket pasien, …) tersaring cabang request. Sebelumnya binding berjalan saat cabang
+aktif masih kosong → user cabang lain bisa membuka/mengubah data cabang lain lewat id (bug lama; test lolos karena state cabang terbawa
+antar request). `tests/TestCase::call` kini mengosongkan instance scoped & controller tiap request agar perilaku test sama dengan produksi.
+
 ## Frontend
 
 - `useAuthStore()`: `cabangAktif` (localStorage `eklinik_cabang`), `cabangs`, `cabang`, `lintasCabang`, `setCabang(id)`.
@@ -77,7 +83,7 @@ kunjungan/resep/tagihan, pindahkan semua user **selain admin** ke cabang itu, ga
 
 - ~~Harga tindakan per cabang (TR-01)~~ → selesai di [F1-01](F1-01-katalog-treatment.md). Stok obat/BHP per gudang cabang & mutasi
   antar cabang (IN-01, IN-05). ~~Tarif konsultasi poli per cabang~~ → jasa konsultasi kini treatment, ikut harga per cabang (F1-09).
-- Laporan konsolidasi lintas cabang (LP-02) — dashboard sudah mendukung tampilan semua cabang.
+- ~~Laporan konsolidasi lintas cabang (LP-02)~~ → laporan penjualan & paket semua cabang + rincian per cabang (F1-11).
 - Modul spesialisasi aktif per cabang (PRD bagian 6).
 
 ## Test

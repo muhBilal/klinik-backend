@@ -48,6 +48,7 @@ app/
 │   ├── PaketService.php        paket pasien: jual, aktif saat lunas (alokasi nilai/sesi), pemakaian & sisa, perpanjang, alihkan, refund sisa
 │   ├── DataKlinisService.php   data klinis pasien: profil (Fitzpatrick, hamil/menyusui, riwayat) & alergi replace-all per id
 │   ├── PersetujuanDataService.php persetujuan UU PDP: naskah, simpan (pemrosesan + opt-in marketing terpisah), cabut, pastikanBolehDaftar
+│   ├── LaporanService.php      laporan penjualan (LP-02) & paket (LP-03): penjualan = dibayar dalam periode, refund di periode refund, alokasi potongan proporsional
 │   ├── KomisiService.php       komisi: periode, hitung dari tagihan lunas (komisi per treatment per peran), setujui & kunci, penyesuaian, ringkasan
 │   ├── PromoService.php        voucher & promo: pasang/lepas di tagihan, hitung potongan (syarat & kuota), catat/batalkan pemakaian
 │   ├── TindakanService.php     simpan treatment + sinkron harga per cabang & BHP standar (per model, ter-audit)
@@ -71,7 +72,7 @@ database/seeders/DatabaseSeeder.php   Data master + akun demo (peran dibuat migr
 database/factories/             UserFactory, PasienFactory
 tests/Feature/                  AlurKlinikTest, FilterTest, PeranIzinTest, MultiCabangTest, AuditLogTest,
                                 KeamananTest, PengaturanTest, BerkasTest, KatalogTreatmentTest, BookingTest,
-                                KasirTest, InventoriTest, RmeEstetikaTest, FotoKlinisTest, OdontogramTest, PaketPromoTest, KomisiTest, DataKlinisPdpTest
+                                KasirTest, InventoriTest, RmeEstetikaTest, FotoKlinisTest, OdontogramTest, PaketPromoTest, KomisiTest, DataKlinisPdpTest, LaporanTest, DemoSeederTest, PemeriksaanKolaborasiTest
 tests/Unit/TwoFactorServiceTest.php   Vektor uji RFC 6238
 ```
 

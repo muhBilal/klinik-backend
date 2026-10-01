@@ -11,59 +11,65 @@
 name: eklinik
 
 services:
-  app:
-    build:
-      context: ..
-      dockerfile: backend/docker/app/Dockerfile
-    container_name: eklinik
-    ports:
-      - "${APP_PORT:-8000}:80"
-    environment:
-      APP_NAME: Lefaklinik
-      APP_ENV: production
-      APP_DEBUG: "false"
-      APP_KEY: ${APP_KEY}
-      APP_URL: ${APP_URL:-http://localhost:8000}
-      APP_TIMEZONE: Asia/Jakarta
-      APP_LOCALE: id
-      FRONTEND_URL: ${APP_URL:-http://localhost:8000}
-      LOG_CHANNEL: stderr
-      DB_CONNECTION: pgsql
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_DATABASE: ${DB_DATABASE:-eklinik}
-      DB_USERNAME: ${DB_USERNAME:-eklinik}
-      DB_PASSWORD: ${DB_PASSWORD:-secret}
-      CACHE_STORE: database
-      SESSION_DRIVER: database
-      QUEUE_CONNECTION: database
-      # Isi data demo (akun, poli, obat, ICD-10) bila database masih kosong
-      SEED_DEMO: ${SEED_DEMO:-true}
-    volumes:
-      - berkas:/var/www/html/storage/app/berkas
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: unless-stopped
+    app:
+        build:
+            context: ..
+            dockerfile: backend/docker/app/Dockerfile
+        container_name: eklinik
+        ports:
+            - "${APP_PORT:-8000}:80"
+        environment:
+            APP_NAME: Lefaklinik
+            APP_ENV: production
+            APP_DEBUG: "false"
+            APP_KEY: ${APP_KEY}
+            APP_URL: ${APP_URL:-http://localhost:8000}
+            APP_TIMEZONE: Asia/Jakarta
+            APP_LOCALE: id
+            FRONTEND_URL: ${APP_URL:-http://localhost:8000}
+            LOG_CHANNEL: stderr
+            DB_CONNECTION: pgsql
+            DB_HOST: db
+            DB_PORT: 5432
+            DB_DATABASE: ${DB_DATABASE:-eklinik}
+            DB_USERNAME: ${DB_USERNAME:-eklinik}
+            DB_PASSWORD: ${DB_PASSWORD:-secret}
+            CACHE_STORE: database
+            SESSION_DRIVER: database
+            QUEUE_CONNECTION: database
+            # Isi data demo (akun, poli, obat, ICD-10) bila database masih kosong
+            SEED_DEMO: ${SEED_DEMO:-true}
+            # true = isi riwayat transaksi demo ±6 minggu (DemoSeeder) bila database belum punya transaksi
+            SEED_DEMO_TRANSAKSI: ${SEED_DEMO_TRANSAKSI:-true}
+        volumes:
+            - berkas:/var/www/html/storage/app/berkas
+        depends_on:
+            db:
+                condition: service_healthy
+        restart: unless-stopped
 
-  db:
-    image: postgres:17-alpine
-    container_name: eklinik-db
-    environment:
-      POSTGRES_DB: ${DB_DATABASE:-eklinik}
-      POSTGRES_USER: ${DB_USERNAME:-eklinik}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
-    ports:
-      - "${DB_FORWARD_PORT:-5432}:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
+    db:
+        image: postgres:17-alpine
+        container_name: eklinik-db
+        environment:
+            POSTGRES_DB: ${DB_DATABASE:-eklinik}
+            POSTGRES_USER: ${DB_USERNAME:-eklinik}
+            POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+        ports:
+            - "${DB_FORWARD_PORT:-5432}:5432"
+        volumes:
+            - pgdata:/var/lib/postgresql/data
+        healthcheck:
+            test:
+                [
+                    "CMD-SHELL",
+                    "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}",
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+        restart: unless-stopped
 
 volumes:
-  pgdata:
-  berkas:
+    pgdata:
+    berkas:

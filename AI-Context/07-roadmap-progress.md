@@ -30,12 +30,15 @@ Smoke test HTTP lewat nginx (stack dev terisolasi) lulus: pengaturan, cabang, pe
 
 | ID | Status | Catatan |
 |----|--------|---------|
-| AD-01 | Parsial | cabang & scope transaksi; harga treatment per cabang (F1-01); stok per cabang selesai (F1-04); laporan konsolidasi belum |
+| AD-01 | Selesai | cabang & scope transaksi; harga treatment per cabang (F1-01); stok per cabang (F1-04); laporan konsolidasi semua cabang + rincian per cabang & dashboard per cabang (F1-11) |
 | AD-02 | Selesai | peran & izin dinamis, pemisahan data klinis (`rme.lihat`) |
 | AD-03 | Selesai | perubahan data + akses RME/berkas + login |
 | AD-04 | Parsial | identitas, struk, lebar kertas, prefix, keamanan, pajak & jam operasional (F1-03); template dokumen lain belum |
 | FT-03 | Selesai | enkripsi, tautan bertanda tangan, audit akses |
 | PS-01 | Selesai | (sudah ada sebelumnya) |
+| LP-01 | Selesai | dashboard harian: kunjungan, omzet, booking & no-show, top treatment, per cabang (F1-11) |
+| LP-02 | Selesai | penjualan per treatment, dokter, cabang, metode bayar, kategori, per hari; refund di periode refund (F1-11) |
+| LP-03 | Selesai | paket terjual, pendapatan diakui per sesi, refund, hangus, sisa kewajiban, segera kedaluwarsa (F1-11) |
 | PS-03 | Selesai | alergi terstruktur (bertaut master obat), riwayat obat & penyakit, Fitzpatrick, hamil/menyusui bertanggal; peringatan di pemeriksaan, resep & farmasi; terpisah dari identitas (F1-10) |
 | PS-04 | Selesai | persetujuan pemrosesan data & opt-in marketing (kanal) terpisah, bertanda tangan, naskah snapshot, cabut; opsi wajib sebelum pendaftaran/check-in (F1-10) |
 | FR-03 | Selesai | (sudah ada sebelumnya; kop etiket kini dari pengaturan) |
@@ -80,12 +83,12 @@ Urutan kerja yang disarankan (dependensi di kolom kanan):
 | 5 | Foto klinis before-after + consent foto | FT-01, FT-02, FT-04 | F0-05 | **Selesai** 1 Okt 2026 (backend + frontend) | [modul/F1-06](modul/F1-06-foto-klinis.md) |
 | 6 | Odontogram & treatment plan per gigi | DG-01, DG-02, DG-07 | 4 | **Selesai** 1 Okt 2026 (backend + frontend) | [modul/F1-07](modul/F1-07-odontogram.md) |
 | 7 | Inventori: batch/expired per gudang cabang, BHP otomatis, satuan fraksional | IN-01..03 | 1, F0-02 | **Selesai** 30 Sep 2026 | [modul/F1-04](modul/F1-04-inventori.md) |
-| 8 | Paket multi-sesi, voucher & promo | TR-02, TR-06 | 1 | **Selesai** 1 Okt 2026 (backend + frontend) | [modul/F1-08](modul/F1-08-paket-promo.md) |
+| 8 | Paket multi-sesi, voucher & promo | TR-02, TR-06 | 1 | **Selesai** 1 Okt 2026 (backend + frontend; revisi: pesan dari pemeriksaan) | [modul/F1-08](modul/F1-08-paket-promo.md) |
 | 9 | Kasir: tagihan tanpa kunjungan, split payment, diskon per peran, void/refund, shift kas, pajak | BL-01..03/05/06, AD-04, 8.3 #3 #7 | — | **Selesai** 30 Sep 2026 (paket & promo: F1-08; deposit = TR-07 Fase 3) | [modul/F1-03](modul/F1-03-kasir.md) |
 | 10 | Komisi dokter & terapis (termasuk aturan komisi per treatment dari TR-01) | KM-01, KM-03 | 1, 9 | **Selesai** 1 Okt 2026 (backend + frontend) | [modul/F1-09](modul/F1-09-komisi.md) |
 | 11 | Consent data pasien (UU PDP) & data klinis pasien terstruktur | PS-03, PS-04 | — | **Selesai** 1 Okt 2026 (backend + frontend) | [modul/F1-10](modul/F1-10-data-klinis-pdp.md) |
 | 12 | Integrasi SATUSEHAT (IHS pasien, Encounter, Condition, ...) | PS-05, 7.1 | 4, F0-07 | **Terblokir**: butuh Organization ID & kredensial Kemenkes | |
-| 13 | Laporan penjualan & paket | LP-01..03 | 8, 9 | Belum | |
+| 13 | Laporan penjualan & paket | LP-01..03 | 8, 9 | **Selesai** 1 Okt 2026 (backend + frontend) | [modul/F1-11](modul/F1-11-laporan.md) |
 
 Catatan: kebutuhan ruang/alat **wajib** per treatment (BK-01) sudah punya tabel `tindakan_sumber_dayas` tetapi belum
 diisi lewat UI katalog — booking belum memaksa memilih ruang yang kompatibel. Lengkapi bersama modul RME/katalog berikutnya.
@@ -93,8 +96,10 @@ diisi lewat UI katalog — booking belum memaksa memilih ruang yang kompatibel. 
 Modul #3 dan #12 terblokir kredensial pihak ketiga, bukan pekerjaan kode: WhatsApp Business API dan Organization ID
 SATUSEHAT. Payment gateway (BL-08, Fase 2) juga menunggu merchant account.
 
-Test backend setelah F1-10: **118 test / 1732 assertion** lulus di SQLite **dan** PostgreSQL 17; migrate → rollback → migrate F1-05
-s.d. F1-10 diuji di PostgreSQL 17 dengan data demo (termasuk konversi data migration revisi komisi & teks alergi). Alur F1-05 s.d. F1-09 juga diuji E2E di browser (lihat modul masing-masing).
+Test backend setelah revisi paket (1 Okt 2026): **136 test** lulus di SQLite (2067 assertion) **dan** PostgreSQL 17 (2075 — selisih dari
+invarian data demo); migrate →
+rollback → migrate F1-05 s.d. F1-10 diuji di PostgreSQL 17 dengan data demo (termasuk konversi data migration revisi komisi & teks alergi).
+Data demo transaksi: `DemoSeeder` (01-overview). Alur F1-05 s.d. F1-09 juga diuji E2E di browser (lihat modul masing-masing).
 
 Frontend: F1-05 s.d. F1-08 punya UI lengkap. Editor pemakaian BHP (F1-04) tersedia di modal catatan tindakan; kasir kini menangani
 tagihan tanpa kunjungan, kode promo & pajak (F1-08). Halaman Booking, Kasir split payment/shift/void, dan Inventori (batch, opname)
@@ -106,6 +111,8 @@ Gerbang PRD Fase 1: "P0 lolos UAT, go-live klinik pilot".
 
 | Tanggal | Perubahan |
 |---------|-----------|
+| 2026-10-01 | F1-08 revisi (keputusan user): **paket dipesan dokter/terapis dari pemeriksaan** & ditagihkan bersama tagihan kunjungan (sesi pertama di kunjungan yang sama; kasir bisa *Batalkan paket* bila pasien tidak jadi), **perawat/terapis (`rme.tindakan`) mencatat tindakan & sesi paket** (ICD-9-CM, diagnosa, resep & tutup tetap dokter). Hasil review adversarial: sinkron tindakan sadar snapshot & baris petugas lain terlindungi (dokter & terapis di perangkat berbeda tidak saling menghapus), simpan hanya kolom yang berubah, kunci baris kunjungan (simpan/tutup/pesan), isi RME hanya diubah yang boleh membaca, neto per baris tagihan (`tagihan_items.neto`) untuk nilai paket/komisi/laporan, laporan paket hanya sesi berbayar, batal kunjungan berisi dokumentasi ditolak. **Perbaikan keamanan (bug lama):** binding rute kini memakai cabang aktif — sebelumnya user cabang lain bisa membuka/mengubah data cabang lain lewat id. Emoji dihapus dari UI (ikon AppIcon) |
+| 2026-10-01 | Fase 1 #13 selesai: F1-11 Laporan penjualan (treatment/dokter/cabang/metode/kategori/per hari, refund di periode refund), laporan paket (terjual, pendapatan diakui, hangus, sisa kewajiban, segera kedaluwarsa), dashboard harian (booking & no-show, top treatment, per cabang). **Perbaikan:** rekap shift kasir kini mengurangkan kembalian tunai. **Data demo:** `DemoSeeder` (cabang kedua, ±430 kunjungan 6 minggu lewat service, paket, komisi, PDP) + opsi `SEED_DEMO_TRANSAKSI` di compose |
 | 2026-10-01 | Fase 1 #11 selesai: F1-10 Data klinis pasien & persetujuan UU PDP (alergi terstruktur bertaut obat, Fitzpatrick, hamil/menyusui, riwayat obat & penyakit — terpisah dari identitas, hanya rme.lihat; peringatan di pemeriksaan, resep & farmasi; persetujuan pemrosesan & opt-in marketing terpisah, bertanda tangan, bisa dicabut; opsi wajib sebelum pendaftaran). `pasiens.alergi` dikonversi & dihapus; alergi tidak lagi diisi di form pasien. Grid pendaftaran diperbaiki untuk mobile |
 | 2026-10-01 | F1-09 revisi (permintaan user): **komisi diatur langsung di master treatment** (`tindakan_komisis`, bagian "Komisi & jasa medis" di form treatment; halaman & API Aturan Komisi dihapus) dan **jasa konsultasi dokter = treatment** (kategori Konsultasi; `polis.tindakan_konsultasi_id` menggantikan `tarif_konsultasi`, harga per cabang & komisi dokter ikut katalog, tidak dobel bila dicatat sebagai tindakan). Migration `140001` mengonversi data lama |
 | 2026-10-01 | Fase 1 #10 selesai: F1-09 Komisi & jasa medis (mesin aturan treatment/kategori/umum & konsultasi × dokter/terapis/asisten, persen/nominal, khusus cabang; rekap per cabang dari tagihan lunas, bruto/neto, sesi paket; setujui & kunci dengan izin terpisah; penyesuaian; slip & Komisi Saya). `kunjungan_tindakans.asisten_id`; tagihan Rp 0 bisa dilunasi |

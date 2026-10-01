@@ -18,6 +18,11 @@ if [ "$SEED_DEMO" = "true" ]; then
     php artisan db:seed --force
 fi
 
+# Riwayat transaksi demo (DemoSeeder) — opt-in; dilewati sendiri bila sudah ada tagihan
+if [ "$SEED_DEMO_TRANSAKSI" = "true" ]; then
+    php artisan db:seed --class=DemoSeeder --force
+fi
+
 chown -R www-data:www-data storage bootstrap/cache
 
 exec "$@"

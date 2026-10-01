@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\MetodeBayar;
 use App\Http\Controllers\Controller;
+use App\Models\PaketPasien;
 use App\Models\Tagihan;
 use App\Services\KasirService;
+use App\Services\PaketService;
 use App\Services\PromoService;
 use App\Services\TagihanService;
 use App\Support\CabangAktif;
@@ -19,7 +21,7 @@ class TagihanController extends Controller
     private const DETAIL = [
         'items:id,tagihan_id,kategori,tindakan_id,paket_id,deskripsi,jumlah,harga,subtotal', 'kasir:id,name',
         'promo:id,kode,nama,jenis,nilai',
-        'paketPasiens:id,no_paket,nama,status,tagihan_id,berlaku_sampai',
+        'paketPasiens:id,no_paket,nama,harga,status,tagihan_id,kunjungan_id,berlaku_sampai',
         'pembayarans:id,tagihan_id,metode,jumlah,referensi,dibayar_at,dikembalikan_at,alasan_refund',
         'pasien:id,no_rm,nama',
         'cabang:id,kode,nama,alamat,telepon',
@@ -102,6 +104,12 @@ class TagihanController extends Controller
     public function lepasPromo(Tagihan $tagihan, PromoService $promo): JsonResponse
     {
         return response()->json($promo->lepas($tagihan)->load(self::DETAIL));
+    }
+
+    /** Pasien menolak paket yang dipesan di pemeriksaan: paket batal, sesinya ditagih tarif normal, tagihan disusun ulang (TR-02). */
+    public function lepasPaket(Tagihan $tagihan, PaketPasien $paketPasien, PaketService $paket): JsonResponse
+    {
+        return response()->json($paket->lepasDariTagihan($tagihan, $paketPasien)->load(self::DETAIL));
     }
 
     /** Batalkan tagihan yang belum dibayar (BL-06, temuan 8.3 #7). */

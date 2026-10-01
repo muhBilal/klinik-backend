@@ -36,6 +36,9 @@ class PemeriksaanController extends Controller
             'diagnosas.*.jenis' => ['nullable', Rule::in(['primer', 'sekunder'])],
 
             'tindakans' => ['sometimes', 'array'],
+            // Id baris yang terlihat saat form dimuat: hanya baris ini yang boleh dihapus (baris dari perangkat lain dibiarkan)
+            'tindakan_ids_awal' => ['sometimes', 'array'],
+            'tindakan_ids_awal.*' => ['integer'],
             'tindakans.*.id' => ['nullable', 'integer', 'distinct'],
             'tindakans.*.tindakan_id' => ['required', Rule::exists('tindakans', 'id')->where('is_active', true)->whereNull('deleted_at')],
             'tindakans.*.jumlah' => ['nullable', 'integer', 'min:1', 'max:100'],

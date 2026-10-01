@@ -4,10 +4,14 @@ namespace Tests\Feature;
 
 use App\Models\AuditLog;
 use App\Models\Icd10;
+use App\Models\Icd9cm;
 use App\Models\Kunjungan;
+use App\Models\KunjunganTindakan;
 use App\Models\Paket;
 use App\Models\PaketPasien;
 use App\Models\Pasien;
+use App\Models\Pemeriksaan;
+use App\Models\Peran;
 use App\Models\Poli;
 use App\Models\Promo;
 use App\Models\Tindakan;
@@ -15,14 +19,16 @@ use App\Models\User;
 use App\Services\PengaturanService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * Paket multi-sesi (PRD TR-02, BL-01) dan voucher & promo (TR-06): jual → aktif saat lunas, pemakaian sesi di pemeriksaan
- * (ditagih Rp 0), sisa & kedaluwarsa, refund penuh/sisa, pengalihan, perpanjangan, serta kode promo dengan periode, kuota,
- * kuota per pasien, minimum transaksi, cabang, dan treatment/paket tertentu.
+ * Paket multi-sesi (PRD TR-02, BL-01) dan voucher & promo (TR-06): jual di kasir atau dipesan dokter/terapis dari pemeriksaan
+ * (ditagihkan bersama tagihan kunjungan, sesi pertama di kunjungan yang sama) → aktif saat lunas, pemakaian sesi di pemeriksaan
+ * (ditagih Rp 0, boleh dicatat terapis), sisa & kedaluwarsa, refund penuh/sisa, pengalihan, perpanjangan, serta kode promo dengan
+ * periode, kuota, kuota per pasien, minimum transaksi, cabang, dan treatment/paket tertentu.
  */
 class PaketPromoTest extends TestCase
 {
@@ -383,5 +389,208 @@ class PaketPromoTest extends TestCase
         $this->as('kasir@eklinik.test');
         $this->postJson("/api/tagihans/{$tagihanKunjungan->id}/promo", ['kode' => 'LASER200'])->assertOk()
             ->assertJsonPath('diskon_promo', 200000)->assertJsonPath('grand_total', 100000 + 1200000 - 200000);
+    }
+
+    public function test_dokter_memesan_paket_di_pemeriksaan_dan_ditagih_bersama_kunjungan(): void
+    {
+        $k = $this->kunjungan();
+        $url = "/api/kunjungans/{$k}/pakets";
+        $laser = $this->paket('PKT-LSR6');
+
+        // Kasir & front office tidak memesankan dari pemeriksaan (kasir tetap bisa jual langsung)
+        foreach (['kasir@eklinik.test', 'pendaftaran@eklinik.test'] as $email) {
+            $this->as($email);
+            $this->postJson($url, ['paket_id' => $laser->id])->assertForbidden();
+        }
+
+        $dokter = $this->as('dokter@eklinik.test');
+        $pesanan = $this->postJson($url, ['paket_id' => $laser->id, 'catatan' => 'Saran dokter'])->assertCreated()
+            ->assertJsonPath('status', 'menunggu_bayar')->assertJsonPath('kunjungan_id', $k)->assertJsonPath('tagihan_id', null)
+            ->assertJsonPath('pembuat.name', $dokter->name)->assertJsonPath('kunjungan.id', $k)->json();
+        $this->postJson($url, ['paket_id' => $laser->id])->assertUnprocessable()->assertJsonValidationErrors('paket_id');
+        $itemId = $pesanan['items'][0]['id'];
+
+        // Pesanan hanya jadi pilihan "pakai paket" di kunjungan pemesannya
+        $daftar = "/api/pasiens/{$this->pasien->id}/pakets?aktif=1";
+        $this->getJson($daftar)->assertOk()->assertJsonCount(0);
+        $this->getJson("{$daftar}&kunjungan_id={$k}")->assertOk()->assertJsonCount(1)->assertJsonPath('0.id', $pesanan['id']);
+        $lain = $this->kunjungan();
+        $this->getJson("{$daftar}&kunjungan_id={$lain}")->assertOk()->assertJsonCount(0);
+        $this->pakaiSesi($lain, $itemId)->assertUnprocessable()->assertJsonValidationErrors('tindakans.0.paket_pasien_item_id');
+
+        // Sesi pertama langsung dipakai di kunjungan yang sama; selama dipakai, pesanan tidak bisa dibatalkan
+        $this->pakaiSesi($k, $itemId)->assertOk()->assertJsonPath('tindakans.0.paket_pasien_item_id', $itemId);
+        $this->getJson("/api/paket-pasiens/{$pesanan['id']}")->assertJsonPath('items.0.dipesan', 1)->assertJsonPath('sisa_sesi', 5);
+        $this->deleteJson("{$url}/{$pesanan['id']}")->assertUnprocessable()->assertJsonValidationErrors('status');
+
+        $this->tutup($k)->assertOk();
+        $tagihan = Kunjungan::find($k)->tagihan;
+        $items = $tagihan->items()->orderBy('id')->get();
+        $this->assertSame(['konsultasi', 'tindakan', 'paket'], $items->pluck('kategori')->all());
+        $this->assertSame([100000, 0, 6000000], $items->pluck('subtotal')->all());
+        $this->assertStringContainsString("paket {$pesanan['no_paket']} sesi 1/6", $items[1]->deskripsi);
+        $this->assertSame($tagihan->id, PaketPasien::find($pesanan['id'])->tagihan_id);
+        $this->getJson("{$daftar}&kunjungan_id={$k}")->assertJsonCount(0);
+
+        // Pemeriksaan sudah ditutup: pesan / batal lewat pemeriksaan ditolak
+        $this->postJson($url, ['paket_id' => $this->paket('PKT-GLOW')->id])->assertUnprocessable()->assertJsonValidationErrors('kunjungan');
+        $this->deleteJson("{$url}/{$pesanan['id']}")->assertUnprocessable()->assertJsonValidationErrors('kunjungan');
+
+        // Sekali bayar di kasir: paket aktif, sesi pertama tercatat terpakai, kunjungan selesai
+        $this->as('kasir@eklinik.test');
+        $this->bayarTunai($tagihan->id)->assertOk()->assertJsonPath('grand_total', 6100000);
+        $aktif = $this->getJson("/api/paket-pasiens/{$pesanan['id']}")->assertOk()->json();
+        $this->assertSame(['aktif', 6000000, today()->addDays(180)->toDateString(), 5, 1, 1000000],
+            [$aktif['status_efektif'], $aktif['nilai'], $aktif['berlaku_sampai'], $aktif['sisa_sesi'], $aktif['items'][0]['terpakai'], $aktif['nilai_terpakai']]);
+        $this->assertSame('selesai', Kunjungan::find($k)->status->value);
+    }
+
+    public function test_pesanan_paket_dibatalkan_dari_pemeriksaan_atau_ikut_batal_bersama_kunjungan(): void
+    {
+        // Sebelum pasien dipanggil pun terapis boleh memesankan
+        $k = $this->kunjungan(panggil: false);
+        $url = "/api/kunjungans/{$k}/pakets";
+        $glow = $this->paket('PKT-GLOW')->id;
+
+        $this->as('terapis@eklinik.test');
+        $pertama = $this->postJson($url, ['paket_id' => $glow])->assertCreated()->json();
+        $this->deleteJson("{$url}/{$pertama['id']}")->assertOk()->assertJsonPath('status', 'dibatalkan');
+        $kedua = $this->postJson($url, ['paket_id' => $glow])->assertCreated()->json();
+
+        // Pesanan kunjungan lain tidak bisa dibatalkan lewat kunjungan ini
+        $lain = $this->kunjungan(panggil: false);
+        $this->deleteJson("/api/kunjungans/{$lain}/pakets/{$kedua['id']}")->assertNotFound();
+
+        $this->as('pendaftaran@eklinik.test');
+        $this->postJson("/api/kunjungans/{$k}/batal")->assertOk();
+        $this->assertSame(['dibatalkan', 'dibatalkan'], [PaketPasien::find($pertama['id'])->status->value, PaketPasien::find($kedua['id'])->status->value]);
+    }
+
+    public function test_terapis_mencatat_tindakan_dan_sesi_paket_tetapi_penutupan_tetap_dokter(): void
+    {
+        $paket = $this->beliPaket();
+        $itemId = $paket['items'][0]['id'];
+        $k = $this->kunjungan();
+        $laser = Tindakan::where('kode', 'TRT-011')->firstOrFail();
+        $icdLain = Icd9cm::whereKeyNot($laser->icd9cm_id)->value('id');
+
+        $terapis = $this->as('terapis@eklinik.test');
+        $res = $this->putJson("/api/kunjungans/{$k}/pemeriksaan", [
+            'tekanan_darah' => '110/70',
+            'diagnosas' => [['icd10_id' => Icd10::where('kode', 'Z41.1')->value('id')]],
+            'tindakans' => [['tindakan_id' => $laser->id, 'jumlah' => 1, 'paket_pasien_item_id' => $itemId, 'icd9cm_id' => $icdLain]],
+        ])->assertOk();
+        // Pelaksana default = terapis yang mencatat; kode ICD-9-CM tetap bawaan katalog; diagnosa tetap wewenang dokter
+        $this->assertSame([$terapis->id, $itemId, $laser->icd9cm_id],
+            [$res->json('tindakans.0.petugas_id'), $res->json('tindakans.0.paket_pasien_item_id'), $res->json('tindakans.0.icd9cm_id')]);
+        $this->assertSame(0, Pemeriksaan::where('kunjungan_id', $k)->firstOrFail()->diagnosas()->count());
+        $this->postJson("/api/kunjungans/{$k}/selesai")->assertForbidden();
+
+        // Perawat menyimpan tanda vital tanpa daftar tindakan → tindakan terapis tetap
+        $this->as('perawat@eklinik.test');
+        $this->putJson("/api/kunjungans/{$k}/pemeriksaan", ['suhu' => 36.5])->assertOk()->assertJsonCount(1, 'tindakans');
+
+        // Tanpa izin rme.tindakan, daftar tindakan dari perawat diabaikan
+        DB::table('peran_izins')->where('izin', 'rme.tindakan')->where('peran_id', Peran::where('kode', 'perawat')->value('id'))->delete();
+        $this->as('perawat@eklinik.test');
+        $this->putJson("/api/kunjungans/{$k}/pemeriksaan", ['tindakans' => []])->assertOk()->assertJsonCount(1, 'tindakans');
+
+        // Dokter menutup & menandatangani; sesi paket ditagih Rp 0
+        $this->as('dokter@eklinik.test');
+        $this->tutup($k)->assertOk();
+        $this->assertSame(0, Kunjungan::find($k)->tagihan->items()->where('kategori', 'tindakan')->value('subtotal'));
+        $this->getJson("/api/paket-pasiens/{$paket['id']}")->assertJsonPath('items.0.terpakai', 1);
+    }
+
+    public function test_tagihan_gabungan_promo_diskon_dan_refund_paket_pesanan(): void
+    {
+        $k = $this->kunjungan();
+        $pesanan = $this->postJson("/api/kunjungans/{$k}/pakets", ['paket_id' => $this->paket('PKT-LSR6')->id])->assertCreated()->json();
+        $this->pakaiSesi($k, $pesanan['items'][0]['id'])->assertOk();
+        $this->tutup($k)->assertOk();
+        $tagihan = Kunjungan::find($k)->tagihan;
+
+        // LASER200 hanya untuk treatment & paket laser → seluruh potongan jatuh ke baris paket (5,8jt); diskon manual dibagi sebanding sisa
+        // setelah promo: 61rb × 5,8jt / 5,9jt = 59.966 → neto paket 5.740.034, konsultasi 100rb − 1.034
+        $this->as('kasir@eklinik.test');
+        $this->postJson("/api/tagihans/{$tagihan->id}/promo", ['kode' => 'LASER200'])->assertOk()->assertJsonPath('diskon_promo', 200000);
+        $this->bayarTunai($tagihan->id, 61000)->assertOk()->assertJsonPath('grand_total', 6100000 - 61000 - 200000);
+        $aktif = $this->getJson("/api/paket-pasiens/{$pesanan['id']}")->json();
+        $this->assertSame([5740034, 956672], [$aktif['nilai'], $aktif['items'][0]['nilai_per_sesi']]);
+        $this->assertSame([98966, 0, 5740034], $tagihan->items()->orderBy('id')->pluck('neto')->all());
+
+        // Refund tagihan kunjungan: sesi yang dipakai di kunjungan itu sendiri ikut direfund
+        $this->as('admin@eklinik.test');
+        $this->postJson("/api/tagihans/{$tagihan->id}/refund", ['alasan_refund' => 'Pasien keberatan'])->assertOk();
+        $this->assertSame(['direfund', 5740034], [PaketPasien::find($pesanan['id'])->status->value, PaketPasien::find($pesanan['id'])->refund_nominal]);
+
+        // Sudah dipakai di kunjungan lain → refund tagihan pemesanannya ditolak (gunakan refund sisa)
+        $k2 = $this->kunjungan();
+        $glow = $this->postJson("/api/kunjungans/{$k2}/pakets", ['paket_id' => $this->paket('PKT-GLOW')->id])->assertCreated()->json();
+        $this->tutup($k2)->assertOk();
+        $tagihan2 = Kunjungan::find($k2)->tagihan;
+        $this->as('kasir@eklinik.test');
+        $this->bayarTunai($tagihan2->id)->assertOk();
+        $k3 = $this->kunjungan();
+        $this->pakaiSesi($k3, $glow['items'][0]['id'], 1, 'TRT-021')->assertOk();
+        $this->tutup($k3)->assertOk();
+        $this->as('admin@eklinik.test');
+        $this->postJson("/api/tagihans/{$tagihan2->id}/refund", ['alasan_refund' => 'x'])->assertUnprocessable()->assertJsonValidationErrors('status');
+    }
+
+    public function test_kasir_melepas_paket_pesanan_yang_ditolak_pasien(): void
+    {
+        $k = $this->kunjungan();
+        $pesanan = $this->postJson("/api/kunjungans/{$k}/pakets", ['paket_id' => $this->paket('PKT-LSR6')->id])->assertCreated()->json();
+        $this->pakaiSesi($k, $pesanan['items'][0]['id'])->assertOk();
+        $this->tutup($k)->assertOk();
+        $tagihan = Kunjungan::find($k)->tagihan;
+        $url = "/api/tagihans/{$tagihan->id}/pakets/{$pesanan['id']}";
+        $this->deleteJson($url)->assertForbidden(); // dokter tanpa kasir.tagihan
+
+        // Promo laser tetap berlaku (treatment laser kini ditagih normal); paket batal, sesi hari ini ditagih tarif normal
+        $this->as('kasir@eklinik.test');
+        $this->postJson("/api/tagihans/{$tagihan->id}/promo", ['kode' => 'LASER200'])->assertOk();
+        $this->deleteJson($url)->assertOk()->assertJsonPath('total', 1300000)->assertJsonPath('diskon_promo', 200000)
+            ->assertJsonPath('grand_total', 1100000)->assertJsonPath('paket_pasiens.0.status', 'dibatalkan');
+        $items = $tagihan->items()->orderBy('id')->get();
+        $this->assertSame([['konsultasi', 100000], ['tindakan', 1200000]], $items->map(fn ($i) => [$i->kategori, $i->subtotal])->all());
+        $this->assertStringNotContainsString('paket', $items[1]->deskripsi);
+        $this->assertNull(KunjunganTindakan::where('kunjungan_id', $k)->value('paket_pasien_item_id'));
+        $this->assertSame('dibatalkan', PaketPasien::find($pesanan['id'])->status->value);
+
+        // Tanda tangan RME tetap sah (pemakaian sesi bukan bagian hash)
+        $this->as('dokter@eklinik.test');
+        $this->getJson("/api/kunjungans/{$k}/verifikasi")->assertOk()->assertJsonPath('valid', true);
+
+        // Sudah dilepas / tagihan lunas / penjualan langsung → ditolak
+        $this->as('kasir@eklinik.test');
+        $this->deleteJson($url)->assertUnprocessable()->assertJsonValidationErrors('status');
+        $this->bayarTunai($tagihan->id)->assertOk()->assertJsonPath('grand_total', 1100000);
+        $langsung = $this->beliPaket(bayar: false);
+        $this->deleteJson("/api/tagihans/{$langsung['tagihan_id']}/pakets/{$langsung['id']}")->assertUnprocessable()->assertJsonValidationErrors('status');
+        $this->deleteJson("/api/tagihans/{$tagihan->id}/pakets/{$langsung['id']}")->assertNotFound();
+    }
+
+    public function test_laporan_paket_hanya_mengakui_sesi_paket_berbayar(): void
+    {
+        $k = $this->kunjungan();
+        $pesanan = $this->postJson("/api/kunjungans/{$k}/pakets", ['paket_id' => $this->paket('PKT-LSR6')->id])->assertCreated()->json();
+        $this->pakaiSesi($k, $pesanan['items'][0]['id'])->assertOk();
+        $this->tutup($k)->assertOk();
+        $tagihan = Kunjungan::find($k)->tagihan;
+
+        $this->as('admin@eklinik.test');
+        $periode = '?mulai='.today()->subDays(7)->toDateString().'&selesai='.today()->toDateString();
+        $laporan = fn () => $this->getJson("/api/laporan/paket{$periode}")->assertOk()->json('ringkasan');
+        // Belum lunas: sesi hari ini belum diakui
+        $this->assertSame([0, 0, 0], [$laporan()['terjual'], $laporan()['sesi_dipakai'], $laporan()['nilai_dipakai']]);
+
+        $this->bayarTunai($tagihan->id)->assertOk();
+        $this->assertSame([1, 1, 1000000], [$laporan()['terjual'], $laporan()['sesi_dipakai'], $laporan()['nilai_dipakai']]);
+
+        // Refund penuh tagihan kunjungan → sesinya ikut tidak diakui
+        $this->postJson("/api/tagihans/{$tagihan->id}/refund", ['alasan_refund' => 'Keberatan'])->assertOk();
+        $this->assertSame([0, 0, 6000000], [$laporan()['sesi_dipakai'], $laporan()['nilai_dipakai'], $laporan()['refund']]);
     }
 }

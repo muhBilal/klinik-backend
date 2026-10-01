@@ -345,4 +345,31 @@ class KomisiTest extends TestCase
         DB::table('kunjungan_tindakans')->where('kunjungan_id', $id)->update(['asisten_id' => $this->id('terapis@eklinik.test')]);
         $this->getJson("/api/kunjungans/{$id}/verifikasi")->assertJsonPath('valid', false);
     }
+
+    public function test_dasar_neto_per_baris_pada_tagihan_kunjungan_berisi_paket(): void
+    {
+        $pasien = Pasien::first();
+        $this->as('pendaftaran@eklinik.test');
+        $id = $this->postJson('/api/kunjungans', ['pasien_id' => $pasien->id,
+            'poli_id' => Poli::where('kode', 'ESTETIKA')->value('id'), 'penjamin' => 'umum'])->assertCreated()->json('id');
+        $dokter = $this->as('dokter@eklinik.test');
+        $this->postJson("/api/kunjungans/{$id}/panggil")->assertOk();
+        // Paket laser dipesan dokter + botox hari ini; LASER200 hanya untuk laser → potongan seluruhnya jatuh ke baris paket
+        $this->postJson("/api/kunjungans/{$id}/pakets", ['paket_id' => Paket::where('kode', 'PKT-LSR6')->value('id')])->assertCreated();
+        $this->putJson("/api/kunjungans/{$id}/pemeriksaan", ['diagnosas' => [['icd10_id' => Icd10::where('kode', 'Z41.1')->value('id')]],
+            'tindakans' => [['tindakan_id' => $this->tindakan('TRT-001'), 'petugas_id' => $dokter->id]]])->assertOk();
+        $this->postJson("/api/kunjungans/{$id}/selesai")->assertOk();
+        $tagihan = Kunjungan::findOrFail($id)->tagihan;
+
+        $this->as('kasir@eklinik.test');
+        $this->postJson("/api/tagihans/{$tagihan->id}/promo", ['kode' => 'LASER200'])->assertOk()->assertJsonPath('diskon_promo', 200000);
+        $this->postJson("/api/tagihans/{$tagihan->id}/bayar", ['metode_bayar' => 'tunai', 'dibayar' => 9400000])->assertOk();
+        $this->assertSame([100000, 3500000, 5800000], $tagihan->items()->orderBy('id')->pluck('neto')->all());
+
+        $periode = $this->periode();
+        $detail = $this->postJson("/api/komisi-periodes/{$periode['id']}/hitung")->assertOk()->json();
+        $dasar = collect($detail['barises'])->where('peran', 'dokter')->mapWithKeys(fn ($b) => [$b['sumber'] => $b['dasar']])->all();
+        // Botox & konsultasi tidak ikut menanggung potongan promo paket
+        $this->assertSame(['konsultasi' => 100000, 'tindakan' => 3500000], $dasar);
+    }
 }

@@ -89,7 +89,26 @@ Enum baru: `JenisCatatanTindakan`, `StatusConsent`, `HubunganPenandatangan`, `Ba
 - `titiks` replace-all per model; batch harus milik `obat_id` titik itu di cabang kunjungan (422 `titiks.{i}.batch_id`).
 - Petugas (`tindakans[].petugas_id` di pemeriksaan atau `petugas_id` di catatan) harus `User::petugasMedis()` — aktif, peran bukan akses
   penuh, memegang `pemeriksaan.dokter` / `pemeriksaan.vital` / `rme.tindakan` — dan bertugas di cabang kunjungan (atau lintas cabang).
-  Default petugas tindakan baru = dokter yang mengisi, atau dokter kunjungan. Check-in booking menyalin petugas booking.
+  Default petugas tindakan baru = dokter yang mengisi, perawat/terapis yang mencatat sendiri, atau dokter kunjungan. Check-in booking menyalin
+  petugas booking.
+
+### Kolaborasi dokter & perawat/terapis (revisi F1-08, 1 Okt 2026)
+- Tindakan & sesi paket dicatat dokter atau pemegang `rme.tindakan` (rute `PUT /kunjungans/{id}/pemeriksaan` kini juga `rme.tindakan`);
+  tanda vital & anamnesis hanya pemegang `pemeriksaan.vital`/`.dokter`; SOAP O/A/P, diagnosa, resep, akses terbatas, kode ICD-9-CM, dan
+  tutup & tanda tangan tetap dokter.
+- Hanya kolom yang dikirim yang diubah; `perawat_id` = non-dokter yang terakhir benar-benar mengubah tanda vital/anamnesis. Frontend
+  mengirim hanya yang berubah sejak form dimuat.
+- Sinkron tindakan sadar snapshot: klien mengirim `tindakan_ids_awal` (id baris saat form dimuat) bersama `tindakans` — hanya baris itu
+  yang boleh dihapus / dicocokkan tanpa id; baris tambahan petugas lain dibiarkan; baris ber-id yang sudah dihapus petugas lain tidak
+  dibuat ulang. Tanpa `tindakan_ids_awal` (klien lama, seeder) daftar dianggap lengkap.
+- Perawat/terapis tidak bisa menghapus baris yang dicatat petugas lain (422 `tindakans`) dan pada baris itu hanya bisa mengganti pemakaian
+  sesi paketnya (atribut lain tetap).
+- Isi RME hanya diubah oleh yang boleh membacanya (`rme.lihat` + aturan akses terbatas); respons PUT mengikuti GET (`rme_disembunyikan`).
+- Simpan, tutup, pesan/batal paket, dan batal kunjungan mengunci baris kunjungan (`Kunjungan::kunci`) lalu memeriksa ulang status — tidak
+  ada tindakan/pesanan yang tersimpan setelah tagihan & tanda tangan. Syarat `selesai` diperiksa pada data terkunci.
+- Front office tidak bisa membatalkan kunjungan yang sudah berisi catatan tindakan atau informed consent (422 `status`); tindakan rencana
+  booking & sesi paket yang baru dipesan tetap boleh (sesinya dilepas).
+- "Selesai & tanda tangani" di frontend berhenti bila petugas lain mengubah daftar tindakan sejak form dimuat, agar dokter memeriksa dulu.
 
 ### Akses terbatas (DR-03)
 - Boleh membaca isi RME kunjungan terbatas: pemegang `rme.terbatas`; tim tercatat (dokter kunjungan, dokter/perawat pemeriksaan,
@@ -154,7 +173,7 @@ Payload catatan tindakan:
 Detail: `frontend/AI-Context/08-fitur-fase-1.md` bagian F1-05. Ringkas: `PemeriksaanView` (template, favorit, akses terbatas,
 ICD-9-CM & petugas per tindakan, tombol Face chart/Parameter alat/Catatan, consent wajib, "Selesai & tanda tangani", addendum),
 komponen `components/rme/*` (FaceChart, CatatanTindakanModal, ConsentFormModal, ConsentLihatModal + cetak, AddendumModal,
-TemplateSoapModal), `SignaturePad`, `RekamMedisRingkas` (tanda tangan, catatan, consent, addendum, 🔒), `KunjunganDetail` (cek keutuhan,
+TemplateSoapModal), `SignaturePad`, `RekamMedisRingkas` (tanda tangan, catatan, consent, addendum, akses terbatas), `KunjunganDetail` (cek keutuhan,
 addendum), modul rail baru **Rekam Medis** (ICD-10, ICD-9-CM, Template SOAP, Template Consent).
 
 ## Data demo

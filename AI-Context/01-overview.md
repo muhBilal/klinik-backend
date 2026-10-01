@@ -7,7 +7,7 @@
 rekam medis estetika (tanda vital, SOAP dengan template, diagnosa ICD-10, tindakan ICD-9-CM + petugas, catatan tindakan: face
 chart injeksi & parameter laser, informed consent bertanda tangan, tanda tangan RME + addendum, akses terbatas kasus IMS,
 lampiran klinis terenkripsi, foto klinis before-after), kedokteran gigi (odontogram FDI, rencana perawatan berfase, tindakan &
-tagihan per gigi), katalog treatment, paket multi-sesi & voucher/promo, komisi & jasa medis, data klinis pasien & persetujuan UU PDP (kategori, durasi, harga per cabang, BHP standar, consent wajib), resep
+tagihan per gigi), katalog treatment, paket multi-sesi & voucher/promo, komisi & jasa medis, data klinis pasien & persetujuan UU PDP, laporan penjualan & paket (kategori, durasi, harga per cabang, BHP standar, consent wajib), resep
 elektronik, farmasi & inventori batch FEFO, kasir (split payment, shift, void/refund), multi-cabang, peran & izin dinamis,
 audit log, 2FA, dan pengaturan klinik. Status per fase: [07-roadmap-progress.md](07-roadmap-progress.md).
 
@@ -118,6 +118,23 @@ $DC exec app php artisan route:list --path=api
 | `BERKAS_ROOT` | `storage/app/berkas` | lokasi disk berkas terenkripsi (opsional) |
 | `TWO_FACTOR_ISSUER` | `APP_NAME` | nama penerbit di aplikasi authenticator |
 | `APP_KEY` | — | juga kunci enkripsi berkas klinis & secret 2FA: **jangan diganti** tanpa rotasi (`APP_PREVIOUS_KEYS`) |
+
+## Data demo transaksi (`DemoSeeder`)
+
+`php artisan db:seed --class=DemoSeeder` (setelah `DatabaseSeeder`) mengisi riwayat **±6 minggu** + booking 1 minggu ke depan untuk
+presentasi: cabang kedua **SELATAN** "Klinik Cabang Selatan" (akun `dokter.selatan@` dr. Rudi Hartono, `terapis.selatan@`,
+`pendaftaran.selatan@`, `kasir.selatan@`, `apoteker.selatan@`; harga khusus laser & facial), ±200 pasien (nama Indonesia, **tanpa Faker** —
+jalan di image produksi), ±430 kunjungan dengan RME ditandatangani, informed consent, odontogram (karies → tambalan), resep diserahkan,
+tagihan & pembayaran (tunai/QRIS/debit/transfer, diskon, promo WELCOME10, kembalian), shift kas per hari, booking hadir / tidak hadir /
+batal, ±50 paket (sebagian besar dipesan dokter/terapis saat pemeriksaan — sesi pertama dikerjakan hari itu — sisanya dibeli di kasir; termasuk
+3 paket lama: 1 hangus, 2 segera kedaluwarsa), tindakan terapis dicatat terapis sendiri, 2 refund, persetujuan UU PDP & data klinis pasien baru, rekap
+komisi bulan lalu **disetujui** (+ bonus terapis) & bulan ini **draf**. Hari ini berisi antrian hidup (menunggu, diperiksa, menunggu bayar)
+bila dijalankan pada jam praktik. Semua lewat service aplikasi dengan waktu disimulasikan (`Carbon::setTestNow`), jadi patuh aturan bisnis.
+
+- Dilewati bila sudah ada tagihan (`DEMO_PAKSA=1` untuk tetap menambah). Lama ±2–3 menit.
+- Stack produksi: `SEED_DEMO_TRANSAKSI=true` (compose) menjalankannya otomatis saat kontainer start (setelah `SEED_DEMO`).
+- Reset penuh dev: `$DC exec app php artisan migrate:fresh --seed && $DC exec app php artisan db:seed --class=DemoSeeder`.
+- `DemoSeeder::$hariKeBelakang` (bawaan 42) dipakai `DemoSeederTest` dengan nilai kecil.
 
 ## Akun demo (seeder)
 

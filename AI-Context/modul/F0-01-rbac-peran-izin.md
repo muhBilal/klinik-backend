@@ -31,7 +31,7 @@ baru (mis. "Dokter Estetika", "Kasir Farmasi") dan mengatur izinnya dari menu **
 | | `pemeriksaan.vital` | tanda vital + anamnesis (S) |
 | | `pemeriksaan.dokter` | SOAP lengkap, diagnosa, tindakan, resep, selesai pemeriksaan; **penanda dokter** (`/dokters`, `poli_id` wajib) |
 | Rekam Medis | `rme.lihat` | isi rekam medis (SOAP, diagnosa, tindakan, resep), riwayat, daftar & buka berkas, buka informed consent, verifikasi tanda tangan |
-| | `rme.tindakan` | catatan tindakan (area, face chart, parameter alat), ambil & cabut informed consent (F1-05) |
+| | `rme.tindakan` | catat tindakan & sesi paket di pemeriksaan, pesan paket dari pemeriksaan (F1-08), catatan tindakan (area, face chart, parameter alat), ambil & cabut informed consent (F1-05) |
 | | `rme.terbatas` | buka rekam medis kunjungan berakses terbatas (mis. IMS) yang tidak ditangani sendiri (F1-05) |
 | | `berkas.kelola` | unggah & hapus lampiran klinis |
 | Farmasi | `farmasi.resep`, `farmasi.obat` | resep & penyerahan; obat & stok |

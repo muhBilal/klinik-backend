@@ -37,7 +37,8 @@ Bentuk `user` (login, `/me`):
 ## Umum & referensi
 | Method | Path | Izin | Keterangan |
 |--------|------|------|------------|
-| GET | `/dashboard` | login | ringkasan hari ini **cabang aktif** (+`cabang_id`): kunjungan per status/poli, pasien, resep menunggu, tagihan belum bayar, pendapatan (`null` tanpa `laporan.keuangan`), obat stok menipis |
+| GET | `/dashboard` | login | ringkasan hari ini **cabang aktif** (+`cabang_id`): kunjungan per status/poli, pasien, resep menunggu, tagihan belum bayar, pendapatan (`null` tanpa `laporan.keuangan`), obat stok menipis, `booking{total, tidak_hadir}`, `top_treatment[]`, `per_cabang[]` (hanya saat semua cabang) |
+| GET | `/laporan/penjualan` · `/laporan/paket` | laporan.keuangan | `?mulai=&selesai=` (default awal bulan s.d. hari ini, ≤ 366 hari). Bentuk respons: [modul/F1-11](modul/F1-11-laporan.md) |
 | GET | `/cabangs` | login | **array**. Pemegang `cabang.kelola`: semua cabang + `users_count` (`status`, `q`); lainnya: cabang aktif yang boleh diakses |
 | GET | `/polis` | login | **array**. Tanpa filter: data lengkap + `dokters_count`. `aktif=1`: ringkas `{id, kode, nama, spesialisasi}` |
 | GET | `/polis/{poli}` | login | + `dokters` |
@@ -74,7 +75,7 @@ Field pasien: `nama*`, `jenis_kelamin*` (L/P), `tanggal_lahir*` (≤ hari ini), 
 | POST | `/kunjungans` | kunjungan.daftar | `{ pasien_id*, poli_id*, dokter_id?, penjamin*, no_penjamin?, keluhan? }` → + `cabang`. 422 `cabang` bila cabang aktif belum dipilih |
 | POST | `/kunjungans/{id}/batal` | kunjungan.daftar | hanya status menunggu |
 | POST | `/kunjungans/{id}/panggil` | pemeriksaan.panggil | menunggu → diperiksa |
-| PUT | `/kunjungans/{id}/pemeriksaan` | pemeriksaan.vital, pemeriksaan.dokter | upsert, lihat payload |
+| PUT | `/kunjungans/{id}/pemeriksaan` | pemeriksaan.vital, pemeriksaan.dokter, rme.tindakan | upsert kolom yang dikirim; `tindakan_ids_awal[]` = id baris saat form dimuat (hanya itu yang boleh dihapus); respons seperti GET (`rme_disembunyikan`) |
 | POST | `/kunjungans/{id}/selesai` | pemeriksaan.dokter | diperiksa → menunggu_pembayaran + buat tagihan + **tanda tangan RME**. 422 `sip` (SIP tidak aktif), `informed_consent` (consent wajib kurang) |
 | POST | `/kunjungans/{id}/addendum` | pemeriksaan.dokter | `{ bagian*, isi*, alasan* }`; hanya RME yang sudah ditandatangani → 201 |
 | GET | `/kunjungans/{id}/verifikasi` | rme.lihat | `{ ditandatangani, valid, ditandatangani_at, penandatangan }` — cocokkan hash tanda tangan |
@@ -155,8 +156,10 @@ Detail & aturan: [modul/F1-08](modul/F1-08-paket-promo.md)
 |--------|------|------|------------|
 | GET | `/pakets` | login | **array**; `aktif=1`; + `items.tindakan`, `nilai_normal`, `terjual_count` |
 | POST / GET / PUT / DELETE | `/pakets`, `/{id}` | master.kelola | `{ kode*, nama*, harga*, masa_berlaku_hari, lintas_cabang, is_active, items*[]{tindakan_id*, jumlah_sesi*} }` |
-| GET | `/pasiens/{id}/pakets` | pasien.lihat, kasir.tagihan, rme.tindakan, pemeriksaan.dokter | **array**; `aktif=1`; + sisa per item, `status_efektif` |
+| GET | `/pasiens/{id}/pakets` | pasien.lihat, kasir.tagihan, rme.tindakan, pemeriksaan.dokter | **array**; `aktif=1` (+ `kunjungan_id=` → pesanan kunjungan itu); + sisa per item, `status_efektif` |
 | POST | `/pasiens/{id}/pakets` | kasir.tagihan | `{ paket_id*, catatan }` → paket `menunggu_bayar` + `tagihan_id` |
+| POST · DELETE | `/kunjungans/{id}/pakets` · `/{paketPasien}` | pemeriksaan.dokter, rme.tindakan | pesan paket dari pemeriksaan (`{ paket_id*, catatan }` → `menunggu_bayar` + `kunjungan_id`, ditagihkan saat ditutup) · batalkan pesanan |
+| DELETE | `/tagihans/{id}/pakets/{paketPasien}` | kasir.tagihan | pasien tidak jadi: paket batal, sesi tarif normal, tagihan disusun ulang |
 | GET | `/paket-pasiens/{id}` | sama dengan daftar | + `pemakaian[]`, `refund_sisa` |
 | POST | `/paket-pasiens/{id}/perpanjang` · `/alihkan` · `/refund` | kasir.void | `{berlaku_sampai*, alasan*}` · `{pasien_id*, alasan*}` · `{metode* tunai/transfer, referensi, alasan*}` |
 | apiResource | `/promos` | promo.kelola | paginated; + `dipakai`, nama `tindakans`/`pakets`/`cabangs` |

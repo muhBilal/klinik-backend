@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Enums\MetodeBayar;
 use App\Enums\StatusKunjungan;
 use App\Enums\StatusPaketPasien;
+use App\Enums\StatusTagihan;
 use App\Models\Kunjungan;
+use App\Models\KunjunganTindakan;
 use App\Models\Paket;
 use App\Models\PaketPasien;
 use App\Models\PaketPasienItem;
@@ -21,8 +23,10 @@ use Illuminate\Validation\ValidationException;
 /**
  * Paket multi-sesi milik pasien (PRD TR-02, BL-01).
  *
- * Alur: jual (tagihan mandiri, status menunggu_bayar) → tagihan lunas = aktif (masa berlaku mulai, nilai bersih dialokasikan
- * per sesi) → sesi dipakai lewat `kunjungan_tindakans.paket_pasien_item_id` (ditagih Rp 0) → habis / kedaluwarsa (dihitung).
+ * Alur: dipesan dokter/terapis dari pemeriksaan (ditagihkan bersama tagihan kunjungan; sesi pertama boleh langsung dipakai di
+ * kunjungan itu) atau dijual langsung di kasir (tagihan mandiri) — status menunggu_bayar → tagihan lunas = aktif (masa berlaku mulai,
+ * nilai bersih dialokasikan per sesi) → sesi dipakai lewat `kunjungan_tindakans.paket_pasien_item_id` (ditagih Rp 0) → habis /
+ * kedaluwarsa (dihitung).
  * Sisa sesi = jumlah sesi − tindakan kunjungan bukan batal yang memakainya; kunjungan yang masih terbuka ikut mengurangi sisa
  * ("dipesan") agar satu sesi tidak dipakai dua kunjungan sekaligus.
  */
@@ -33,6 +37,7 @@ class PaketService
         'cabang:id,kode,nama',
         'tagihan:id,no_tagihan,status,grand_total,cabang_id',
         'pembuat:id,name',
+        'kunjungan:id,no_registrasi,tanggal,status',
         'dialihkanDari:id,no_paket,pasien_id',
         'dialihkanDari.pasien:id,no_rm,nama',
         'dialihkanKe:id,no_paket,pasien_id,dialihkan_dari_id',
@@ -51,14 +56,10 @@ class PaketService
         private KasirService $kasir,
     ) {}
 
-    /** Jual paket: buat paket (menunggu bayar) + tagihan mandiri berisi satu baris paket. */
+    /** Jual langsung di kasir: buat paket (menunggu bayar) + tagihan mandiri berisi satu baris paket. */
     public function jual(Pasien $pasien, Paket $paket, ?string $catatan, User $user): PaketPasien
     {
-        $paket->loadMissing('items');
-
-        if (! $paket->is_active || $paket->items->isEmpty()) {
-            throw ValidationException::withMessages(['paket_id' => 'Paket tidak aktif atau belum berisi treatment.']);
-        }
+        $this->pastikanBisaDijual($paket);
 
         return DB::transaction(function () use ($pasien, $paket, $catatan, $user) {
             $noPaket = $this->nomor->noPaket(now());
@@ -70,32 +71,152 @@ class PaketService
                 'harga' => $paket->harga,
             ]], "Penjualan paket {$noPaket}");
 
-            $paketPasien = PaketPasien::create([
-                'no_paket' => $noPaket,
-                'pasien_id' => $pasien->id,
-                'paket_id' => $paket->id,
-                'cabang_id' => $tagihan->cabang_id,
-                'tagihan_id' => $tagihan->id,
-                'nama' => $paket->nama,
-                'harga' => $paket->harga,
-                'status' => StatusPaketPasien::MenungguBayar,
-                'lintas_cabang' => $paket->lintas_cabang,
-                'masa_berlaku_hari' => $paket->masa_berlaku_hari,
-                'catatan' => $catatan,
-                'dibuat_oleh' => $user->id,
-            ]);
-
-            foreach ($paket->items as $item) {
-                $paketPasien->items()->create(['tindakan_id' => $item->tindakan_id, 'jumlah_sesi' => $item->jumlah_sesi]);
-            }
-
-            return $this->muat($paketPasien);
+            return $this->muat($this->buatInstance($noPaket, $pasien->id, $paket, $tagihan->cabang_id, $tagihan->id, null, $catatan, $user));
         });
     }
 
     /**
-     * Tagihan penjualan lunas → paket aktif. Nilai bersih = subtotal baris paket setelah bagian proporsional diskon tagihan
-     * (manual + promo, sebelum pajak), lalu dialokasikan ke tiap treatment sebanding tarif dasar × jumlah sesi.
+     * Dokter/terapis memesankan paket dari pemeriksaan: paket menunggu bayar tanpa tagihan sendiri — ikut ditagihkan saat pemeriksaan
+     * ditutup (`TagihanService::buatDariKunjungan`) sehingga pasien membayar sekali di kasir. Sesi pertamanya boleh dipakai di kunjungan
+     * yang sama (`pastikanBisaDipakai`). Satu paket katalog paling banyak sekali per kunjungan.
+     */
+    public function pesanDariKunjungan(Kunjungan $kunjungan, Paket $paket, ?string $catatan, User $user): PaketPasien
+    {
+        $this->pastikanKunjunganTerbuka($kunjungan);
+        $this->pastikanBisaDijual($paket);
+
+        return DB::transaction(function () use ($kunjungan, $paket, $catatan, $user) {
+            $kunjungan = $this->kunciKunjunganTerbuka($kunjungan);
+            $ganda = PaketPasien::where('kunjungan_id', $kunjungan->id)->where('paket_id', $paket->id)
+                ->where('status', StatusPaketPasien::MenungguBayar)->exists();
+            if ($ganda) {
+                throw ValidationException::withMessages(['paket_id' => "Paket {$paket->nama} sudah dipesan di kunjungan ini."]);
+            }
+
+            return $this->muat($this->buatInstance($this->nomor->noPaket(now()), $kunjungan->pasien_id, $paket, $kunjungan->cabang_id, null,
+                $kunjungan->id, $catatan, $user));
+        });
+    }
+
+    /** Batalkan pesanan paket selama pemeriksaan masih terbuka dan sesinya belum dipakai di kunjungan ini. */
+    public function batalPesanan(PaketPasien $paket, Kunjungan $kunjungan): PaketPasien
+    {
+        abort_unless((int) $paket->kunjungan_id === (int) $kunjungan->id, 404);
+        $this->pastikanKunjunganTerbuka($kunjungan);
+
+        return DB::transaction(function () use ($paket, $kunjungan) {
+            $this->kunciKunjunganTerbuka($kunjungan);
+            $paket = PaketPasien::whereKey($paket->id)->lockForUpdate()->with('items')->firstOrFail();
+            if ($paket->status !== StatusPaketPasien::MenungguBayar || $paket->tagihan_id) {
+                throw ValidationException::withMessages(['status' => "Paket {$paket->no_paket} sudah ditagihkan; batalkan lewat kasir."]);
+            }
+            $dipakai = collect($this->pemakaian($paket->items->pluck('id')))->sum(fn ($p) => $p['terpakai'] + $p['dipesan']);
+            if ($dipakai > 0) {
+                throw ValidationException::withMessages(['status' => "Sesi paket {$paket->no_paket} sedang dipakai tindakan — lepas dulu pemakaiannya."]);
+            }
+
+            $paket->update(['status' => StatusPaketPasien::Dibatalkan]);
+
+            return $this->muat($paket);
+        });
+    }
+
+    /**
+     * Pasien menolak paket yang dipesan dokter/terapis saat membayar di kasir: pesanan dibatalkan, tindakan yang memakai sesinya kembali ke
+     * tarif normal, lalu tagihan kunjungan (belum dibayar) disusun ulang. Kolom sesi paket tidak termasuk hash RME, jadi tanda tangan tetap
+     * sah. Paket yang dijual langsung (tagihan mandiri) dibatalkan lewat void tagihannya.
+     */
+    public function lepasDariTagihan(Tagihan $tagihan, PaketPasien $paket): Tagihan
+    {
+        abort_unless((int) $paket->tagihan_id === (int) $tagihan->id, 404);
+
+        return DB::transaction(function () use ($tagihan, $paket) {
+            $tagihan = Tagihan::withoutGlobalScope('cabang')->whereKey($tagihan->id)->lockForUpdate()->firstOrFail();
+            if ($tagihan->status !== StatusTagihan::BelumBayar) {
+                throw ValidationException::withMessages(['status' => 'Paket hanya bisa dilepas dari tagihan yang belum dibayar.']);
+            }
+            if (! $tagihan->kunjungan_id) {
+                throw ValidationException::withMessages(['status' => 'Paket ini dijual langsung di kasir — batalkan tagihannya.']);
+            }
+
+            $paket = PaketPasien::whereKey($paket->id)->lockForUpdate()->with('items')->firstOrFail();
+            if ($paket->status !== StatusPaketPasien::MenungguBayar) {
+                throw ValidationException::withMessages(['status' => "Paket {$paket->no_paket} sudah {$paket->status->value}."]);
+            }
+
+            $paket->update(['status' => StatusPaketPasien::Dibatalkan]);
+            KunjunganTindakan::where('kunjungan_id', $tagihan->kunjungan_id)->whereIn('paket_pasien_item_id', $paket->items->pluck('id'))
+                ->get()->each->update(['paket_pasien_item_id' => null]);
+
+            return $this->tagihan->susunUlang($tagihan);
+        });
+    }
+
+    /** Kunjungan dibatalkan → pesanan paketnya yang belum ditagihkan ikut batal. */
+    public function batalkanPesananKunjungan(Kunjungan $kunjungan): void
+    {
+        PaketPasien::where('kunjungan_id', $kunjungan->id)->where('status', StatusPaketPasien::MenungguBayar)->whereNull('tagihan_id')
+            ->get()->each->update(['status' => StatusPaketPasien::Dibatalkan]);
+    }
+
+    private function pastikanBisaDijual(Paket $paket): void
+    {
+        $paket->loadMissing('items');
+
+        if (! $paket->is_active || $paket->items->isEmpty()) {
+            throw ValidationException::withMessages(['paket_id' => 'Paket tidak aktif atau belum berisi treatment.']);
+        }
+    }
+
+    private function pastikanKunjunganTerbuka(Kunjungan $kunjungan): void
+    {
+        if (! $kunjungan->terbuka()) {
+            throw ValidationException::withMessages(['kunjungan' => 'Pemeriksaan sudah ditutup — jual paket lewat kasir.']);
+        }
+    }
+
+    /**
+     * Kunci baris kunjungan lalu periksa ulang statusnya: pesan/batal pesanan berurutan per kunjungan (cek ganda andal) dan tidak
+     * menyusup setelah tagihan kunjungan dibuat — `selesai` mengubah status kunjungan sebelum menyusun tagihan di transaksi yang sama.
+     */
+    private function kunciKunjunganTerbuka(Kunjungan $kunjungan): Kunjungan
+    {
+        $terkunci = Kunjungan::kunci($kunjungan->id);
+        $this->pastikanKunjunganTerbuka($terkunci);
+
+        return $terkunci;
+    }
+
+    /** Snapshot katalog → paket milik pasien (menunggu bayar). */
+    private function buatInstance(string $noPaket, int $pasienId, Paket $paket, int $cabangId, ?int $tagihanId, ?int $kunjunganId, ?string $catatan, User $user): PaketPasien
+    {
+        $paketPasien = PaketPasien::create([
+            'no_paket' => $noPaket,
+            'pasien_id' => $pasienId,
+            'paket_id' => $paket->id,
+            'cabang_id' => $cabangId,
+            'tagihan_id' => $tagihanId,
+            'kunjungan_id' => $kunjunganId,
+            'nama' => $paket->nama,
+            'harga' => $paket->harga,
+            'status' => StatusPaketPasien::MenungguBayar,
+            'lintas_cabang' => $paket->lintas_cabang,
+            'masa_berlaku_hari' => $paket->masa_berlaku_hari,
+            'catatan' => $catatan,
+            'dibuat_oleh' => $user->id,
+        ]);
+
+        foreach ($paket->items as $item) {
+            $paketPasien->items()->create(['tindakan_id' => $item->tindakan_id, 'jumlah_sesi' => $item->jumlah_sesi]);
+        }
+
+        return $paketPasien;
+    }
+
+    /**
+     * Tagihan lunas (penjualan mandiri atau tagihan kunjungan yang memuat pesanan paket) → paket aktif. Nilai bersih = neto baris paket
+     * (`tagihan_items.neto`, dihitung `KasirService` tepat sebelumnya: potongan promo hanya bila baris paket memenuhi syarat promo, diskon
+     * manual sebanding), sebelum pajak; lalu dialokasikan ke tiap treatment sebanding tarif dasar × jumlah sesi.
      */
     public function aktifkanDariTagihan(Tagihan $tagihan): void
     {
@@ -108,8 +229,8 @@ class PaketService
         $faktor = $tagihan->total > 0 ? ($tagihan->total - $tagihan->diskon - $tagihan->diskon_promo) / $tagihan->total : 0;
 
         foreach ($pakets as $paket) {
-            $subtotal = (int) ($baris->firstWhere('paket_id', $paket->paket_id)?->subtotal ?? $paket->harga);
-            $nilai = (int) round($subtotal * $faktor);
+            $item = $baris->firstWhere('paket_id', $paket->paket_id);
+            $nilai = $item?->neto ?? (int) round(($item?->subtotal ?? $paket->harga) * $faktor);
 
             $paket->update([
                 'status' => StatusPaketPasien::Aktif,
@@ -129,8 +250,9 @@ class PaketService
     }
 
     /**
-     * Refund penuh tagihan penjualan (BL-06) hanya untuk paket yang belum pernah dipakai; paket yang sudah dipakai
-     * mengikuti kebijakan refund sisa (`refundSisa`).
+     * Refund penuh tagihan yang memuat paket (BL-06) hanya untuk paket yang belum pernah dipakai; paket yang sudah dipakai
+     * mengikuti kebijakan refund sisa (`refundSisa`). Sesi yang dipakai di kunjungan milik tagihan ini sendiri (paket dipesan &
+     * sesi pertama dikerjakan di kunjungan yang sama) ikut direfund bersama tagihannya, jadi tidak menghalangi.
      */
     public function refundPenuhDariTagihan(Tagihan $tagihan, string $alasan, User $user): void
     {
@@ -139,7 +261,8 @@ class PaketService
                 throw ValidationException::withMessages(['status' => "Paket {$paket->no_paket} sudah {$paket->status->value}; tagihannya tidak bisa direfund."]);
             }
 
-            $dipakai = collect($this->pemakaian($paket->items->pluck('id')))->sum(fn ($p) => $p['terpakai'] + $p['dipesan']);
+            $dipakai = collect($this->pemakaian($paket->items->pluck('id'), kecualiKunjunganId: $tagihan->kunjungan_id))
+                ->sum(fn ($p) => $p['terpakai'] + $p['dipesan']);
             if ($dipakai > 0) {
                 throw ValidationException::withMessages([
                     'status' => "Paket {$paket->no_paket} sudah dipakai {$dipakai} sesi. Gunakan pengembalian sisa paket sesuai kebijakan klinik.",
@@ -171,7 +294,10 @@ class PaketService
         if (! $paket || $paket->pasien_id !== (int) $kunjungan->pasien_id) {
             $gagal('Paket tidak ditemukan untuk pasien ini.');
         }
-        if ($paket->status !== StatusPaketPasien::Aktif) {
+        // Paket yang dipesan di kunjungan ini (belum ditagihkan) boleh langsung dipakai: harganya ikut tagihan kunjungan yang sama.
+        $pesananKunjunganIni = $paket->status === StatusPaketPasien::MenungguBayar
+            && (int) $paket->kunjungan_id === (int) $kunjungan->id && ! $paket->tagihan_id;
+        if ($paket->status !== StatusPaketPasien::Aktif && ! $pesananKunjunganIni) {
             $gagal($paket->status === StatusPaketPasien::MenungguBayar
                 ? "Paket {$paket->no_paket} belum aktif — tagihan penjualannya belum lunas."
                 : "Paket {$paket->no_paket} sudah {$paket->status->value}.");
@@ -197,11 +323,12 @@ class PaketService
 
     /**
      * Pemakaian per item: `terpakai` (kunjungan sudah ditutup) & `dipesan` (kunjungan masih terbuka). Kunjungan batal tidak dihitung.
+     * `$kecualiKunjunganId` mengabaikan pemakaian di satu kunjungan (refund tagihan kunjungan itu).
      *
      * @param  iterable<int>  $itemIds
      * @return array<int, array{terpakai: int, dipesan: int}>
      */
-    public function pemakaian(iterable $itemIds, ?int $kecualiKunjunganTindakanId = null): array
+    public function pemakaian(iterable $itemIds, ?int $kecualiKunjunganTindakanId = null, ?int $kecualiKunjunganId = null): array
     {
         $ids = collect($itemIds)->values();
         $hasil = $ids->mapWithKeys(fn ($id) => [$id => ['terpakai' => 0, 'dipesan' => 0]])->all();
@@ -215,6 +342,7 @@ class PaketService
             ->whereIn('kt.paket_pasien_item_id', $ids)
             ->where('k.status', '!=', StatusKunjungan::Batal->value)
             ->when($kecualiKunjunganTindakanId, fn ($q) => $q->where('kt.id', '!=', $kecualiKunjunganTindakanId))
+            ->when($kecualiKunjunganId, fn ($q) => $q->where('kt.kunjungan_id', '!=', $kecualiKunjunganId))
             ->groupBy('kt.paket_pasien_item_id', 'k.status')
             ->selectRaw('kt.paket_pasien_item_id AS item_id, k.status, SUM(kt.jumlah) AS n')
             ->get();
@@ -423,11 +551,16 @@ class PaketService
      *
      * @return Collection<int, PaketPasien>
      */
-    public function aktif(Pasien $pasien): Collection
+    public function aktif(Pasien $pasien, ?int $kunjunganId = null): Collection
     {
-        return $pasien->paketPasiens()->where('status', StatusPaketPasien::Aktif)->with(self::RELASI)->latest('id')->get()
+        return $pasien->paketPasiens()
+            ->where(fn ($q) => $q->where('status', StatusPaketPasien::Aktif)
+                // + pesanan di kunjungan yang sedang diperiksa (belum ditagihkan) — sesinya boleh dipakai di kunjungan itu
+                ->when($kunjunganId, fn ($w) => $w->orWhere(fn ($p) => $p->where('status', StatusPaketPasien::MenungguBayar)
+                    ->where('kunjungan_id', $kunjunganId)->whereNull('tagihan_id'))))
+            ->with(self::RELASI)->latest('id')->get()
             ->map(fn (PaketPasien $p) => $this->ringkas($p))
-            ->filter(fn (PaketPasien $p) => $p->status_efektif === StatusPaketPasien::Aktif->value)
+            ->filter(fn (PaketPasien $p) => in_array($p->status_efektif, [StatusPaketPasien::Aktif->value, StatusPaketPasien::MenungguBayar->value], true))
             ->values();
     }
 }

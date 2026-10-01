@@ -118,6 +118,15 @@ class Kunjungan extends Model
         return in_array($this->status, [StatusKunjungan::Menunggu, StatusKunjungan::Diperiksa], true);
     }
 
+    /**
+     * Baca ulang kunjungan dengan kunci baris (dalam transaksi): simpan pemeriksaan, tutup & tanda tangan, pesan/batal paket, dan batal
+     * kunjungan berjalan berurutan per kunjungan, lalu pemanggil memeriksa ulang statusnya.
+     */
+    public static function kunci(int $id): self
+    {
+        return static::withoutGlobalScope('cabang')->whereKey($id)->lockForUpdate()->firstOrFail();
+    }
+
     public function berkas(): HasMany
     {
         return $this->hasMany(Berkas::class);

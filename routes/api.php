@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\KategoriTindakanController;
 use App\Http\Controllers\Api\KodeFavoritController;
 use App\Http\Controllers\Api\KomisiPeriodeController;
 use App\Http\Controllers\Api\KunjunganController;
+use App\Http\Controllers\Api\LaporanController;
 use App\Http\Controllers\Api\ObatController;
 use App\Http\Controllers\Api\OdontogramController;
 use App\Http\Controllers\Api\PaketController;
@@ -72,6 +73,12 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
 
     Route::middleware('wajib2fa')->group(function () {
         Route::get('dashboard', DashboardController::class);
+
+        // Laporan penjualan & paket (LP-02, LP-03)
+        Route::middleware('izin:laporan.keuangan')->group(function () {
+            Route::get('laporan/penjualan', [LaporanController::class, 'penjualan']);
+            Route::get('laporan/paket', [LaporanController::class, 'paket']);
+        });
 
         // Data referensi (read-only untuk semua pengguna)
         Route::get('cabangs', [CabangController::class, 'index']);
@@ -130,6 +137,11 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
             Route::get('paket-pasiens/{paketPasien}', [PaketPasienController::class, 'show']);
         });
         Route::post('pasiens/{pasien}/pakets', [PaketPasienController::class, 'store'])->middleware('izin:kasir.tagihan');
+        // Dokter/terapis memesankan paket dari pemeriksaan (ditagihkan bersama tagihan kunjungan)
+        Route::middleware('izin:pemeriksaan.dokter,rme.tindakan')->group(function () {
+            Route::post('kunjungans/{kunjungan}/pakets', [PaketPasienController::class, 'pesan']);
+            Route::delete('kunjungans/{kunjungan}/pakets/{paketPasien}', [PaketPasienController::class, 'batalPesanan']);
+        });
         Route::middleware('izin:kasir.void')->group(function () {
             Route::post('paket-pasiens/{paketPasien}/perpanjang', [PaketPasienController::class, 'perpanjang']);
             Route::post('paket-pasiens/{paketPasien}/alihkan', [PaketPasienController::class, 'alihkan']);
@@ -176,7 +188,8 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
 
         // Pemeriksaan. Selesai = tutup & tanda tangani RME (dokter ber-SIP aktif); koreksi setelahnya lewat addendum (RM-07).
         Route::post('kunjungans/{kunjungan}/panggil', [KunjunganController::class, 'panggil'])->middleware('izin:pemeriksaan.panggil');
-        Route::put('kunjungans/{kunjungan}/pemeriksaan', [PemeriksaanController::class, 'update'])->middleware('izin:pemeriksaan.vital,pemeriksaan.dokter');
+        // Tanda vital (pemeriksaan.vital), tindakan & sesi paket (rme.tindakan), atau seluruh SOAP (pemeriksaan.dokter) — dibedakan di service
+        Route::put('kunjungans/{kunjungan}/pemeriksaan', [PemeriksaanController::class, 'update'])->middleware('izin:pemeriksaan.vital,pemeriksaan.dokter,rme.tindakan');
         Route::middleware('izin:pemeriksaan.dokter')->group(function () {
             Route::post('kunjungans/{kunjungan}/selesai', [PemeriksaanController::class, 'selesai']);
             Route::post('kunjungans/{kunjungan}/addendum', [PemeriksaanController::class, 'addendum']);
@@ -265,6 +278,8 @@ Route::middleware(['auth:sanctum', 'cabang'])->group(function () {
             // Voucher & kode promo (TR-06)
             Route::post('tagihans/{tagihan}/promo', [TagihanController::class, 'pasangPromo']);
             Route::delete('tagihans/{tagihan}/promo', [TagihanController::class, 'lepasPromo']);
+            // Pasien tidak jadi membeli paket yang dipesan di pemeriksaan (TR-02)
+            Route::delete('tagihans/{tagihan}/pakets/{paketPasien}', [TagihanController::class, 'lepasPaket']);
 
             // Batal & refund butuh izin terpisah (persetujuan manajer) — BL-06
             Route::middleware('izin:kasir.void')->group(function () {

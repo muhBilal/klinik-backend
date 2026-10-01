@@ -11,6 +11,7 @@ use App\Models\Pasien;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\NomorUrutService;
+use App\Services\PaketService;
 use App\Services\PemeriksaanService;
 use App\Services\PersetujuanDataService;
 use App\Services\RekamMedisService;
@@ -134,11 +135,26 @@ class KunjunganController extends Controller
 
     public function batal(Kunjungan $kunjungan): JsonResponse
     {
-        if ($kunjungan->status !== StatusKunjungan::Menunggu) {
-            throw ValidationException::withMessages(['status' => 'Hanya kunjungan yang belum dipanggil yang dapat dibatalkan.']);
-        }
+        $kunjungan = DB::transaction(function () use ($kunjungan) {
+            $kunjungan = Kunjungan::kunci($kunjungan->id);
 
-        $kunjungan->update(['status' => StatusKunjungan::Batal]);
+            if ($kunjungan->status !== StatusKunjungan::Menunggu) {
+                throw ValidationException::withMessages(['status' => 'Hanya kunjungan yang belum dipanggil yang dapat dibatalkan.']);
+            }
+            // Dokumentasi tindakan yang sudah dikerjakan (catatan tindakan, informed consent) tidak boleh hilang diam-diam bersama kunjungan
+            // batal. Tindakan rencana dari booking & sesi paket yang baru dipesan boleh — sesinya dilepas (F1-08).
+            if ($kunjungan->tindakans()->whereHas('catatan')->exists() || $kunjungan->informedConsents()->exists()) {
+                throw ValidationException::withMessages([
+                    'status' => 'Kunjungan sudah berisi catatan tindakan atau informed consent. Selesaikan pemeriksaannya, atau minta petugas medis menghapus tindakan itu dulu.',
+                ]);
+            }
+
+            $kunjungan->update(['status' => StatusKunjungan::Batal]);
+            // Paket yang dipesan di kunjungan ini (belum ditagihkan) ikut batal.
+            app(PaketService::class)->batalkanPesananKunjungan($kunjungan);
+
+            return $kunjungan;
+        });
 
         return response()->json($kunjungan);
     }

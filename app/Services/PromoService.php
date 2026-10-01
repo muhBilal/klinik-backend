@@ -7,6 +7,8 @@ use App\Enums\StatusTagihan;
 use App\Models\Promo;
 use App\Models\PromoPemakaian;
 use App\Models\Tagihan;
+use App\Models\TagihanItem;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -132,20 +134,32 @@ class PromoService
         return strtoupper(trim($kode));
     }
 
+    /**
+     * Baris tagihan yang menanggung potongan promo terpasang (kosong bila tanpa promo) — dasar alokasi nilai bersih per baris
+     * (`KasirService::alokasikanNeto`): baris lain tidak ikut menanggung potongan promo yang bukan untuknya.
+     *
+     * @param  Collection<int, TagihanItem>  $items
+     * @return Collection<int, TagihanItem>
+     */
+    public function barisMemenuhiSyarat(Tagihan $tagihan, Collection $items): Collection
+    {
+        $promo = $tagihan->promo_id && $tagihan->diskon_promo > 0 ? $tagihan->promo : null;
+
+        return $promo ? $items->filter(fn (TagihanItem $i) => $this->memenuhiSyarat($promo, $i)) : $items->take(0);
+    }
+
     /** Subtotal item yang memenuhi syarat promo (semua item bila promo tidak dibatasi treatment/paket). */
     private function nilaiMemenuhiSyarat(Promo $promo, Tagihan $tagihan): int
     {
-        $items = $tagihan->items()->get(['id', 'tindakan_id', 'paket_id', 'subtotal']);
+        return (int) $tagihan->items()->get(['id', 'tindakan_id', 'paket_id', 'subtotal'])
+            ->filter(fn (TagihanItem $i) => $this->memenuhiSyarat($promo, $i))->sum('subtotal');
+    }
 
-        if ($promo->semuaItem()) {
-            return (int) $items->sum('subtotal');
-        }
-
-        $tindakan = array_map('intval', $promo->tindakan_ids ?? []);
-        $paket = array_map('intval', $promo->paket_ids ?? []);
-
-        return (int) $items->filter(fn ($i) => ($i->tindakan_id && in_array($i->tindakan_id, $tindakan, true))
-            || ($i->paket_id && in_array($i->paket_id, $paket, true)))->sum('subtotal');
+    private function memenuhiSyarat(Promo $promo, TagihanItem $item): bool
+    {
+        return $promo->semuaItem()
+            || ($item->tindakan_id && in_array((int) $item->tindakan_id, array_map('intval', $promo->tindakan_ids ?? []), true))
+            || ($item->paket_id && in_array((int) $item->paket_id, array_map('intval', $promo->paket_ids ?? []), true));
     }
 
     private function simpanPotongan(Tagihan $tagihan, ?int $promoId, int $potongan): Tagihan

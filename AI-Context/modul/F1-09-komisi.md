@@ -103,6 +103,10 @@ Rp 75.000 (Poli Gigi). Komisi demo (wajib disesuaikan klinik): Konsultasi dokter
 terapis 10% (dokter tanpa komisi); Laser & Energy Device dokter 5% + terapis Rp 50.000; Perawatan Gigi dokter 30% + asisten Rp 10.000;
 Botox (TRT-001) dokter 15% + asisten Rp 25.000.
 
+Revisi 1 Okt 2026: dasar `neto` memakai neto baris tagihan (`tagihan_items.neto`) — potongan promo hanya menimpa baris yang memenuhi syarat
+(mis. promo khusus paket di tagihan kunjungan tidak mengurangi dasar komisi botox/konsultasi); tagihan lama tanpa neto tetap memakai
+proporsi tagihan.
+
 ## Frontend
 
 Detail: `frontend/AI-Context/08-fitur-fase-1.md` bagian F1-09. Ringkas: Master Data → **Treatment** bagian "Komisi & jasa medis" (+ kolom

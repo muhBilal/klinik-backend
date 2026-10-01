@@ -7,6 +7,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -21,6 +22,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'cabang' => ResolveCabang::class,
             'wajib2fa' => EnsureTwoFactorEnabled::class,
         ]);
+        // Cabang aktif ditentukan (sesudah autentikasi) SEBELUM binding rute: model ber-scope cabang (DalamCabang) dari parameter rute
+        // ikut tersaring cabang request — tanpa ini user cabang lain bisa membuka/mengubah kunjungan, tagihan, dst. lewat id.
+        $middleware->prependToPriorityList(SubstituteBindings::class, ResolveCabang::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

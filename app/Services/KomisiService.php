@@ -24,7 +24,8 @@ use Illuminate\Validation\ValidationException;
  * - item konsultasi (treatment jasa konsultasi poli) → peran dokter (dokter kunjungan), komisi dokter treatment itu;
  * - tiap tindakan → peran dokter (dokter kunjungan), terapis (pelaksana `petugas_id`), asisten (`asisten_id`), komisi peran itu pada
  *   treatment-nya. Peran tanpa komisi di treatment = tidak ada baris.
- * Dasar: pengaturan `komisi.dasar` — `bruto` (harga × jumlah) atau `neto` (dikali proporsi diskon manual + promo tagihan). Sesi paket
+ * Dasar: pengaturan `komisi.dasar` — `bruto` (harga × jumlah) atau `neto` (nilai bersih baris tagihan `tagihan_items.neto`: potongan promo
+ * hanya untuk baris yang memenuhi syarat, diskon manual sebanding; tagihan lama tanpa neto memakai proporsi tagihan). Sesi paket
  * (ditagih Rp 0) memakai nilai per sesi paket (sudah bersih) di kedua mode. Persen = dasar × persen; nominal = nilai × jumlah tindakan.
  */
 class KomisiService
@@ -158,7 +159,7 @@ class KomisiService
             ->whereNotNull('kunjungan_id')
             ->whereBetween('dibayar_at', [Carbon::parse($periode->mulai)->startOfDay(), Carbon::parse($periode->selesai)->endOfDay()])
             ->with([
-                'items:id,tagihan_id,kategori,tindakan_id,deskripsi,jumlah,subtotal',
+                'items:id,tagihan_id,kategori,tindakan_id,deskripsi,jumlah,subtotal,neto',
                 'kunjungan:id,cabang_id,no_registrasi,pasien_id,poli_id,dokter_id',
                 'kunjungan.pasien:id,nama',
                 'kunjungan.tindakans:id,kunjungan_id,tindakan_id,jumlah,tarif,petugas_id,asisten_id,gigi,permukaan,paket_pasien_item_id',
@@ -179,9 +180,13 @@ class KomisiService
     private function barisTagihan(Tagihan $tagihan, Collection $komisi, string $dasar): array
     {
         $kunjungan = $tagihan->kunjungan;
-        $faktor = $dasar === 'neto' && $tagihan->total > 0
+        $neto = $dasar === 'neto';
+        $faktor = $neto && $tagihan->total > 0
             ? ($tagihan->total - $tagihan->diskon - $tagihan->diskon_promo) / $tagihan->total
             : 1.0;
+        // Rasio neto/subtotal per treatment dari baris tagihan berbayar (sama untuk semua baris treatment itu); null = tagihan lama.
+        $rasio = $tagihan->items->where('kategori', 'tindakan')->where('subtotal', '>', 0)->whereNotNull('neto')->groupBy('tindakan_id')
+            ->map(fn (Collection $b) => $b->sum('neto') / $b->sum('subtotal'));
         $tanggal = $tagihan->dibayar_at->toDateString();
         $ket = "{$kunjungan->no_registrasi} · {$kunjungan->pasien?->nama}";
         $hasil = [];
@@ -205,14 +210,15 @@ class KomisiService
 
         // Jasa konsultasi dokter: item konsultasi menunjuk treatment jasa konsultasi poli.
         foreach ($tagihan->items->where('kategori', 'konsultasi') as $item) {
-            $tambah($kunjungan->dokter_id, PeranKomisi::Dokter, SumberKomisi::Konsultasi, $item->tindakan_id, (int) round($item->subtotal * $faktor),
+            $nilaiDasar = $neto ? ($item->neto ?? (int) round($item->subtotal * $faktor)) : $item->subtotal;
+            $tambah($kunjungan->dokter_id, PeranKomisi::Dokter, SumberKomisi::Konsultasi, $item->tindakan_id, $nilaiDasar,
                 $item->jumlah, "{$item->deskripsi} — {$ket}", null);
         }
 
         foreach ($kunjungan->tindakans as $kt) {
             $nilai = $kt->paketItem
                 ? $kt->paketItem->nilai_per_sesi * $kt->jumlah
-                : (int) round($kt->tarif * $kt->jumlah * $faktor);
+                : (int) round($kt->tarif * $kt->jumlah * ($neto ? ($rasio[$kt->tindakan_id] ?? $faktor) : 1.0));
             $nama = $kt->tindakan?->nama.($kt->gigi ? " gigi {$kt->gigi}".($kt->permukaan ? " ({$kt->permukaan})" : '') : '')
                 .($kt->paketItem ? ' · sesi paket' : '').($kt->jumlah > 1 ? " ×{$kt->jumlah}" : '');
 

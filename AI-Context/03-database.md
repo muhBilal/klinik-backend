@@ -30,7 +30,7 @@ protokol_fotos 1─* berkas, 1─* tindakans                 pasiens 1─* perse
 pasiens 1─* odontogram_kondisis *─1 kunjungans (dicatat) / kunjungans (berakhir_kunjungan_id) / kunjungan_tindakans (turunan)
 pasiens 1─* rencana_perawatans 1─* rencana_perawatan_items *─1 tindakans
 kunjungan_tindakans *─1 rencana_perawatan_items (rencana_item_id: item yang dikerjakan)
-pakets 1─* paket_items *─1 tindakans                     pakets 1─* paket_pasiens *─1 pasiens, *─1 tagihans (penjualan)
+pakets 1─* paket_items *─1 tindakans                     pakets 1─* paket_pasiens *─1 pasiens, *─1 tagihans (penjualan), *─1 kunjungans (dipesan dari pemeriksaan)
 paket_pasiens 1─* paket_pasien_items 1─* kunjungan_tindakans (paket_pasien_item_id: sesi dipakai)
 promos 1─* promo_pemakaians *─1 tagihans                tagihans *─1 promos (promo_id, diskon_promo)
 pasiens 1─1 pasien_klinis · 1─* pasien_alergis *─1 obats (opsional) · 1─* persetujuan_datas (pemrosesan / marketing)
@@ -80,7 +80,7 @@ pengaturans (kunci → nilai JSON)
 | `informed_consents` | uuid, cabang_id, kunjungan_id, pasien_id, kunjungan_tindakan_id, template_consent_id, judul, tindakan_nama, isi (snapshot), status, penandatangan_nama, hubungan, ttd_penandatangan & ttd_saksi (**terenkripsi**), saksi_nama, dokter_id, dibuat_oleh, ditandatangani_at, dicabut_at/_oleh, alasan_cabut, checksum, ip_address — tidak pernah dihapus |
 | `pemeriksaan_diagnosas` | pemeriksaan_id, icd10_id, jenis (`primer`/`sekunder`) |
 | `kunjungan_tindakans` | kunjungan_id, tindakan_id, jumlah, **tarif (snapshot harga cabang kunjungan)**, **petugas_id** (pelaksana), **asisten_id**, **icd9cm_id**, **gigi** (FDI), **permukaan** (`MO`), **rencana_item_id**, **paket_pasien_item_id** (sesi paket → ditagih Rp 0), keterangan |
-| `paket_pasiens` | no_paket, pasien_id, paket_id, cabang_id, tagihan_id, nama/harga (snapshot), nilai (bersih), status, lintas_cabang, masa_berlaku_hari, aktif_at, berlaku_sampai, catatan, dibuat_oleh, dialihkan_*, refund_* — sisa sesi dihitung dari `kunjungan_tindakans` |
+| `paket_pasiens` | no_paket, pasien_id, paket_id, cabang_id, tagihan_id, **kunjungan_id** (dipesan dari pemeriksaan), nama/harga (snapshot), nilai (bersih), status, lintas_cabang, masa_berlaku_hari, aktif_at, berlaku_sampai, catatan, dibuat_oleh, dialihkan_*, refund_* — sisa sesi dihitung dari `kunjungan_tindakans` |
 | `paket_pasien_items` | paket_pasien_id, tindakan_id, jumlah_sesi, nilai_per_sesi |
 | `komisi_periodes` | **cabang_id**, nama, mulai, selesai, status (`draf`/`disetujui`), dasar (bruto/neto, snapshot), total, dihitung_at/_oleh, disetujui_at/_oleh, catatan — terkunci setelah disetujui |
 | `komisi_barises` | komisi_periode_id, user_id, peran, sumber, kunjungan_id, kunjungan_tindakan_id, tagihan_id, tindakan_id, tanggal, deskripsi, dasar, jenis, nilai, komisi, dibuat_oleh (penyesuaian) |
@@ -91,7 +91,7 @@ pengaturans (kunci → nilai JSON)
 | `reseps` | **cabang_id** (= cabang kunjungan), no_resep, kunjungan_id (unik), dokter_id, **status**, catatan, apoteker_id, diserahkan_at |
 | `resep_items` | resep_id, obat_id, jumlah, aturan_pakai, **harga (snapshot)** |
 | `tagihans` | **cabang_id** (= cabang kunjungan), no_tagihan, kunjungan_id (unik), total, diskon, **promo_id**, **diskon_promo**, grand_total, **status**, metode_bayar, dibayar, kembalian, kasir_id, dibayar_at |
-| `tagihan_items` | tagihan_id, kategori (`konsultasi`/`tindakan`/`obat`/`produk`/`paket`/...), **tindakan_id**, **paket_id**, deskripsi, jumlah, harga, subtotal |
+| `tagihan_items` | tagihan_id, kategori (`konsultasi`/`tindakan`/`obat`/`produk`/`paket`/...), **tindakan_id**, **paket_id**, deskripsi, jumlah, harga, subtotal, **neto** (bersih setelah promo & diskon, diisi saat lunas) |
 | `stok_mutasis` | obat_id, jenis, jumlah (**bertanda**: + masuk, − keluar), stok_akhir, referensi (mis. no_resep), keterangan, user_id |
 | `berkas` | uuid (unik, route key), cabang_id (informasi, **tidak** di-scope), pasien_id, kunjungan_id, **kunjungan_tindakan_id**, kategori, **protokol_foto_id**, **posisi**, **tahap** (sebelum/sesudah/kontrol), keterangan, nama_file, mime, ukuran (byte asli), **diambil_at**, **lebar**, **tinggi**, path & **thumbnail_path** (tersembunyi), checksum SHA-256 (tersembunyi), diunggah_oleh, deleted_at |
 | `pasien_klinis` | pasien_id (unik), fitzpatrick (I–VI), status_kehamilan (tidak/hamil/menyusui; null = belum ditanyakan), status_kehamilan_at, riwayat_obat, riwayat_penyakit, diperbarui_oleh — hanya rme.lihat |
@@ -138,6 +138,7 @@ Sudah diuji `migrate` + `migrate:rollback` + `migrate` ulang di PostgreSQL 17 de
 | `2026_10_01_150001_create_data_klinis_dan_persetujuan_data_tables` | `pasien_klinis`, `pasien_alergis` (konversi teks `pasiens.alergi` lalu kolomnya dihapus), `persetujuan_datas` | [F1-10](modul/F1-10-data-klinis-pdp.md) |
 | `2026_10_01_140001_pindah_komisi_dan_konsultasi_ke_treatment` | `tindakan_komisis`, `polis.tindakan_konsultasi_id` (− `tarif_konsultasi`), `komisi_barises.tindakan_id` (− `aturan_komisi_id`), drop `aturan_komisis`; konversi data tarif poli → treatment konsultasi & aturan → komisi treatment | [F1-09](modul/F1-09-komisi.md) |
 | `2026_10_01_120001_create_paket_promo_tables` | `pakets`, `paket_items`, `paket_pasiens`, `paket_pasien_items`, `promos`, `promo_pemakaians`; `kunjungan_tindakans.paket_pasien_item_id`, `tagihans.promo_id/diskon_promo`, `tagihan_items.tindakan_id/paket_id`; izin `promo.kelola` (manajer, marketing) & `pasien.lihat` (kasir) | [F1-08](modul/F1-08-paket-promo.md) |
+| `2026_10_01_160001_add_kunjungan_id_to_paket_pasiens_table` · `160002_add_neto_to_tagihan_items_table` | `paket_pasiens.kunjungan_id` (pesanan dari pemeriksaan), `tagihan_items.neto` (neto per baris saat lunas) | [F1-08](modul/F1-08-paket-promo.md) |
 | `2026_10_01_110001_create_odontogram_tables` | `polis.spesialisasi`, `tindakans.per_gigi/kondisi_gigi_hasil`, `odontogram_kondisis`, `rencana_perawatans`, `rencana_perawatan_items`, kolom gigi di `kunjungan_tindakans`; isi data lama dari kode/nama poli & ICD-9-CM 23.xx | [F1-07](modul/F1-07-odontogram.md) |
 | `2026_09_30_150001_create_rme_estetika_tables` (+ `150002` izin) | `icd9cms` (+ 62 kode), `template_soaps`, `template_consents`, `catatan_tindakans`, `catatan_tindakan_titiks`, `informed_consents`, `pemeriksaan_addendums`, `kode_favorits`; kolom baru di `icd10s`, `tindakans`, `kunjungans`, `kunjungan_tindakans`, `pemeriksaans`, `users` | [F1-05](modul/F1-05-rme-estetika.md) |
 
