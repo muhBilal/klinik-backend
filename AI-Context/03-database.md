@@ -5,6 +5,8 @@ Status disimpan sebagai string dan di-cast ke Enum pada model.
 
 ## Diagram relasi
 
+ERD lengkap per domain (Mermaid, dengan kolom & kardinalitas): [08-flowchart-erd.md](08-flowchart-erd.md#6-erd).
+
 ```
 cabangs 1─* users (cabang_id, null = lintas cabang)
 cabangs 1─* kunjungans / reseps / tagihans / berkas (cabang_id)
@@ -37,6 +39,8 @@ pasiens 1─1 pasien_klinis · 1─* pasien_alergis *─1 obats (opsional) · 1�
 tindakans 1─* tindakan_komisis (komisi per peran)          polis *─1 tindakans (tindakan_konsultasi_id = jasa konsultasi)
 cabangs 1─* komisi_periodes 1─* komisi_barises *─1 users, *─1 kunjungan_tindakans / tagihans / tindakans (snapshot)
 obats 1─* stok_mutasis
+resep_items 1─* resep_item_komponens *─1 obats            (racikan; resep_items.obat_id null)
+kunjungans 1─1 satusehat_kirims                           pesan_whatsapps *─1 pasiens / appointments / kunjungans
 
 audit_logs (tanpa FK: user_id, cabang_id, pasien_id, tipe + subjek_id)
 pengaturans (kunci → nilai JSON)
@@ -97,6 +101,9 @@ pengaturans (kunci → nilai JSON)
 | `pasien_klinis` | pasien_id (unik), fitzpatrick (I–VI), status_kehamilan (tidak/hamil/menyusui; null = belum ditanyakan), status_kehamilan_at, riwayat_obat, riwayat_penyakit, diperbarui_oleh — hanya rme.lihat |
 | `pasien_alergis` | pasien_id, kategori (obat/makanan/lingkungan/lainnya), zat, obat_id (opsional), reaksi, keparahan (ringan/sedang/berat), dicatat_oleh |
 | `persetujuan_datas` | uuid, pasien_id, cabang_id, jenis (`pemrosesan`/`marketing`), kanal (json), isi (snapshot), status (berlaku/diganti/dicabut), penandatangan_nama, hubungan, ttd (**terenkripsi**), dibuat_oleh, ditandatangani_at, berakhir_at, dicabut_oleh, alasan_cabut, checksum, ip_address — tidak pernah dihapus |
+| `resep_item_komponens` | resep_item_id, obat_id, jumlah `decimal(12,3)` (total untuk seluruh racikan, satuan stok), harga (snapshot) — lihat [V2-07](modul/V2-07-racikan-regulasi.md) |
+| `satusehat_kirims` | kunjungan_id (unik), cabang_id, status (`menunggu`/`terkirim`/`gagal`), percobaan, encounter_id, hasil (JSON), error, terakhir_dicoba_at, terkirim_at — lihat [V2-08](modul/V2-08-satusehat.md) |
+| `pesan_whatsapps` | cabang_id, pasien_id, appointment_id, kunjungan_id, jenis (`reminder_h1`/`reminder_2jam`/`followup_h1`/`followup_h7`), no_tujuan, template, parameter, pratinjau, status, percobaan, wa_message_id, error, balasan, terkirim/dibaca/dibalas_at. Unik `(jenis, appointment_id)` & `(jenis, kunjungan_id)` — lihat [V2-09](modul/V2-09-whatsapp.md) |
 | `persetujuan_fotos` | uuid, pasien_id, cabang_id, kunjungan_id, tingkat (klinis/edukasi/marketing), isi (snapshot), status (berlaku/diganti/dicabut), penandatangan_nama, hubungan, ttd (**terenkripsi**), dibuat_oleh, ditandatangani_at, berakhir_at, dicabut_oleh, alasan_cabut, checksum — tidak pernah dihapus |
 
 `cabang_id` di tabel transaksi nullable di skema (agar migrasi data lama aman) tetapi **selalu diisi aplikasi**.

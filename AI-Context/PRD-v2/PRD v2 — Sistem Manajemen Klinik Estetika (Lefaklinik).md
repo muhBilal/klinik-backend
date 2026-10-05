@@ -11,7 +11,8 @@ Versi 2.0 · 1 Okt 2026 · revisi dari PRD v1 (30 Sep 2026, @Thoriq)
 
 **Yang berubah di v2**
 
-1. **Nama produk** menjadi **Lefaklinik** (sebelumnya eKlinik). Nama teknis `eklinik` di kode tidak diubah.
+1. **Nama produk** menjadi **Lefaklinik** (sebelumnya eKlinik). Nama teknis `eklinik` di kode tidak diubah. **Pembaruan 5 Okt 2026:**
+   nama produk menjadi **Vertiqo** (tanpa embel-embel "klinik"); judul dan nama berkas dokumen ini tetap agar tautan tidak putus.
 2. **Kolom Status** ditambahkan ke setiap tabel kebutuhan (bagian 5–7), menggambarkan kode per 1 Okt 2026.
 3. **Bagian 8 ditulis ulang.** Analisis gap v1 sudah usang karena Fase 0 dan sebagian besar Fase 1 sudah dikerjakan.
 4. **Kebutuhan baru** ditandai **(baru)**:
@@ -36,7 +37,7 @@ Versi 2.0 · 1 Okt 2026 · revisi dari PRD v1 (30 Sep 2026, @Thoriq)
 
 ## 1. Ringkasan produk
 
-Lefaklinik adalah sistem manajemen klinik untuk klinik estetika dan spesialis rawat jalan: dermatologi & venereologi, estetika
+Vertiqo (sebelumnya Lefaklinik) adalah sistem manajemen klinik untuk klinik estetika dan spesialis rawat jalan: dermatologi & venereologi, estetika
 medis (injeksi, laser, facial), dan kedokteran gigi. Satu aplikasi menangani perjalanan pasien dari booking hingga kontrol ulang,
 termasuk Rekam Medis Elektronik (RME) yang patuh Permenkes 24/2022 dan terhubung ke SATUSEHAT.
 
@@ -530,7 +531,7 @@ Pengurusan kredensial pihak ketiga (#8, #9, payment gateway) dimulai **sekarang*
 
 | Topik | Keputusan |
 | --- | --- |
-| Nama produk | Lefaklinik (nama teknis `eklinik` tetap) |
+| Nama produk | Vertiqo (sejak 5 Okt 2026; sebelumnya Lefaklinik; nama teknis `eklinik` tetap) |
 | Model tenant | Satu instalasi = satu organisasi, banyak cabang |
 | Data pusat vs cabang | Pasien, No. RM, katalog, ICD, peran, pengaturan bersifat pusat; kunjungan, resep, tagihan, booking, stok, kas per cabang |
 | Kebijakan paket | Diatur per organisasi lewat pengaturan: refund penuh bila belum dipakai; refund prorata sisa (default tidak) dengan potongan persen; transfer ke pasien lain (default tidak); perpanjangan masa berlaku oleh pemegang izin dengan alasan |

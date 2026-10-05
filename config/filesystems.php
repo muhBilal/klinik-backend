@@ -38,7 +38,7 @@ return [
             'report' => false,
         ],
 
-        // Lefaklinik: berkas klinis terenkripsi (BerkasService). Di luar root disk `local` yang bisa disajikan,
+        // Vertiqo: berkas klinis terenkripsi (BerkasService). Di luar root disk `local` yang bisa disajikan,
         // dan di Docker dipasang sebagai volume agar tidak hilang saat image dibangun ulang.
         'berkas' => [
             'driver' => 'local',

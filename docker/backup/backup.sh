@@ -1,6 +1,6 @@
 #!/bin/sh
-# Backup harian Lefaklinik (PRD v2 7.2: RPO ≤ 24 jam): database PostgreSQL (pg_dump format custom) + volume berkas klinis
-# terenkripsi + checksum. Jalankan dari host, mis. cron: `15 1 * * * /opt/lefaklinik/backend/docker/backup/backup.sh /backup/lefaklinik`
+# Backup harian Vertiqo (PRD v2 7.2: RPO ≤ 24 jam): database PostgreSQL (pg_dump format custom) + volume berkas klinis
+# terenkripsi + checksum. Jalankan dari host, mis. cron: `15 1 * * * /opt/vertiqo/backend/docker/backup/backup.sh /backup/vertiqo`
 #
 # Variabel (opsional): DB_CONTAINER (eklinik-db), APP_CONTAINER (eklinik), DB_USERNAME (eklinik), DB_DATABASE (eklinik),
 #                      BERKAS_PATH (/var/www/html/storage/app/berkas), RETENSI_HARI (30)

@@ -2,7 +2,7 @@
 
 ## Tentang aplikasi
 
-**Lefaklinik** (sebelumnya bernama E-Klinik) adalah sistem informasi klinik rawat jalan yang sedang dikembangkan menjadi sistem manajemen **klinik estetika**
+**Vertiqo** (sebelumnya Lefaklinik, awalnya E-Klinik) adalah sistem informasi klinik rawat jalan yang sedang dikembangkan menjadi sistem manajemen **klinik estetika**
 (dermatologi, estetika medis, gigi) sesuai PRD di folder ini. Fitur saat ini: pendaftaran pasien & antrian poli, booking,
 rekam medis estetika (tanda vital, SOAP dengan template, diagnosa ICD-10, tindakan ICD-9-CM + petugas, catatan tindakan: face
 chart injeksi & parameter laser, informed consent bertanda tangan, tanda tangan RME + addendum, akses terbatas kasus IMS,
@@ -34,7 +34,7 @@ Frontend ada di repo terpisah `klinik-frontend`, tetapi **semua file Docker ada 
 Kedua repo di-clone sejajar dalam satu folder induk; folder induk hanya berisi `backend/` dan `frontend/`.
 
 ```
-lefaklinik/   (folder: eklinik)
+vertiqo/      (folder: eklinik)
 ├── backend/                        ← repo ini
 │   ├── docker-compose.yml          STACK LENGKAP: app (nginx+php-fpm+queue+scheduler+build frontend, port 8000) + db, volume `berkas`
 │   ├── docker-compose.dev.yml      STACK DEV API: app (php-fpm, kode di-mount) + nginx + db (+ queue, scheduler: profile `worker`)

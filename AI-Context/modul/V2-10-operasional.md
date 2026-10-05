@@ -8,7 +8,7 @@ penyimpanan berkas S3/MinIO + pemindaian malware, review keamanan formal oleh ti
 
 - `backend/docker/backup/backup.sh [tujuan]` — `pg_dump -Fc` database + arsip volume berkas terenkripsi + `SHA256SUMS`, langsung diuji keterbacaannya
   (`pg_restore --list`, `tar -t`), retensi `RETENSI_HARI` (30). Folder berkas belum ada → arsip kosong + peringatan.
-  Cron contoh: `15 1 * * * /opt/lefaklinik/backend/docker/backup/backup.sh /backup/lefaklinik`.
+  Cron contoh: `15 1 * * * /opt/vertiqo/backend/docker/backup/backup.sh /backup/vertiqo`.
 - `backend/docker/backup/restore.sh <db.dump> [berkas.tar.gz]` — verifikasi checksum, `pg_restore --clean --if-exists --no-owner` ke
   `TARGET_DB` (default DB produksi; isi nama lain untuk uji restore kuartalan), pulihkan berkas, lalu `php artisan migrate --force`.
 - Variabel: `DB_CONTAINER` (eklinik-db), `APP_CONTAINER` (eklinik), `DB_USERNAME`, `DB_DATABASE`, `BERKAS_PATH`.

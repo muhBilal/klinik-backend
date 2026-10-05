@@ -1,4 +1,4 @@
-# AI-Context — Backend Lefaklinik
+# AI-Context — Backend Vertiqo
 
 Konteks untuk AI assistant (dan developer baru) yang akan bekerja di `backend/`.
 Baca berurutan sebelum mengubah kode.
@@ -13,6 +13,7 @@ Baca berurutan sebelum mengubah kode.
 | [06-conventions.md](06-conventions.md) | Konvensi kode, cara menambah fitur, testing, jebakan umum |
 | [07-roadmap-progress.md](07-roadmap-progress.md) | Status pengerjaan PRD per fase & ID kebutuhan, rencana berikutnya |
 | [07-roadmap-modul.md](07-roadmap-modul.md) | Gap analysis modul & roadmap agar fleksibel untuk semua jenis klinik |
+| [08-flowchart-erd.md](08-flowchart-erd.md) | Flowchart (arsitektur, alur pelayanan, autentikasi, proses latar belakang), diagram status, ERD Mermaid per domain; versi [PDF](diagram/Peta-Sistem-Lefaklinik.pdf), [PNG per diagram](diagram/png/) & [draw.io](diagram/Peta-Sistem-Lefaklinik.drawio) |
 | [modul/](modul/) | Dokumentasi per fitur/modul (satu file per fitur, lihat daftar di bawah) |
 | [PRD-v2/](PRD-v2/PRD%20v2%20—%20Sistem%20Manajemen%20Klinik%20Estetika%20(Lefaklinik).md) | **PRD v2 (acuan terbaru)**: status per ID, kebutuhan baru, kriteria penerimaan P0 tersisa, roadmap |
 | [PRD — Sistem Manajemen Klinik Estetika (eKlinik).md](PRD%20—%20Sistem%20Manajemen%20Klinik%20Estetika%20(eKlinik).md) | PRD v1 (arsip; sumber kebutuhan & ID seperti `AD-01`) |

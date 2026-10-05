@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pulihkan Lefaklinik dari backup (PRD v2 7.2: RTO ≤ 4 jam; uji restore tiap kuartal).
+# Pulihkan Vertiqo dari backup (PRD v2 7.2: RTO ≤ 4 jam; uji restore tiap kuartal).
 #   docker/backup/restore.sh <db-YYYYmmdd-HHMMSS.dump> [berkas-YYYYmmdd-HHMMSS.tar.gz]
 # Variabel sama dengan backup.sh, plus TARGET_DB (default = DB_DATABASE) untuk memulihkan ke database lain saat uji restore.
 # Database tujuan dibersihkan (--clean). Hentikan container app lebih dulu saat memulihkan produksi.

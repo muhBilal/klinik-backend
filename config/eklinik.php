@@ -1,7 +1,7 @@
 <?php
 
 /*
-| Konfigurasi khusus Lefaklinik.
+| Konfigurasi khusus Vertiqo.
 |
 | `pengaturan` = definisi pengaturan klinik yang bisa diubah admin lewat API/UI (tabel `pengaturans`).
 | Nilai di sini hanya DEFAULT; nilai tersimpan menimpa default. Aturan validasi harus berupa string/array
@@ -12,7 +12,7 @@
 return [
 
     'pengaturan' => [
-        'klinik.nama' => ['default' => env('APP_NAME', 'Lefaklinik'), 'rules' => ['required', 'string', 'max:100'], 'publik' => true],
+        'klinik.nama' => ['default' => env('APP_NAME', 'Vertiqo'), 'rules' => ['required', 'string', 'max:100'], 'publik' => true],
         'klinik.alamat' => ['default' => null, 'rules' => ['nullable', 'string', 'max:255'], 'publik' => true],
         'klinik.telepon' => ['default' => null, 'rules' => ['nullable', 'string', 'max:30'], 'publik' => true],
         'klinik.email' => ['default' => null, 'rules' => ['nullable', 'email', 'max:100'], 'publik' => true],
@@ -135,7 +135,7 @@ return [
 
     'two_factor' => [
         // Nama penerbit yang tampil di aplikasi authenticator.
-        'issuer' => env('TWO_FACTOR_ISSUER', env('APP_NAME', 'Lefaklinik')),
+        'issuer' => env('TWO_FACTOR_ISSUER', env('APP_NAME', 'Vertiqo')),
     ],
 
 ];
