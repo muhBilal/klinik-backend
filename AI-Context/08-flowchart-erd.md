@@ -1,6 +1,6 @@
 # 08 — Flowchart & ERD
 
-Diagram sistem Vertiqo dalam format [Mermaid](https://mermaid.js.org) (dirender otomatis oleh GitHub/GitLab dan VS Code
+Diagram sistem Lefaklinik dalam format [Mermaid](https://mermaid.js.org) (dirender otomatis oleh GitHub/GitLab dan VS Code
 dengan ekstensi *Markdown Preview Mermaid Support*). Sumber kebenaran tetap kode: migration di `database/migrations/`,
 service di `app/Services/`. Ringkasan tabel per kolom ada di [03-database.md](03-database.md), aturan bisnis di
 [04-business-rules.md](04-business-rules.md).
@@ -12,9 +12,8 @@ yang bisa diklik, panduan membaca, satu diagram per halaman A4–A2) dan satu ga
 [diagram/png/](diagram/png/) (`01-arsitektur.png` … `20-erd-integrasi.png`, resolusi 2×), serta versi yang bisa diedit di
 draw.io: [diagram/Peta-Sistem-Lefaklinik.drawio](diagram/Peta-Sistem-Lefaklinik.drawio) (20 halaman/tab, bentuk asli draw.io hitam
 putih; ERD berupa tabel dengan ujung crow's foot, kotak putus-putus = tabel domain lain). Ketiganya dirender dari blok Mermaid
-di file ini — bila blok diubah, render ulang agar PDF, PNG, dan draw.io tidak usang. Berkas-berkas itu dibuat 2 Okt 2026, sebelum
-nama produk berganti menjadi Vertiqo (5 Okt 2026), sehingga nama berkas PDF & draw.io masih `Peta-Sistem-Lefaklinik.*` (sengaja tidak
-di-rename agar tautan tidak putus); isi diagram tetap berlaku.
+di file ini — bila blok diubah, render ulang agar PDF, PNG, dan draw.io tidak usang. Berkas-berkas itu dibuat 2 Okt 2026
+(nama berkas PDF & draw.io `Peta-Sistem-Lefaklinik.*`).
 
 **Isi**
 
